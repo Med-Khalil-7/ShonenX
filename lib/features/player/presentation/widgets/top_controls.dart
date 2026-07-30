@@ -17,7 +17,6 @@ class TopControls extends ConsumerWidget {
   final PlayerState playerState;
   final PlayerController controller;
   final VoidCallback onBack;
-  final VoidCallback? onComments;
 
   const TopControls({
     super.key,
@@ -27,7 +26,6 @@ class TopControls extends ConsumerWidget {
     required this.playerState,
     required this.controller,
     required this.onBack,
-    this.onComments,
   });
 
   @override
@@ -134,13 +132,6 @@ class TopControls extends ConsumerWidget {
                       },
                     );
                   },
-                ),
-                const SizedBox(width: 6),
-              ],
-              if (mode is PlayerModeOnline && onComments != null) ...[
-                _buildActionIcon(
-                  icon: Icons.comment_outlined,
-                  onTap: onComments!,
                 ),
                 const SizedBox(width: 6),
               ],

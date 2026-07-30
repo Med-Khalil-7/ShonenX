@@ -50,12 +50,6 @@ class SettingsScreen extends ConsumerWidget {
                     context.push('/settings/remote_config_editor'),
               ),
               SettingsNavTile(
-                icon: Icons.download_outlined,
-                title: 'Downloads',
-                subtitle: 'Download location, file naming',
-                onTap: () => context.push('/settings/downloads'),
-              ),
-              SettingsNavTile(
                 icon: Icons.filter_alt_outlined,
                 title: 'Content',
                 subtitle: 'Content filters, 18+ toggle',

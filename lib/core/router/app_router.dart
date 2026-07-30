@@ -9,7 +9,6 @@ import 'package:shonenx/features/onboarding/presentation/onboarding_screen.dart'
 import 'package:shonenx/features/discovery/presentation/home_screen.dart';
 import 'package:shonenx/features/splash/presentation/splash_screen.dart';
 import 'package:shonenx/features/discovery/presentation/discover_screen.dart';
-import 'package:shonenx/features/downloads/presentation/downloads_screen.dart';
 import 'package:shonenx/features/extensions/presentation/extensions_settings_screen.dart';
 import 'package:shonenx/features/extensions/presentation/extension_tester_screen.dart';
 import 'package:shonenx/core/remote_config/ui/remote_config_editor_screen.dart';
@@ -20,7 +19,6 @@ import 'package:shonenx/features/player/presentation/player_screen.dart';
 import 'package:shonenx/features/reader/domain/reader_mode.dart';
 import 'package:shonenx/features/reader/presentation/reader_screen.dart';
 import 'package:shonenx/features/settings/presentation/cache_settings_screen.dart';
-import 'package:shonenx/features/settings/presentation/download_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/home_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/permissions_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/player_settings_screen.dart';
@@ -245,17 +243,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: '/downloads',
-        builder: (context, state) => const DownloadsScreen(),
-      ),
-      GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
         routes: [
-          GoRoute(
-            path: 'downloads',
-            builder: (context, state) => const DownloadSettingsScreen(),
-          ),
           GoRoute(
             path: 'permissions',
             builder: (context, state) => const PermissionsSettingsScreen(),

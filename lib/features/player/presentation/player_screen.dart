@@ -24,7 +24,6 @@ import 'package:shonenx/features/player/providers/aniskip_provider.dart';
 import 'package:shonenx/features/player/providers/player_controller.dart';
 import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
 import 'package:shonenx/features/player/providers/video_engine_provider.dart';
-import 'package:shonenx/features/comments/presentation/widgets/comments_tab.dart';
 import 'package:shonenx/shared/widgets/app_bottom_sheet.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
@@ -260,26 +259,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     });
   }
 
-  void _showCommentsSheet() {
-    if (widget.mode is! PlayerModeOnline) return;
-    final media = (widget.mode as PlayerModeOnline).media;
-    final activeEpisode = ref.read(playerControllerProvider).activeEpisode;
-
-    AppBottomSheet.show(
-      context: context,
-      title: 'Episode ${activeEpisode?.number ?? 1} Discussion',
-      contentPadding: EdgeInsets.zero,
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.78,
-        child: CommentsTabWidget(
-          media: media,
-          initialEpisodeNumber: activeEpisode?.number.toInt(),
-          forceEpisodeFilter: true,
-        ),
-      ),
-    );
-  }
-
   void _handlePop(
     bool didPop,
     VideoEngine engine,
@@ -335,7 +314,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         playerState: playerState,
         controller: controller,
         onBack: context.pop,
-        onComments: _showCommentsSheet,
       ),
       CenterControls(
         showControls: _showControls,

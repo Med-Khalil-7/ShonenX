@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:shonenx/features/discovery/domain/media_args.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/sheets/download_sheet.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_list_panel.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/sheets/manual_match_sheet.dart';
 import 'package:shonenx/features/discovery/providers/matched_media_provider.dart';
@@ -22,7 +21,6 @@ import 'package:shonenx/shared/widgets/staggered_fade_in.dart';
 import 'package:shonenx/source_engine/models/source_info.dart';
 import 'package:shonenx/source_engine/utils/media_type_extensions.dart';
 import 'package:shonenx/features/history/providers/watch_history_provider.dart';
-import 'package:shonenx/features/comments/presentation/widgets/comments_tab.dart';
 
 class EpisodesTabWidget extends ConsumerWidget {
   final UnifiedMedia media;
@@ -126,101 +124,6 @@ class EpisodesTabWidget extends ConsumerWidget {
                   ),
                 );
               }
-            },
-            episodeActionsBuilder: (episodeActionsContext, episode, isCurrent, isWatched) {
-              final epNum = episode.number.toInt();
-              return [
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  tooltip: 'Discussion',
-                  onPressed: () {
-                    AppBottomSheet.show(
-                      context: episodeActionsContext,
-                      title:
-                          '${(media.type == MediaType.MANGA || media.type == MediaType.NOVEL) ? 'Chapter' : 'Episode'} $epNum Discussion',
-                      contentPadding: EdgeInsets.zero,
-                      child: SizedBox(
-                        height:
-                            MediaQuery.of(episodeActionsContext).size.height *
-                            0.78,
-                        child: CommentsTabWidget(
-                          media: media,
-                          initialEpisodeNumber: epNum,
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
-                ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () {
-                    AppBottomSheet.show(
-                      context: episodeActionsContext,
-                      title:
-                          '${(media.type == MediaType.MANGA || media.type == MediaType.NOVEL) ? 'Chapter' : 'Episode'} ${episode.number.toString().contains('.0') ? episode.number.toInt() : episode.number}',
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            title: const Text('Discussion'),
-                            leading: const Icon(Icons.forum_rounded),
-                            onTap: () {
-                              episodeActionsContext.pop();
-                              AppBottomSheet.show(
-                                context: episodeActionsContext,
-                                title:
-                                    '${media.type == MediaType.MANGA ? 'Chapter' : 'Episode'} $epNum Discussion',
-                                contentPadding: EdgeInsets.zero,
-                                child: SizedBox(
-                                  height:
-                                      MediaQuery.of(
-                                        episodeActionsContext,
-                                      ).size.height *
-                                      0.78,
-                                  child: CommentsTabWidget(
-                                    media: media,
-                                    initialEpisodeNumber: epNum,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                          if (media.type == MediaType.ANIME)
-                            ListTile(
-                              title: const Text('Stream / Download'),
-                              leading: const Icon(Icons.tune_rounded),
-                              onTap: () {
-                                episodeActionsContext.pop();
-                                DownloadSheet.show(
-                                  context,
-                                  episode,
-                                  ref
-                                          .read(
-                                            mediaPreferenceProvider(
-                                              MediaArgs(
-                                                mediaTitle:
-                                                    media.title.availableTitle,
-                                                type: media.type,
-                                                sourceId: media.sourceId,
-                                                providerId: media.id,
-                                              ),
-                                            ),
-                                          )
-                                          .value
-                                          ?.sourceInfo ??
-                                      sources.first,
-                                  media,
-                                );
-                              },
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.more_horiz),
-                ),
-              ];
             },
           ),
         ),

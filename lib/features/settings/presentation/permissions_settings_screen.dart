@@ -19,8 +19,6 @@ class _PermissionsSettingsScreenState
     with WidgetsBindingObserver {
   PermissionStatus? _notificationStatus;
   PermissionStatus? _exactAlarmStatus;
-  PermissionStatus? _storageStatus;
-  PermissionStatus? _manageStorageStatus;
 
   @override
   void initState() {
@@ -49,19 +47,11 @@ class _PermissionsSettingsScreenState
     final exactAlarm = Platform.isAndroid
         ? await Permission.scheduleExactAlarm.status
         : PermissionStatus.granted;
-    final storage = Platform.isAndroid
-        ? await Permission.storage.status
-        : PermissionStatus.granted;
-    final manageStorage = Platform.isAndroid
-        ? await Permission.manageExternalStorage.status
-        : PermissionStatus.granted;
 
     if (mounted) {
       setState(() {
         _notificationStatus = notif;
         _exactAlarmStatus = exactAlarm;
-        _storageStatus = storage;
-        _manageStorageStatus = manageStorage;
       });
     }
   }
@@ -162,22 +152,6 @@ class _PermissionsSettingsScreenState
                   trailing: _buildStatusBadge(_exactAlarmStatus, cs),
                   onTap: () =>
                       _requestPermission(Permission.scheduleExactAlarm),
-                ),
-                SettingsActionTile(
-                  icon: Icons.folder_outlined,
-                  title: 'Storage (Android 10 and below)',
-                  subtitle: 'Save downloads on older Android versions',
-                  trailing: _buildStatusBadge(_storageStatus, cs),
-                  onTap: () => _requestPermission(Permission.storage),
-                ),
-                SettingsActionTile(
-                  icon: Icons.manage_search_outlined,
-                  title: 'Manage External Storage (Android 11+)',
-                  subtitle:
-                      'Save downloads to custom directories across device',
-                  trailing: _buildStatusBadge(_manageStorageStatus, cs),
-                  onTap: () =>
-                      _requestPermission(Permission.manageExternalStorage),
                 ),
               ],
             ],

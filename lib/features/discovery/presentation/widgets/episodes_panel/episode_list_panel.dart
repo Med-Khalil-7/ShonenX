@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shonenx/core/utils/responsive.dart';
 import 'package:shonenx/features/discovery/domain/media_args.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_tiles.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/sheets/batch_download_sheet.dart';
 import 'package:shonenx/features/discovery/providers/episodes_provider.dart';
 import 'package:shonenx/features/discovery/providers/matched_media_provider.dart';
 import 'package:shonenx/features/reader/providers/preferred_scanlator_provider.dart';
@@ -491,23 +490,6 @@ class _EpisodeListPanelState extends ConsumerState<EpisodeListPanel> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (widget.media.type == MediaType.ANIME &&
-                            finalEpisodes.isNotEmpty)
-                          IconButton(
-                            onPressed: () => BatchDownloadSheet.show(
-                              context,
-                              finalEpisodes,
-                              widget.watchedProgress,
-                              state.source,
-                              widget.media,
-                            ),
-                            icon: const Icon(
-                              Icons.download_for_offline_outlined,
-                            ),
-                            iconSize: 20,
-                            color: cs.primary,
-                            tooltip: 'Batch Download',
-                          ),
                         _ViewModeToggle(
                           current: viewMode,
                           onChanged: (m) => ref

@@ -3,8 +3,6 @@
 class Env {
   static const RELEASE_REPO = String.fromEnvironment('RELEASE_REPO');
 
-  static const COMMENTUM_API_URL = String.fromEnvironment('COMMENTUM_API_URL');
-
   static const ANILIST_CLIENT_ID = String.fromEnvironment('ANILIST_CLIENT_ID');
 
   static const ANILIST_CLIENT_SECRET = String.fromEnvironment(

@@ -6,12 +6,9 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:shonenx/features/auth/providers/auth_provider.dart';
-import 'package:shonenx/features/comments/presentation/widgets/comments_tab.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/tabs/about_tab.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/tabs/episodes_tab.dart';
 import 'package:shonenx/features/discovery/providers/details_provider.dart';
-import 'package:shonenx/features/downloads/domain/models/download_task.dart';
-import 'package:shonenx/features/downloads/providers/download_provider.dart';
 import 'package:shonenx/features/player/domain/player_mode.dart';
 import 'package:shonenx/features/reader/domain/reader_mode.dart';
 import 'package:shonenx/features/tracking/domain/isar_tracker_link.dart';
@@ -55,46 +52,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   late final FocusNode _keyboardFocusNode;
-  double _pullProgress = 0.0;
-  double _accumulatedOverscroll = 0.0;
-
-  bool _onScrollNotification(ScrollNotification notification) {
-    if (notification.metrics.axis != Axis.vertical) return false;
-
-    final pixels = notification.metrics.pixels;
-
-    if (notification is OverscrollNotification &&
-        notification.metrics.extentBefore == 0 &&
-        notification.overscroll < 0) {
-      _accumulatedOverscroll += -notification.overscroll;
-      final progress = (_accumulatedOverscroll / 180.0).clamp(0.0, 1.0);
-      if (progress != _pullProgress) {
-        setState(() => _pullProgress = progress);
-      }
-    } else if (notification is ScrollUpdateNotification) {
-      if (pixels < 0) {
-        final progress = (-pixels / 180.0).clamp(0.0, 1.0);
-        if (progress != _pullProgress) {
-          setState(() => _pullProgress = progress);
-        }
-      } else if (_pullProgress > 0 || _accumulatedOverscroll > 0) {
-        _accumulatedOverscroll = 0.0;
-        if (_pullProgress != 0.0) setState(() => _pullProgress = 0.0);
-      }
-    } else if (notification is ScrollEndNotification) {
-      final shouldTrigger = _pullProgress >= 1.0;
-      _accumulatedOverscroll = 0.0;
-      if (_pullProgress != 0.0) {
-        setState(() => _pullProgress = 0.0);
-      }
-      if (shouldTrigger) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showCommentsSheet(context, widget.media);
-        });
-      }
-    }
-    return false;
-  }
 
   @override
   void initState() {
@@ -178,9 +135,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         detailsState.value?.merge(widget.media) ?? widget.media;
 
     return AppScaffold(
-      body: NotificationListener<ScrollNotification>(
-        onNotification: _onScrollNotification,
-        child: Stack(
+      body: Stack(
           children: [
             NestedScrollView(
               headerSliverBuilder: (context, innerBoxIsScrolled) => [
@@ -193,7 +148,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                     onPressed: () => context.pop(),
                   ),
                   actions: [
-                    const _DownloadAppBarButton(),
                     AppIconButton(
                       tooltip: 'Share',
                       backgroundColor: theme.colorScheme.secondaryContainer,
@@ -219,11 +173,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                           ShareParams(uri: Uri.parse(url)),
                         );
                       },
-                    ),
-                    const SizedBox(width: 5),
-                    _CommentsAppBarButton(
-                      media: displayMedia,
-                      uiRoundness: uiRoundness,
                     ),
                     const SizedBox(width: 5),
                     _TrackerAppBarButton(
@@ -513,72 +462,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 ],
               ),
             ),
-            Positioned(
-              top: MediaQuery.paddingOf(context).top + 12,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: AnimatedSlide(
-                  duration: const Duration(milliseconds: 200),
-                  offset: Offset(0, _pullProgress > 0.05 ? 0.0 : -3.0),
-                  child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 150),
-                    opacity: _pullProgress > 0.05 ? 1.0 : 0.0,
-                    child: IgnorePointer(
-                      child: Container(
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHighest,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            SizedBox(
-                              width: 40,
-                              height: 40,
-                              child: CircularProgressIndicator(
-                                value: _pullProgress,
-                                strokeWidth: 3.5,
-                                backgroundColor: theme
-                                    .colorScheme
-                                    .onSurfaceVariant
-                                    .withValues(alpha: 0.2),
-                                valueColor: AlwaysStoppedAnimation(
-                                  _pullProgress >= 1.0
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                            Icon(
-                              _pullProgress >= 1.0
-                                  ? Icons.forum_rounded
-                                  : Icons.chat_bubble_outline_rounded,
-                              color: _pullProgress >= 1.0
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.onSurface,
-                              size: 22,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
-      ),
       bottomNavigationBar: SafeArea(
         child: KeyboardListener(
           focusNode: _keyboardFocusNode,
@@ -594,9 +479,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                 break;
               case LogicalKeyboardKey.digit2:
                 _tabController.animateTo(1);
-                break;
-              case LogicalKeyboardKey.digit3:
-                _showCommentsSheet(context, displayMedia);
                 break;
             }
           },
@@ -773,103 +655,4 @@ class _TrackerAppBarButton extends ConsumerWidget {
       builder: (_) => TrackerManagerSheet(media: media),
     );
   }
-}
-
-class _DownloadAppBarButton extends ConsumerWidget {
-  const _DownloadAppBarButton();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tasksAsync = ref.watch(downloadTasksProvider);
-    final activeTasks =
-        tasksAsync.value
-            ?.where(
-              (t) =>
-                  t.status == DownloadStatus.downloading ||
-                  t.status == DownloadStatus.pending,
-            )
-            .toList() ??
-        [];
-    final activeCount = activeTasks.length;
-
-    if (activeCount == 0) return const SizedBox.shrink();
-
-    double? averageProgress;
-    double totalProgress = 0.0;
-    int validCount = 0;
-    for (final t in activeTasks) {
-      if (t.progress >= 0.0) {
-        totalProgress += t.progress;
-        validCount++;
-      }
-    }
-    averageProgress = validCount > 0 ? totalProgress / validCount : null;
-
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: Badge(
-        isLabelVisible: activeCount > 0,
-        label: Text(activeCount.toString()),
-        offset: const Offset(2, -2),
-        child: AppIconButton(
-          onPressed: () => context.push('/downloads'),
-          backgroundColor: colorScheme.primaryContainer,
-          foregroundColor: colorScheme.onPrimaryContainer,
-          icon: Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  value: averageProgress,
-                  strokeWidth: 2.0,
-                  strokeCap: StrokeCap.round,
-                  backgroundColor: colorScheme.primaryContainer.withValues(
-                    alpha: 0.12,
-                  ),
-                  color: colorScheme.onPrimaryContainer,
-                ),
-              ),
-              const Icon(Icons.download_rounded, size: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CommentsAppBarButton extends StatelessWidget {
-  final UnifiedMedia media;
-  final double uiRoundness;
-
-  const _CommentsAppBarButton({required this.media, required this.uiRoundness});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return AppIconButton(
-      tooltip: 'Discussion',
-      backgroundColor: theme.colorScheme.secondaryContainer,
-      foregroundColor: theme.colorScheme.onSecondaryContainer,
-      radius: uiRoundness,
-      icon: const Icon(Icons.forum_rounded, size: 18),
-      onPressed: () => _showCommentsSheet(context, media),
-    );
-  }
-}
-
-void _showCommentsSheet(BuildContext context, UnifiedMedia media) {
-  AppBottomSheet.show(
-    context: context,
-    title: 'Discussion',
-    contentPadding: EdgeInsets.zero,
-    child: SizedBox(
-      height: MediaQuery.of(context).size.height * 0.78,
-      child: CommentsTabWidget(media: media),
-    ),
-  );
 }
