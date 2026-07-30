@@ -15,7 +15,9 @@ class TvPosterCard extends StatelessWidget {
   final String? imageUrl;
   final String? heroTag;
   final VoidCallback? onTap;
-  final double width;
+
+  /// Null sizes the card from the row's own metrics.
+  final double? width;
   final bool autofocus;
   final FocusNode? focusNode;
 
@@ -28,7 +30,7 @@ class TvPosterCard extends StatelessWidget {
     required this.imageUrl,
     this.heroTag,
     this.onTap,
-    this.width = ShonenX.rowPosterWidth,
+    this.width,
     this.autofocus = false,
     this.focusNode,
     this.title,
@@ -63,8 +65,8 @@ class TvPosterCard extends StatelessWidget {
       borderRadius: radius,
       focusScale: 1.08,
       child: SizedBox(
-        width: width,
-        child: AspectRatio(aspectRatio: 2 / 3, child: image),
+        width: width ?? ShonenXMetrics.of(context).rowPoster,
+        child: AspectRatio(aspectRatio: ShonenX.posterAspect, child: image),
       ),
     );
   }

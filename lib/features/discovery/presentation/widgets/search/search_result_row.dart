@@ -25,6 +25,7 @@ class SearchResultRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final m = ShonenXMetrics.of(context);
 
     return TvFocusable(
       onTap: onTap,
@@ -34,19 +35,19 @@ class SearchResultRow extends StatelessWidget {
       // A row this wide scaling up would shove the column edge past the
       // viewport; the ring alone is enough at this size.
       scaleOnFocus: false,
-      padding: const EdgeInsets.all(8),
+      padding: EdgeInsets.all(m.body * 0.5),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
             child: SizedBox(
-              width: ShonenX.resultThumbWidth,
-              height: ShonenX.resultThumbHeight,
+              width: m.resultThumb,
+              height: m.resultThumb / ShonenX.posterAspect,
               child: _thumbnail(cs),
             ),
           ),
-          const SizedBox(width: 20),
+          SizedBox(width: m.body * 1.6),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -56,19 +57,20 @@ class SearchResultRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleLarge?.copyWith(
+                    fontSize: m.meta,
                     fontWeight: FontWeight.w700,
                     color: cs.onSurface,
                   ),
                 ),
-                const SizedBox(height: 10),
+                SizedBox(height: m.body * 0.8),
                 Row(
                   children: [
                     TvBadge.rating(media),
-                    const SizedBox(width: 12),
+                    SizedBox(width: m.badge),
                     const TvHdBadge(),
                   ],
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: m.body),
                 if (media.description != null)
                   Text(
                     _plainText(media.description!),
@@ -79,6 +81,7 @@ class SearchResultRow extends StatelessWidget {
                     overflow: TextOverflow.clip,
                     softWrap: false,
                     style: theme.textTheme.bodyMedium?.copyWith(
+                      fontSize: m.body,
                       color: cs.onSurfaceVariant,
                     ),
                   ),

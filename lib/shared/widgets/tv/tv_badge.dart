@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
 
 /// Small outlined pill used for the age rating and quality markers that sit
@@ -16,8 +17,12 @@ class TvBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final m = ShonenXMetrics.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: EdgeInsets.symmetric(
+        horizontal: m.badge * 0.55,
+        vertical: m.badge * 0.2,
+      ),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: cs.onSurfaceVariant, width: 1.5),
@@ -25,6 +30,7 @@ class TvBadge extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          fontSize: m.badge,
           color: cs.onSurface,
           fontWeight: FontWeight.w700,
           height: 1.1,
@@ -62,7 +68,9 @@ class TvMetaRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final m = ShonenXMetrics.of(context);
     final style = theme.textTheme.titleMedium?.copyWith(
+      fontSize: m.meta,
       color: cs.onSurfaceVariant,
       fontWeight: FontWeight.w600,
     );
@@ -72,7 +80,7 @@ class TvMetaRow extends StatelessWidget {
     final hasScore = score != null;
 
     Widget dot() => Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: EdgeInsets.symmetric(horizontal: m.meta * 0.5),
       child: Text('·', style: style),
     );
 
@@ -80,12 +88,12 @@ class TvMetaRow extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         TvBadge.rating(media),
-        const SizedBox(width: 10),
+        SizedBox(width: m.meta * 0.5),
         const TvHdBadge(),
         if (hasScore) ...[
           dot(),
-          Icon(Icons.star_rounded, size: 20, color: cs.onSurface),
-          const SizedBox(width: 5),
+          Icon(Icons.star_rounded, size: m.meta * 1.15, color: cs.onSurface),
+          SizedBox(width: m.meta * 0.25),
           Text(
             // Trackers report 0-100 as often as 0-10; normalise the way the
             // card system already does.

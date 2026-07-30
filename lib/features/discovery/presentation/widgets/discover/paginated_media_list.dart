@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/search/search_result_row.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
 import 'package:shonenx/source_engine/models/paginated_result.dart';
@@ -29,15 +30,17 @@ class PaginatedMediaList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final m = ShonenXMetrics.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 8, bottom: 16),
+          padding: EdgeInsets.only(left: m.body * 0.5, bottom: m.body),
           child: Text(
             'Results',
             style: theme.textTheme.headlineSmall?.copyWith(
+              fontSize: m.heading,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -52,6 +55,7 @@ class PaginatedMediaList extends ConsumerWidget {
                   child: Text(
                     'No results found',
                     style: theme.textTheme.titleMedium?.copyWith(
+                      fontSize: m.meta,
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
@@ -80,7 +84,7 @@ class PaginatedMediaList extends ConsumerWidget {
                     cacheExtent: 1600,
                     padding: const EdgeInsets.only(bottom: 120),
                     itemCount: result.items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    separatorBuilder: (_, __) => SizedBox(height: m.body),
                     itemBuilder: (context, index) {
                       final media = result.items[index];
                       return SearchResultRow(

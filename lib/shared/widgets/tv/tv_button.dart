@@ -69,6 +69,8 @@ class TvButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final m = ShonenXMetrics.of(context);
+    final iconSize = m.label * 1.5;
 
     final (Color background, Color foreground) = switch (variant) {
       TvButtonVariant.filledRed => (cs.primary, Colors.white),
@@ -78,6 +80,7 @@ class TvButton extends StatelessWidget {
     };
 
     final labelStyle = theme.textTheme.titleMedium?.copyWith(
+      fontSize: m.label,
       color: foreground,
       fontWeight: FontWeight.w600,
     );
@@ -98,7 +101,9 @@ class TvButton extends StatelessWidget {
         width: width == null ? null : width! - TvFocus.ringWidth * 2,
         height: height - TvFocus.ringWidth * 2,
         padding: EdgeInsets.symmetric(
-          horizontal: variant == TvButtonVariant.bare ? 12 : 24,
+          horizontal: variant == TvButtonVariant.bare
+              ? m.label * 0.6
+              : m.label * 1.6,
         ),
         decoration: BoxDecoration(
           color: background,
@@ -110,17 +115,17 @@ class TvButton extends StatelessWidget {
           children: [
             if (loading) ...[
               SizedBox(
-                width: 24,
-                height: 24,
+                width: iconSize,
+                height: iconSize,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.5,
                   color: foreground,
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: m.label),
             ] else if (icon != null) ...[
-              Icon(icon, size: 24, color: foreground),
-              const SizedBox(width: 12),
+              Icon(icon, size: iconSize, color: foreground),
+              SizedBox(width: m.label),
             ],
             Flexible(
               child: Text.rich(

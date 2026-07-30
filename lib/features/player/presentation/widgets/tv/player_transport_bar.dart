@@ -55,6 +55,7 @@ class _PlayerTransportBarState extends ConsumerState<PlayerTransportBar> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final m = ShonenXMetrics.of(context);
     final insets = TvMetrics.ofSize(MediaQuery.sizeOf(context));
     final aniSkips = ref.watch(aniSkipProvider(widget.aniskipArgs));
 
@@ -78,9 +79,9 @@ class _PlayerTransportBarState extends ConsumerState<PlayerTransportBar> {
           child: Container(
             padding: EdgeInsets.fromLTRB(
               insets.left,
-              48,
+              m.transportIcon * 1.6,
               insets.right,
-              insets.bottom + 16,
+              insets.bottom + m.transportIcon * 0.5,
             ),
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -104,19 +105,20 @@ class _PlayerTransportBarState extends ConsumerState<PlayerTransportBar> {
                           _hasTriggeredAutoNext = true,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: m.transportIcon * 0.25),
                   _SeekRow(
                     engine: widget.engine,
                     aniSkips: aniSkips.value ?? const [],
                     onInteraction: widget.onInteraction,
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: m.transportIcon * 0.25),
                   _ControlRow(
                     engine: widget.engine,
                     controller: widget.controller,
                     playPauseFocus: widget.playPauseFocus,
                     onInteraction: widget.onInteraction,
                     theme: theme,
+                    metrics: m,
                   ),
                 ],
               ),
@@ -215,6 +217,7 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final m = ShonenXMetrics.of(context);
     final position = ref.watch(
       videoEngineStateProvider.select((s) => s.position),
     );
@@ -225,6 +228,7 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
 
     final shown = _pending ?? position;
     final timeStyle = theme.textTheme.titleMedium?.copyWith(
+      fontSize: m.meta,
       color: Colors.white70,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
@@ -232,34 +236,26 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
     return Row(
       children: [
         SizedBox(
-          width: 110,
+          width: m.meta * 4.5,
           child: Text(formatPlaybackTime(shown), style: timeStyle),
         ),
         Expanded(
           child: Focus(
             focusNode: _node,
             child: SizedBox(
-              height: 40,
+              height: m.transportIcon,
               child: CustomPaint(
-                size: const Size(double.infinity, 40),
+                size: Size(double.infinity, m.transportIcon),
                 painter: ProgressBarPainter(
                   skipStamps: widget.aniSkips,
                   totalDuration: duration.inMilliseconds / 1000.0,
                   progress: shown.inMilliseconds / 1000.0,
                   buffer: buffer.inMilliseconds / 1000.0,
-                  barHeight: _focused
-                      ? ShonenX.seekTrackHeight + 2
-                      : ShonenX.seekTrackHeight,
-                  thumbWidth: _focused
-                      ? ShonenX.seekThumbRadiusFocused * 2
-                      : ShonenX.seekThumbRadius * 2,
-                  thumbHeight: _focused
-                      ? ShonenX.seekThumbRadiusFocused * 2
-                      : ShonenX.seekThumbRadius * 2,
+                  barHeight: _focused ? m.seekTrack * 1.6 : m.seekTrack,
+                  thumbWidth: _focused ? m.seekThumb * 2.6 : m.seekThumb * 2,
+                  thumbHeight: _focused ? m.seekThumb * 2.6 : m.seekThumb * 2,
                   thumbRadius: Radius.circular(
-                    _focused
-                        ? ShonenX.seekThumbRadiusFocused
-                        : ShonenX.seekThumbRadius,
+                    _focused ? m.seekThumb * 1.3 : m.seekThumb,
                   ),
                   // Red while scrubbing so it is obvious the bar has focus and
                   // that the position shown is not where playback is yet.
@@ -273,7 +269,7 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
           ),
         ),
         SizedBox(
-          width: 110,
+          width: m.meta * 4.5,
           child: Text(
             formatPlaybackTime(duration),
             style: timeStyle,
@@ -291,6 +287,7 @@ class _ControlRow extends ConsumerWidget {
   final FocusNode playPauseFocus;
   final VoidCallback onInteraction;
   final ThemeData theme;
+  final ShonenXMetrics metrics;
 
   const _ControlRow({
     required this.engine,
@@ -298,6 +295,7 @@ class _ControlRow extends ConsumerWidget {
     required this.playPauseFocus,
     required this.onInteraction,
     required this.theme,
+    required this.metrics,
   });
 
   @override
@@ -320,7 +318,7 @@ class _ControlRow extends ConsumerWidget {
             isPlaying ? engine.pause() : engine.play();
           },
         ),
-        const SizedBox(width: ShonenX.transportGap),
+        SizedBox(width: metrics.transportGap),
         _TransportButton(
           icon: Icons.replay_10_rounded,
           tooltip: 'Back 10 seconds',
@@ -329,7 +327,7 @@ class _ControlRow extends ConsumerWidget {
             engine.seekRelative(const Duration(seconds: -10));
           },
         ),
-        const SizedBox(width: ShonenX.transportGap),
+        SizedBox(width: metrics.transportGap),
         _TransportButton(
           icon: Icons.forward_10_rounded,
           tooltip: 'Forward 10 seconds',
@@ -382,6 +380,7 @@ class _TransportButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final m = ShonenXMetrics.of(context);
 
     return TvFocusable(
       onTap: onPressed,
@@ -393,7 +392,7 @@ class _TransportButton extends StatelessWidget {
       builder: (context, isFocused) {
         final color = isFocused ? theme.colorScheme.primary : Colors.white;
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          padding: EdgeInsets.all(m.transportIcon * 0.2),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -401,15 +400,16 @@ class _TransportButton extends StatelessWidget {
                 Text(
                   label!,
                   style: theme.textTheme.titleMedium?.copyWith(
+                    fontSize: m.meta,
                     color: color,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: m.meta * 0.6),
               ],
               Icon(
                 icon,
-                size: ShonenX.transportIconSize,
+                size: m.transportIcon,
                 semanticLabel: tooltip,
                 color: color,
               ),
@@ -468,7 +468,7 @@ class _SkipAction extends ConsumerWidget {
       return TvButton(
         label: label,
         icon: Icons.skip_next_rounded,
-        height: 52,
+        height: ShonenXMetrics.of(context).buttonHeight * 0.9,
         variant: TvButtonVariant.filledWhite,
         onPressed: () =>
             engine.seekTo(Duration(seconds: currentSkip.endTime.ceil())),
@@ -495,6 +495,6 @@ class _SkipAction extends ConsumerWidget {
       }
     }
 
-    return const SizedBox(height: 52);
+    return SizedBox(height: ShonenXMetrics.of(context).buttonHeight * 0.9);
   }
 }

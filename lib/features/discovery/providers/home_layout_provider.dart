@@ -11,13 +11,21 @@ import 'package:shonenx/features/tracking/engine/remote_tracker.dart';
 class UserHomeLayoutNotifier extends Notifier<List<HomeSection>> {
   SharedPreferences get _storage => ref.read(sharedPreferencesProvider);
 
+  /// Bumped when the shipped default changes shape.
+  ///
+  /// The default only applies when nothing is stored, so without a new key an
+  /// existing install keeps whatever the first run wrote -- which is how it
+  /// ended up showing a single row. A hand-ordered layout is lost once; it is
+  /// re-editable in Settings -> Home.
+  static const _schemaVersion = 2;
+
   String get _dataKey {
     final prefs = ref.read(discoveryPrefsProvider);
     if (prefs.mode == MetadataMode.source) {
-      return 'home_layout_source';
+      return 'home_layout_source_v$_schemaVersion';
     } else {
       final tracker = ref.read(metadataSourceProvider);
-      return 'home_layout_tracker_${tracker.type.name}';
+      return 'home_layout_tracker_${tracker.type.name}_v$_schemaVersion';
     }
   }
 
@@ -37,6 +45,10 @@ class UserHomeLayoutNotifier extends Notifier<List<HomeSection>> {
     }
 
     if (prefs.mode == MetadataMode.source || tracker == null) {
+      // One discovery section only. In source mode the feed provider ignores
+      // the category and always asks the extension for its trending list, so
+      // N category rows would be N copies of the same list; the home screen
+      // fans this one section out to a row per active extension instead.
       return const [
         HomeSection(
           id: '1',
@@ -56,25 +68,38 @@ class UserHomeLayoutNotifier extends Notifier<List<HomeSection>> {
       int idCounter = 1;
       final sections = <HomeSection>[];
 
-      for (final media in tracker.supportedMediaTypes) {
-        if (tracker.supportedCategories.contains(TrackerCategory.trending)) {
-          sections.add(HomeSection(
-            id: (idCounter++).toString(),
-            title: '${TrackerCategory.trending.label} ${media.displayName}',
-            type: HomeSectionType.discovery,
-            targetMediaType: media,
-            trackerCategory: TrackerCategory.trending,
-          ));
+      // A row per category the tracker actually serves. AniList gives
+      // Trending Now, All-Time Popular, Top Rated All-Time and Upcoming Next
+      // Season; the previous default asked for Trending and stopped, which is
+      // why Home opened onto a single row.
+      for (final category in tracker.supportedCategories) {
+        for (final media in tracker.supportedMediaTypes) {
+          sections.add(
+            HomeSection(
+              id: (idCounter++).toString(),
+              // Only qualify with the media type when there is more than one
+              // to tell apart -- "Trending Now Anime" reads as a typo when
+              // anime is the only thing the app carries.
+              title: tracker.supportedMediaTypes.length > 1
+                  ? '${category.label} ${media.displayName}'
+                  : category.label,
+              type: HomeSectionType.discovery,
+              targetMediaType: media,
+              trackerCategory: category,
+            ),
+          );
         }
       }
 
       for (final media in tracker.supportedMediaTypes) {
-        sections.add(HomeSection(
-          id: (idCounter++).toString(),
-          title: 'Continue Watching',
-          type: HomeSectionType.continueMedia,
-          targetMediaType: media,
-        ));
+        sections.add(
+          HomeSection(
+            id: (idCounter++).toString(),
+            title: 'Continue Watching',
+            type: HomeSectionType.continueMedia,
+            targetMediaType: media,
+          ),
+        );
       }
 
       return sections;

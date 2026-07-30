@@ -28,6 +28,7 @@ class PlayerTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final m = ShonenXMetrics.of(context);
     final insets = TvMetrics.ofSize(MediaQuery.sizeOf(context));
 
     return AnimatedPositioned(
@@ -46,9 +47,9 @@ class PlayerTopBar extends StatelessWidget {
           child: Container(
             padding: EdgeInsets.fromLTRB(
               insets.left,
-              insets.top + 16,
+              insets.top + m.playerIcon * 0.6,
               insets.right,
-              48,
+              m.playerIcon * 1.8,
             ),
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -65,7 +66,7 @@ class PlayerTopBar extends StatelessWidget {
                   tooltip: 'Back',
                   onPressed: onBack,
                 ),
-                const SizedBox(width: 24),
+                SizedBox(width: m.playerIcon),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -75,17 +76,19 @@ class PlayerTopBar extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleLarge?.copyWith(
+                          fontSize: m.heading * 0.93,
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       if (subtitle != null) ...[
-                        const SizedBox(height: 4),
+                        SizedBox(height: m.meta * 0.2),
                         Text(
                           subtitle!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.titleMedium?.copyWith(
+                            fontSize: m.meta,
                             color: Colors.white70,
                           ),
                         ),
@@ -93,19 +96,19 @@ class PlayerTopBar extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 40),
+                SizedBox(width: m.playerIconGap * 0.6),
                 _PlayerIconButton(
                   icon: Icons.layers_outlined,
                   tooltip: 'Episodes',
                   onPressed: onEpisodes,
                 ),
-                const SizedBox(width: ShonenX.playerTopIconGap),
+                SizedBox(width: m.playerIconGap),
                 _PlayerIconButton(
                   icon: Icons.subtitles_outlined,
                   tooltip: 'Subtitles',
                   onPressed: onSubtitles,
                 ),
-                const SizedBox(width: ShonenX.playerTopIconGap),
+                SizedBox(width: m.playerIconGap),
                 _PlayerIconButton(
                   icon: Icons.settings,
                   tooltip: 'Settings',
@@ -133,6 +136,7 @@ class _PlayerIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final m = ShonenXMetrics.of(context);
     return TvFocusable(
       onTap: onPressed,
       borderRadius: BorderRadius.circular(8),
@@ -142,11 +146,11 @@ class _PlayerIconButton extends StatelessWidget {
       // any frame.
       ringColor: Colors.transparent,
       builder: (context, isFocused) => SizedBox(
-        width: 56,
-        height: 48,
+        width: m.playerIcon * 1.6,
+        height: m.playerIcon * 1.4,
         child: Icon(
           icon,
-          size: ShonenX.playerIconSize,
+          size: m.playerIcon,
           semanticLabel: tooltip,
           color: isFocused ? Theme.of(context).colorScheme.primary : Colors.white,
         ),

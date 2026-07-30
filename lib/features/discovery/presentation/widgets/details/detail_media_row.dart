@@ -25,8 +25,8 @@ class DetailMediaRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return HorizontalSection<UnifiedMedia>(
       title: title,
-      height: ShonenX.rowPosterHeight,
-      gap: ShonenX.rowGap,
+      height: ShonenXMetrics.of(context).rowPoster / ShonenX.posterAspect,
+      gap: ShonenXMetrics.of(context).rowGap,
       data: AsyncValue.data(items),
       itemBuilder: (context, item) => TvPosterCard(
         heroTag: '$tagPrefix-${item.id}',
@@ -53,8 +53,11 @@ class DetailCharacterRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return HorizontalSection<MediaCharacter>(
       title: 'Characters',
-      height: 210,
-      gap: ShonenX.rowGap,
+      // Portrait image plus two text lines, all derived so the row cannot
+      // overflow when the type scale changes.
+      height: ShonenXMetrics.of(context).rowPoster * 1.25 +
+          ShonenXMetrics.of(context).body * 3.2,
+      gap: ShonenXMetrics.of(context).rowGap,
       data: AsyncValue.data(characters),
       itemBuilder: (context, character) => _CharacterCard(character: character),
     );
@@ -70,6 +73,7 @@ class _CharacterCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final m = ShonenXMetrics.of(context);
     final radius = BorderRadius.circular(ShonenX.posterRadius);
 
     return TvFocusable(
@@ -79,15 +83,15 @@ class _CharacterCard extends StatelessWidget {
       canRequestFocus: false,
       borderRadius: radius,
       child: SizedBox(
-        width: 130,
+        width: m.rowPoster,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ClipRRect(
               borderRadius: radius,
               child: SizedBox(
-                width: 130,
-                height: 160,
+                width: m.rowPoster,
+                height: m.rowPoster * 1.25,
                 child: (character.image == null || character.image!.isEmpty)
                     ? Container(
                         color: cs.surfaceContainer,
@@ -106,12 +110,13 @@ class _CharacterCard extends StatelessWidget {
                       ),
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: m.body * 0.5),
             Text(
               character.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodyMedium?.copyWith(
+                fontSize: m.body,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -121,6 +126,7 @@ class _CharacterCard extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: m.badge,
                   color: cs.onSurfaceVariant,
                 ),
               ),

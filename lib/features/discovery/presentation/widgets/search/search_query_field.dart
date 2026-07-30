@@ -15,7 +15,7 @@ class SearchQueryField extends StatefulWidget {
     super.key,
     required this.text,
     this.hint = 'Search',
-    this.height = ShonenX.searchFieldHeight,
+    required this.height,
   });
 
   @override
@@ -43,7 +43,7 @@ class _SearchQueryFieldState extends State<SearchQueryField>
 
     return Container(
       height: widget.height,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: EdgeInsets.symmetric(horizontal: widget.height * 0.36),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(ShonenX.searchFieldRadius),
         border: Border.all(color: cs.outlineVariant),

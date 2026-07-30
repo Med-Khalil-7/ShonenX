@@ -9,28 +9,22 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/core/tv/tv_focusable.dart';
 import 'package:shonenx/core/tv/tv_metrics.dart';
-import 'package:shonenx/core/utils/extensions.dart';
 import 'package:shonenx/features/auth/providers/auth_provider.dart';
-import 'package:shonenx/features/discovery/domain/media_args.dart';
+import 'package:shonenx/features/discovery/domain/media_actions.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/details/detail_media_row.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_list_panel.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_source_header.dart';
 import 'package:shonenx/features/discovery/providers/details_provider.dart';
-import 'package:shonenx/features/discovery/providers/episodes_provider.dart';
 import 'package:shonenx/features/history/domain/models/watch_history_entry.dart';
 import 'package:shonenx/features/history/providers/watch_history_provider.dart';
 import 'package:shonenx/features/player/domain/player_mode.dart';
-import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
 import 'package:shonenx/features/tracking/domain/isar_tracker_link.dart';
-import 'package:shonenx/features/tracking/domain/models/tracked_status.dart';
 import 'package:shonenx/features/tracking/domain/models/tracker_type.dart';
 import 'package:shonenx/features/tracking/engine/remote_tracker.dart';
-import 'package:shonenx/features/tracking/presentation/widgets/tracker_manager_sheet.dart';
 import 'package:shonenx/features/tracking/providers/media_tracking_provider.dart';
 import 'package:shonenx/features/tracking/providers/tracker_link_provider.dart';
 import 'package:shonenx/features/tracking/providers/tracker_registry.dart';
 import 'package:shonenx/features/tracking/providers/tracking_prefs_provider.dart';
-import 'package:shonenx/shared/models/unified_episode.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
 import 'package:shonenx/shared/models/video_server.dart';
 import 'package:shonenx/shared/widgets/app_scaffold.dart';
@@ -106,13 +100,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
         .saveLink(primaryType, mapping);
   }
 
-  void _toast(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
   /// Resumes the part-watched episode if there is one, otherwise starts the
   /// one after the last finished episode, otherwise episode one.
   ///
@@ -122,57 +109,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
   /// screen the user may never play from.
   Future<void> _play(UnifiedMedia media, {ServerType? serverType}) async {
     if (_resolving) return;
-
-    if (serverType != null) {
-      ref.read(playerPrefsProvider.notifier).setDefaultServerType(serverType);
-    }
-
     setState(() => _resolving = true);
     try {
-      final state = await ref.read(
-        episodesListProvider(MediaArgs.fromMedia(media)).future,
-      );
-      final episodes = state.episodes;
-      if (episodes.isEmpty) {
-        _toast('No episodes found for this source.');
-        return;
-      }
-
-      final history = ref.read(historyEpisodesProvider(media.id)).value ?? [];
-      final last = history.firstOrNull;
-
-      UnifiedEpisode? target;
-      Duration? startPosition;
-
-      if (last != null) {
-        final partway =
-            last.positionInMilliseconds > 0 &&
-            last.positionInMilliseconds < last.durationInMilliseconds;
-        if (partway) {
-          target = episodes.firstWhereOrNull(
-            (e) => e.number == last.episodeNumber,
-          );
-          startPosition = Duration(milliseconds: last.positionInMilliseconds);
-        } else {
-          target = episodes.firstWhereOrNull(
-            (e) => e.number == last.episodeNumber + 1,
-          );
-        }
-      }
-      target ??= episodes.first;
-
-      if (!mounted) return;
-      context.push(
-        '/player',
-        extra: PlayerModeOnline(
-          media: media,
-          episode: target,
-          sourceInfo: state.source,
-          startPosition: startPosition,
-        ),
-      );
-    } catch (e) {
-      _toast('Could not start playback: $e');
+      await MediaActions.play(context, ref, media, serverType: serverType);
     } finally {
       if (mounted) setState(() => _resolving = false);
     }
@@ -230,62 +169,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     );
   }
 
-  Future<void> _addToWatchList(UnifiedMedia media) async {
-    final tracker = ref.read(primaryTrackerProvider);
-    if (!(await tracker.isAuthenticated)) {
-      if (!mounted) return;
-      _openTrackerManager(media);
-      return;
-    }
+  Future<void> _addToWatchList(UnifiedMedia media) =>
+      MediaActions.addToWatchList(context, ref, media);
 
-    final links = ref.read(trackerLinkProvider(media.id)).value ?? {};
-    final trackingId = tracker.type == TrackerType.local
-        ? media.id
-        : links[tracker.type]?.trackingId;
-
-    if (trackingId == null) {
-      // Nothing to write against yet; the manager is where a link is made.
-      if (!mounted) return;
-      _openTrackerManager(media);
-      return;
-    }
-
-    final existing = ref
-        .read(
-          mediaTrackingProvider(
-            TrackingQuery(tracker.type, media.id, media.type),
-          ),
-        )
-        .value;
-
-    try {
-      await tracker.updateListItem(
-        media: media,
-        trackingId: trackingId,
-        status: TrackedStatus.planning,
-        progress: existing?.progress ?? 0,
-        score: existing?.score ?? 0,
-      );
-      ref.invalidate(
-        mediaTrackingProvider(
-          TrackingQuery(tracker.type, media.id, media.type),
-        ),
-      );
-      _toast('Added to ${tracker.type.displayName} plan to watch');
-    } catch (e) {
-      _toast('Could not add to watch list: $e');
-    }
-  }
-
-  void _openTrackerManager(UnifiedMedia media) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      useRootNavigator: true,
-      builder: (_) => TrackerManagerSheet(media: media),
-    );
-  }
+  void _openTrackerManager(UnifiedMedia media) =>
+      MediaActions.openTrackerManager(context, media);
 
   void _share(UnifiedMedia media) {
     final providerId = media.providerId ?? 'anilist';
@@ -302,7 +190,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final size = MediaQuery.sizeOf(context);
-    final gutter = ShonenX.gutter(size);
+    final m = ShonenXMetrics.of(context);
+    final gutter = m.gutter(size);
     final topInset = TvMetrics.verticalOfSize(size);
 
     final detailsState = ref.watch(
@@ -330,11 +219,14 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
+                  // Starts at the back arrow's inset, not the content gutter:
+                  // the arrow lives in the margin to the left of the text
+                  // column, so it must not push the column inward.
                   padding: EdgeInsets.fromLTRB(
-                    gutter,
+                    m.backArrowInset,
                     topInset + 16,
                     gutter,
-                    40,
+                    m.body * 3,
                   ),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
@@ -342,30 +234,38 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                       // report very different logical widths for the same
                       // panel, and a hardcoded poster plus two hardcoded
                       // buttons overflow the narrow ones.
-                      final posterHeight = math.min(
-                        ShonenX.detailPosterWidth * 1.5,
-                        size.height * 0.72,
-                      );
                       final posterWidth = math.min(
-                        posterHeight * (2 / 3),
-                        constraints.maxWidth * 0.32,
+                        m.detailPoster,
+                        size.height * 0.72 * ShonenX.posterAspect,
                       );
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _IconButton(
-                            icon: Icons.arrow_back,
-                            onPressed: () => context.pop(),
-                            tooltip: 'Back',
+                          // The margin between the arrow's inset and the
+                          // content gutter is narrower than the button itself,
+                          // so the slot has to be the larger of the two --
+                          // sizing it to the margin alone squashed the icon.
+                          SizedBox(
+                            width: math.max(
+                              gutter - m.backArrowInset,
+                              m.iconButton * 1.5,
+                            ),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: _IconButton(
+                                icon: Icons.arrow_back,
+                                onPressed: () => context.pop(),
+                                tooltip: 'Back',
+                              ),
+                            ),
                           ),
-                          const SizedBox(width: 24),
                           Expanded(child: _buildInfoColumn(media, theme, cs)),
-                          const SizedBox(width: 40),
+                          SizedBox(width: gutter * 0.5),
                           _Poster(
                             media: media,
                             tag: widget.tag,
                             width: posterWidth,
-                            height: posterWidth * 1.5,
+                            height: posterWidth / ShonenX.posterAspect,
                           ),
                         ],
                       );
@@ -404,6 +304,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
   Widget _buildInfoColumn(UnifiedMedia media, ThemeData theme, ColorScheme cs) {
     final genres = media.genres ?? const <String>[];
     final description = media.description;
+    final m = ShonenXMetrics.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -411,8 +312,8 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
         // A Wrap, not a Row: on a narrow viewport the badges and the two
         // action icons cannot share a line, and a Row would just clip them.
         Wrap(
-          spacing: 24,
-          runSpacing: 8,
+          spacing: m.meta * 1.6,
+          runSpacing: m.meta * 0.5,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             TvMetaRow(media: media),
@@ -424,7 +325,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                   tooltip: 'Share',
                   onPressed: () => _share(media),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: m.meta),
                 _TrackerButton(
                   media: media,
                   onOpenManager: () => _openTrackerManager(media),
@@ -433,37 +334,40 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: m.titlePage * 0.6),
         Text(
           media.title.availableTitle,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.displaySmall?.copyWith(
+            fontSize: m.titlePage,
             fontWeight: FontWeight.w800,
             height: 1.1,
           ),
         ),
-        const SizedBox(height: 22),
+        SizedBox(height: m.titlePage * 0.7),
         if (description != null && description.isNotEmpty)
           Text(
             _plainText(description),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodyLarge?.copyWith(
+              fontSize: m.body,
               color: cs.onSurfaceVariant,
               height: 1.5,
             ),
           ),
-        const SizedBox(height: 18),
+        SizedBox(height: m.body * 1.6),
         Text(
           'Genres: ${genres.join(', ')}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.titleMedium?.copyWith(
+            fontSize: m.body,
             color: cs.onSurfaceVariant,
           ),
         ),
-        const SizedBox(height: 32),
+        SizedBox(height: m.body * 2.6),
         FocusTraversalGroup(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -471,12 +375,12 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
               // minus everything else left it a pixel short, and the pair
               // wrapped onto separate lines.
               final buttonWidth = math.min(
-                280.0,
-                (constraints.maxWidth - 20) / 2,
+                m.buttonWidth,
+                (constraints.maxWidth - m.label * 1.6) / 2,
               );
               return Wrap(
-                spacing: 16,
-                runSpacing: 12,
+                spacing: m.label * 1.3,
+                runSpacing: m.label,
                 children: [
                   TvButton(
                     label: 'Play now',
@@ -649,17 +553,18 @@ class _IconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final m = ShonenXMetrics.of(context);
 
     return TvFocusable(
       onTap: onPressed,
       borderRadius: BorderRadius.circular(10),
       scaleOnFocus: false,
       builder: (context, isFocused) => SizedBox(
-        width: 44,
-        height: 44,
+        width: m.iconButton * 1.5,
+        height: m.iconButton * 1.5,
         child: Icon(
           icon,
-          size: 28,
+          size: m.iconButton,
           semanticLabel: tooltip,
           color: isFocused ? cs.onSurface : cs.onSurfaceVariant,
         ),

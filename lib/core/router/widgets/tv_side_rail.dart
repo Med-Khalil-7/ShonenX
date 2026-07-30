@@ -50,8 +50,6 @@ const tvDestinations = <TvNavDestination>[
 /// expansion -- a cost a TV SoC cannot absorb smoothly. At a fixed width the
 /// content padding is constant and nothing below it ever reflows.
 class TvSideRail extends StatelessWidget {
-  static const double width = ShonenX.railWidth;
-
   final int currentIndex;
   final ValueChanged<TvNavDestination> onSelected;
 
@@ -74,7 +72,9 @@ class TvSideRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final m = ShonenXMetrics.of(context);
     final verticalInset = TvMetrics.verticalOfSize(MediaQuery.sizeOf(context));
+    final itemGap = m.railItem * 0.25;
 
     return FocusScope(
       node: scopeNode,
@@ -101,14 +101,14 @@ class TvSideRail extends StatelessWidget {
           return KeyEventResult.ignored;
         },
         child: SizedBox(
-          width: TvSideRail.width,
+          width: m.railWidth,
           child: Stack(
             children: [
               Padding(
                 padding: EdgeInsets.symmetric(vertical: verticalInset),
                 child: Column(
                   children: [
-                    const SizedBox(height: 24),
+                    SizedBox(height: m.railLogo * 0.43),
                     // Brand mark, never a focus stop -- a remote should not
                     // have to step over decoration to reach a destination.
                     const ExcludeFocus(child: _RailLogo()),
@@ -122,8 +122,8 @@ class TvSideRail extends StatelessWidget {
                               FocusTraversalOrder(
                                 order: NumericFocusOrder(i.toDouble()),
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 8,
+                                  padding: EdgeInsets.symmetric(
+                                    vertical: itemGap / 2,
                                   ),
                                   child: _RailItem(
                                     destination: tvDestinations[i],
@@ -149,8 +149,11 @@ class TvSideRail extends StatelessWidget {
                     child: _RailIndicator(
                       selectedItem: _selectedItem,
                       itemCount: tvDestinations.length,
-                      topOffset: verticalInset + 24 + ShonenX.railLogoSize,
+                      topOffset:
+                          verticalInset + m.railLogo * 0.43 + m.railLogo,
                       bottomOffset: verticalInset,
+                      itemPitch: m.railItem + itemGap,
+                      indicator: m.railIndicator,
                       color: cs.primary,
                     ),
                   ),
@@ -168,9 +171,10 @@ class _RailLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final m = ShonenXMetrics.of(context);
     return Container(
-      width: ShonenX.railLogoSize,
-      height: ShonenX.railLogoSize,
+      width: m.railLogo,
+      height: m.railLogo,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.primary,
         borderRadius: BorderRadius.circular(ShonenX.railLogoRadius),
@@ -179,8 +183,11 @@ class _RailLogo extends StatelessWidget {
       child: Image.asset(
         'assets/images/app_icon.png',
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) =>
-            const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 32),
+        errorBuilder: (_, __, ___) => Icon(
+          Icons.play_arrow_rounded,
+          color: Colors.white,
+          size: m.railIcon,
+        ),
       ),
     );
   }
@@ -199,6 +206,10 @@ class _RailIndicator extends StatelessWidget {
   final double topOffset;
   final double bottomOffset;
 
+  /// Item box plus the padding above and below it.
+  final double itemPitch;
+  final Size indicator;
+
   final Color color;
 
   const _RailIndicator({
@@ -206,11 +217,10 @@ class _RailIndicator extends StatelessWidget {
     required this.itemCount,
     required this.topOffset,
     required this.bottomOffset,
+    required this.itemPitch,
+    required this.indicator,
     required this.color,
   });
-
-  /// Item box plus the 8px padding above and below it.
-  static const _itemPitch = ShonenX.railItemSize + 16;
 
   @override
   Widget build(BuildContext context) {
@@ -219,12 +229,12 @@ class _RailIndicator extends StatelessWidget {
         final regionHeight = constraints.maxHeight - topOffset - bottomOffset;
         // Items are centred as a group, so the first starts half a stack above
         // the midpoint of that region.
-        final firstTop = (regionHeight - itemCount * _itemPitch) / 2;
+        final firstTop = (regionHeight - itemCount * itemPitch) / 2;
         final top =
             topOffset +
             firstTop +
-            selectedItem * _itemPitch +
-            (_itemPitch - ShonenX.railIndicator.height) / 2;
+            selectedItem * itemPitch +
+            (itemPitch - indicator.height) / 2;
 
         // The AnimatedPositioned needs a Stack of its own: LayoutBuilder
         // breaks the parent-child relationship a Stack requires, so placing it
@@ -237,12 +247,12 @@ class _RailIndicator extends StatelessWidget {
               left: 0,
               top: top,
               child: Container(
-                width: ShonenX.railIndicator.width,
-                height: ShonenX.railIndicator.height,
+                width: indicator.width,
+                height: indicator.height,
                 decoration: BoxDecoration(
                   color: color,
-                  borderRadius: const BorderRadius.horizontal(
-                    right: Radius.circular(3),
+                  borderRadius: BorderRadius.horizontal(
+                    right: Radius.circular(indicator.width),
                   ),
                 ),
               ),
@@ -268,10 +278,11 @@ class _RailItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final m = ShonenXMetrics.of(context);
 
     return TvFocusable(
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(m.railItem * 0.2),
       scaleOnFocus: false,
       // The rail is narrow; a ring would crowd the icon. Focus reads as a
       // filled plate instead, and red stays reserved for the edge indicator.
@@ -279,12 +290,12 @@ class _RailItem extends StatelessWidget {
       filledWhenFocused: true,
       focusFillColor: cs.surfaceContainer,
       builder: (context, isFocused) => Container(
-        width: ShonenX.railItemSize,
-        height: ShonenX.railItemSize,
+        width: m.railItem,
+        height: m.railItem,
         alignment: Alignment.center,
         child: Icon(
           destination.icon,
-          size: ShonenX.railIconSize,
+          size: m.railIcon,
           color: isFocused || selected ? cs.onSurface : cs.onSurfaceVariant,
         ),
       ),
@@ -331,7 +342,9 @@ class _TvShellBodyState extends State<TvShellBody> {
     return Stack(
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: TvSideRail.width),
+          padding: EdgeInsets.only(
+            left: ShonenXMetrics.of(context).railWidth,
+          ),
           child: FocusScope(
             node: _contentScope,
             child: Focus(

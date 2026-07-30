@@ -44,12 +44,14 @@ class _PlayerCenterIndicatorState
       });
     }
 
+    final m = ShonenXMetrics.of(context);
+
     if (isBuffering) {
-      return const Center(
+      return Center(
         child: SizedBox(
-          width: 56,
-          height: 56,
-          child: CircularProgressIndicator(
+          width: m.centerIndicator * 0.47,
+          height: m.centerIndicator * 0.47,
+          child: const CircularProgressIndicator(
             strokeWidth: 5,
             color: ShonenX.red,
           ),
@@ -67,15 +69,15 @@ class _PlayerCenterIndicatorState
         opacity: showGlyph ? 1 : 0,
         child: Center(
           child: Container(
-            width: ShonenX.centerIndicatorSize,
-            height: ShonenX.centerIndicatorSize,
+            width: m.centerIndicator,
+            height: m.centerIndicator,
             decoration: const BoxDecoration(
               color: Colors.black54,
               shape: BoxShape.circle,
             ),
             child: Icon(
               isPlaying ? Icons.play_arrow_rounded : Icons.pause_rounded,
-              size: 56,
+              size: m.centerIndicator * 0.47,
               color: Colors.white,
             ),
           ),

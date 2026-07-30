@@ -111,7 +111,8 @@ class _SearchDiscoverScreenState extends ConsumerState<SearchDiscoverScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final gutter = ShonenX.gutter(MediaQuery.sizeOf(context));
+    final m = ShonenXMetrics.of(context);
+    final gutter = m.shellGutter(MediaQuery.sizeOf(context));
 
     return AppScaffold(
       // No app bar: the reference has none, and on a screen where the whole
@@ -125,15 +126,12 @@ class _SearchDiscoverScreenState extends ConsumerState<SearchDiscoverScreen> {
             SizedBox(
               // Never more than 40% of the width: the results column has to
               // stay wide enough for a title plus its badges.
-              width: math.min(
-                ShonenX.searchColumnWidth,
-                MediaQuery.sizeOf(context).width * 0.4,
-              ),
+              width: m.searchColumn,
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  const gap = 24.0;
+                  final gap = m.searchField * 0.4;
                   final fieldHeight = math.min(
-                    ShonenX.searchFieldHeight,
+                    m.searchField,
                     constraints.maxHeight * 0.12,
                   );
                   // Devices disagree wildly about the logical viewport for the
@@ -142,13 +140,13 @@ class _SearchDiscoverScreenState extends ConsumerState<SearchDiscoverScreen> {
                   final keyHeight =
                       ((constraints.maxHeight - fieldHeight - gap - 8) /
                               TvOnScreenKeyboard.rowCount)
-                          .clamp(28.0, ShonenX.keyHeight);
+                          .clamp(20.0, m.keyHeight);
 
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       SearchQueryField(text: _text, height: fieldHeight),
-                      const SizedBox(height: gap),
+                      SizedBox(height: gap),
                       TvOnScreenKeyboard(
                         firstKeyFocus: _firstKeyFocus,
                         keyHeight: keyHeight,

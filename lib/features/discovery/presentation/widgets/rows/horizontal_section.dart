@@ -1,6 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shonenx/core/theme/shonenx_tokens.dart';
+import 'package:shonenx/core/tv/tv_metrics.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
 class HorizontalSection<T> extends StatelessWidget {
@@ -32,7 +35,16 @@ class HorizontalSection<T> extends StatelessWidget {
     // The gutter lives on the list's own padding rather than an outer Padding,
     // so items scroll under the safe edge instead of having their focus ring
     // clipped at the first and last position.
-    final edge = ShonenX.gutter(MediaQuery.sizeOf(context));
+    final m = ShonenXMetrics.of(context);
+    final edge = m.shellGutter(MediaQuery.sizeOf(context));
+    // Cards carry a focus ring drawn as a Border, which occupies its width
+    // even when transparent, so each one is already ringWidth wider on both
+    // sides than the art inside it. Deduct that or the visible gap comes out
+    // at roughly three times what was asked for.
+    final separator = math.max(
+      0.0,
+      (gap ?? m.rowGap) - TvFocus.ringWidth * 2,
+    );
 
     // Each row is its own traversal group: left/right stay inside the row and
     // up/down move between rows, instead of the geometric policy wandering
@@ -53,9 +65,10 @@ class HorizontalSection<T> extends StatelessWidget {
             // reachable by scrolling the row itself.
             child: Text(
               title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontSize: m.heading,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
           SizedBox(
@@ -82,7 +95,7 @@ class HorizontalSection<T> extends StatelessWidget {
                     );
                   },
                   separatorBuilder: (context, index) =>
-                      SizedBox(width: gap ?? 10.0),
+                      SizedBox(width: separator),
                 ),
               ),
               error: (e, _) => Center(child: Text('Error: $e')),
@@ -108,7 +121,7 @@ class HorizontalSection<T> extends StatelessWidget {
                   itemBuilder: (context, index) =>
                       itemBuilder(context, items[index]),
                   separatorBuilder: (context, index) =>
-                      SizedBox(width: gap ?? 10.0),
+                      SizedBox(width: separator),
                 );
               },
             ),

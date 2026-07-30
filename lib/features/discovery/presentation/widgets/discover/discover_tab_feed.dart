@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/features/discovery/providers/discovery_prefs_provider.dart';
 import 'package:shonenx/features/discovery/providers/search_provider.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
@@ -105,6 +106,22 @@ class _DiscoverTabFeedState extends ConsumerState<DiscoverTabFeed> {
   @override
   Widget build(BuildContext context) {
     if (!_hasActiveFilters) {
+      if (widget.listMode) {
+        // The search screen's right pane stays empty until something is typed.
+        // The browse feeds render through MediaCard at its own much larger
+        // size, which next to the keyboard column reads as a different app.
+        final theme = Theme.of(context);
+        return Center(
+          child: Text(
+            'Search for an anime',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontSize: ShonenXMetrics.of(context).meta,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        );
+      }
+
       final discoveryMode = ref.watch(
         discoveryPrefsProvider.select((p) => p.mode),
       );

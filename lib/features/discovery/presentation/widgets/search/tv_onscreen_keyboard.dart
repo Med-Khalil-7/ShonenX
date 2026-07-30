@@ -43,8 +43,8 @@ class TvOnScreenKeyboard extends StatelessWidget {
     required this.onChar,
     required this.onBackspace,
     required this.onSpace,
+    required this.keyHeight,
     this.firstKeyFocus,
-    this.keyHeight = ShonenX.keyHeight,
   });
 
   @override

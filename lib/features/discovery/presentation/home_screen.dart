@@ -87,11 +87,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final sections = ref.watch(userHomeLayoutProvider);
-    final activeSections = sections.where((s) => !s.disabled).toList();
+    final allActive = sections.where((s) => !s.disabled).toList();
 
-    final heroSection = activeSections
+    final discoveryCount = allActive
+        .where((s) => s.type == HomeSectionType.discovery)
+        .length;
+    final heroSection = allActive
         .where((s) => s.type == HomeSectionType.discovery)
         .firstOrNull;
+
+    // The hero already shows this feed, so it does not need a row of its own
+    // as well -- unless it is the only discovery section there is, which is
+    // the case in source mode, where dropping it would leave no rows at all.
+    final activeSections = (discoveryCount > 1 && heroSection != null)
+        ? allActive.where((s) => s.id != heroSection.id).toList()
+        : allActive;
 
     return AppScaffold(
       // The hero reaches the panel edge; the rows below apply overscan
@@ -140,7 +150,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     top:
                         TvMetrics.verticalOfSize(MediaQuery.sizeOf(context)) +
                         16,
-                    right: ShonenX.contentPadH,
+                    right: ShonenXMetrics.of(context).shellGutter(
+                      MediaQuery.sizeOf(context),
+                    ),
                     child: _HeaderActions(firstFocus: _headerFocus),
                   ),
                 ],
@@ -257,14 +269,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           );
         }
 
+        final m = ShonenXMetrics.of(context);
         return HorizontalSection<UnifiedMedia>(
           title: section.title,
-          height: ShonenX.rowPosterHeight,
-          gap: ShonenX.rowGap,
+          height: m.rowPoster / ShonenX.posterAspect,
+          gap: m.rowGap,
           data: ref.watch(categorySectionFeedProvider((category, mediaType))),
           skeletonItemBuilder: (context, index) =>
-              const TvPosterCard(imageUrl: null),
+              TvPosterCard(imageUrl: null, width: m.rowPoster),
           itemBuilder: (context, item) => TvPosterCard(
+            width: m.rowPoster,
             heroTag: '${section.id}-${item.id}',
             title: item.title.availableTitle,
             imageUrl: item.cover ?? item.banner,
@@ -316,20 +330,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         final info = activeSources[discoveryIndex];
         return _buildSingleSourceRow(context, ref, info, info.name);
       },
-      loading: () => Column(
-        children: List.generate(
-          2,
-          (sIndex) => HorizontalSection<UnifiedMedia>(
-            title: 'Loading',
-            height: ShonenX.rowPosterHeight,
-            gap: ShonenX.rowGap,
-            data: const AsyncValue.loading(),
-            itemBuilder: (_, __) => const SizedBox.shrink(),
-            skeletonItemBuilder: (context, index) =>
-                const TvPosterCard(imageUrl: null),
+      loading: () {
+        final m = ShonenXMetrics.of(context);
+        return Column(
+          children: List.generate(
+            2,
+            (sIndex) => HorizontalSection<UnifiedMedia>(
+              title: 'Loading',
+              height: m.rowPoster / ShonenX.posterAspect,
+              gap: m.rowGap,
+              data: const AsyncValue.loading(),
+              itemBuilder: (_, __) => const SizedBox.shrink(),
+              skeletonItemBuilder: (context, index) =>
+                  TvPosterCard(imageUrl: null, width: m.rowPoster),
+            ),
           ),
-        ),
-      ),
+        );
+      },
       error: (_, __) => const SizedBox.shrink(),
     );
   }
@@ -340,14 +357,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     SourceInfo info,
     String title,
   ) {
+    final m = ShonenXMetrics.of(context);
     return HorizontalSection<UnifiedMedia>(
       title: title,
-      height: ShonenX.rowPosterHeight,
-      gap: ShonenX.rowGap,
+      height: m.rowPoster / ShonenX.posterAspect,
+      gap: m.rowGap,
       data: ref.watch(singleSourceFeedProvider((info, MediaType.ANIME))),
       skeletonItemBuilder: (context, index) =>
-          const TvPosterCard(imageUrl: null),
+          TvPosterCard(imageUrl: null, width: m.rowPoster),
       itemBuilder: (context, item) => TvPosterCard(
+        width: m.rowPoster,
         heroTag: '$title-${item.id}',
         title: item.title.availableTitle,
         imageUrl: item.cover ?? item.banner,
@@ -419,8 +438,8 @@ class _HeaderButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       scaleOnFocus: false,
       builder: (context, isFocused) => Container(
-        width: 48,
-        height: 48,
+        width: ShonenXMetrics.of(context).iconButton * 1.35,
+        height: ShonenXMetrics.of(context).iconButton * 1.35,
         decoration: BoxDecoration(
           color: active
               ? cs.primary.withValues(alpha: 0.18)
@@ -429,7 +448,9 @@ class _HeaderButton extends StatelessWidget {
         ),
         child: Icon(
           icon,
-          size: 24,
+          // Deliberately smaller than the detail screen's icons: these sit in
+          // the corner as chrome, not as part of the content.
+          size: ShonenXMetrics.of(context).iconButton * 0.72,
           color: isFocused || active ? cs.onSurface : cs.onSurfaceVariant,
         ),
       ),
