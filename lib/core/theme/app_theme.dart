@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shonenx/shared/providers/theme_prefs_provider.dart';
 import 'package:shonenx/core/theme/exclusive_schemes.dart';
+import 'package:shonenx/core/tv/tv_metrics.dart';
 
 typedef ThemeModifier =
     ThemeData Function(ThemeData theme, ThemePrefsState prefs);
@@ -229,6 +230,27 @@ class AppTheme {
 
   static const double _tvTextScale = 1.2;
 
+  /// Material's stock focus treatment is a ~20%-alpha wash, which measures as
+  /// a real repaint but is invisible from a sofa. Every Material button gets a
+  /// hard outline instead, so focus is unmistakable without wrapping each call
+  /// site. The colour is deliberately high-contrast rather than the primary
+  /// tone, so it also reads on top of an already-primary-filled button.
+  static WidgetStateProperty<BorderSide?> _focusRing(ColorScheme cs) =>
+      WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.focused)) {
+          return BorderSide(color: cs.onSurface, width: TvFocus.ringWidth);
+        }
+        return null;
+      });
+
+  static WidgetStateProperty<Color?> _focusOverlay(ColorScheme cs) =>
+      WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.focused)) {
+          return cs.onSurface.withValues(alpha: 0.14);
+        }
+        return null;
+      });
+
   /// Material 3 default sizes, used as the base when a slot leaves `fontSize`
   /// null. GoogleFonts text themes do exactly that for several slots, and
   /// `TextTheme.apply(fontSizeFactor:)` asserts on a null fontSize -- so the
@@ -294,7 +316,9 @@ class AppTheme {
       textTheme: _scaleTextTheme(theme.textTheme),
       primaryTextTheme: _scaleTextTheme(theme.primaryTextTheme),
       iconTheme: theme.iconTheme.copyWith(size: 30),
-      focusColor: cs.primary,
+      // ListTile and bare InkWells fall back to this; the stock 20%-alpha
+      // wash is invisible at 10 feet, so it is much stronger here.
+      focusColor: cs.primary.withValues(alpha: 0.34),
       listTileTheme: theme.listTileTheme.copyWith(
         minTileHeight: 72,
         minVerticalPadding: 14,
@@ -314,25 +338,25 @@ class AppTheme {
         style: FilledButton.styleFrom(
           minimumSize: _tvButtonMinSize,
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-        ),
+        ).copyWith(side: _focusRing(cs), overlayColor: _focusOverlay(cs)),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           minimumSize: _tvButtonMinSize,
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-        ),
+        ).copyWith(side: _focusRing(cs), overlayColor: _focusOverlay(cs)),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           minimumSize: _tvButtonMinSize,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        ),
+        ).copyWith(side: _focusRing(cs), overlayColor: _focusOverlay(cs)),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           minimumSize: _tvButtonMinSize,
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-        ),
+        ).copyWith(side: _focusRing(cs), overlayColor: _focusOverlay(cs)),
       ),
       chipTheme: theme.chipTheme.copyWith(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
