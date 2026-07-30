@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shonenx/shared/providers/storage_provider.dart';
 import 'package:shonenx/features/player/domain/aniskip_prefs.dart';
-import 'package:shonenx/features/player/domain/gesture_prefs.dart';
 import 'package:shonenx/shared/models/video_server.dart';
 
 enum PlayerType {
@@ -22,7 +21,6 @@ enum PlayerType {
 
 class PlayerPrefsState {
   final PlayerType playerType;
-  final GesturePrefs gesturePrefs;
   final bool showShortcutsSheetOnStart;
   final String defaultQuality;
   final String defaultAudioLang;
@@ -35,7 +33,6 @@ class PlayerPrefsState {
 
   const PlayerPrefsState({
     this.playerType = PlayerType.mediakit,
-    this.gesturePrefs = const GesturePrefs(),
     this.showShortcutsSheetOnStart = true,
     this.defaultQuality = '1080p',
     this.defaultAudioLang = 'eng',
@@ -50,7 +47,6 @@ class PlayerPrefsState {
   PlayerPrefsState copyWith({
     AniSkipPrefs? aniSkipPrefs,
     PlayerType? playerType,
-    GesturePrefs? gesturePrefs,
     bool? showShortcutsSheetOnStart,
     String? defaultQuality,
     String? defaultAudioLang,
@@ -63,7 +59,6 @@ class PlayerPrefsState {
   }) {
     return PlayerPrefsState(
       playerType: playerType ?? this.playerType,
-      gesturePrefs: gesturePrefs ?? this.gesturePrefs,
       showShortcutsSheetOnStart:
           showShortcutsSheetOnStart ?? this.showShortcutsSheetOnStart,
       defaultQuality: defaultQuality ?? this.defaultQuality,
@@ -80,9 +75,6 @@ class PlayerPrefsState {
   factory PlayerPrefsState.fromMap(Map<String, dynamic> map) {
     return PlayerPrefsState(
       playerType: PlayerType.fromString(map['playerType']),
-      gesturePrefs: map['gesturePrefs'] != null
-          ? GesturePrefs.fromMap(map['gesturePrefs'])
-          : const GesturePrefs(),
       showShortcutsSheetOnStart: map['showShortcutsSheetOnStart'] ?? true,
       defaultQuality: map['defaultQuality'] ?? '1080p',
       defaultAudioLang: map['defaultAudioLang'] ?? 'eng',
@@ -103,7 +95,6 @@ class PlayerPrefsState {
   Map<String, dynamic> toMap() {
     return {
       'playerType': playerType.name,
-      'gesturePrefs': gesturePrefs.toMap(),
       'showShortcutsSheetOnStart': showShortcutsSheetOnStart,
       'defaultQuality': defaultQuality,
       'defaultAudioLang': defaultAudioLang,
@@ -146,10 +137,7 @@ class PlayerPrefsNotifier extends Notifier<PlayerPrefsState> {
     _saveDb();
   }
 
-  void updateGesturePrefs(GesturePrefs gesturePrefs) {
-    state = state.copyWith(gesturePrefs: gesturePrefs);
-    _saveDb();
-  }
+
 
   void toggleShowShortcutsSheetOnStart(bool value) {
     state = state.copyWith(showShortcutsSheetOnStart: value);

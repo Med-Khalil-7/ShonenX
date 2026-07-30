@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shonenx/core/tv/tv_focusable.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shonenx/shared/providers/content_prefs_provider.dart';
@@ -124,7 +125,9 @@ class HomeScreen extends ConsumerWidget {
                     return Row(
                       children: [
                         Expanded(
-                          child: GestureDetector(
+                          // Bare GestureDetector: the profile header was
+                          // unreachable by remote.
+                          child: TvFocusable(
                             onTap: () => showModalBottomSheet(
                               context: context,
                               isScrollControlled: true,
@@ -134,7 +137,7 @@ class HomeScreen extends ConsumerWidget {
                                 trackerType: primaryTrackerType,
                               ),
                             ),
-                            behavior: HitTestBehavior.opaque,
+                            scaleOnFocus: false,
                             child: Row(
                               children: [
                                 Container(

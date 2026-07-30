@@ -14,7 +14,6 @@ import 'package:shonenx/features/player/engine/video_engine.dart';
 import 'package:shonenx/features/player/presentation/widgets/bottom_controls.dart';
 import 'package:shonenx/features/player/presentation/widgets/center_controls.dart';
 import 'package:shonenx/features/player/presentation/widgets/custom_subtitle_overlay.dart';
-import 'package:shonenx/features/player/presentation/widgets/gesture_overlay.dart';
 import 'package:shonenx/features/player/presentation/widgets/keyboard_shortcuts_sheet.dart';
 import 'package:shonenx/features/player/presentation/widgets/player_keyboard_listener.dart';
 import 'package:shonenx/features/player/presentation/widgets/top_controls.dart';
@@ -41,7 +40,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   Timer? _controlsTimer;
 
   bool _isEpisodePanelOpen = false;
-  Offset? _lastHoverPosition;
 
   static const _controlsAutoHideDuration = Duration(seconds: 3);
 
@@ -133,14 +131,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     });
   }
 
-  void _toggleControls() {
-    if (_showControls) {
-      _controlsTimer?.cancel();
-      setState(() => _showControls = false);
-    } else {
-      _showControlsTemporarily();
-    }
-  }
+
 
   void _hideControls() {
     if (_showControls) {
@@ -149,12 +140,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     }
   }
 
-  void _onMouseHover(PointerHoverEvent event) {
-    if (event.kind == PointerDeviceKind.touch) return;
-    if (_lastHoverPosition == event.position) return;
-    _lastHoverPosition = event.position;
-    _showControlsTemporarily();
-  }
+
 
   void _toggleEpisodePanel() {
     if (widget.mode is! PlayerModeOnline) return;
@@ -406,47 +392,39 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         body: PlayerKeyboardListener(
           engine: engine,
           controller: controller,
-          onUserInteraction: () {},
+          // Was an empty closure, so nothing the keyboard did ever surfaced
+          // the controls. On a remote that is the only way to reach them.
+          onUserInteraction: _showControlsTemporarily,
+          controlsVisible: _showControls,
           onToggleEpisodePanel: _toggleEpisodePanel,
           onShowShortcutsGuide: () => KeyboardShortcutsSheet.show(context),
           onExit: () {
+            // BACK unwinds one layer at a time rather than dumping the user
+            // straight out of playback.
             if (_isEpisodePanelOpen) {
               Navigator.of(context).pop();
+            } else if (_showControls) {
+              _hideControls();
             } else {
               context.pop();
             }
           },
-          child: MouseRegion(
-            cursor: _showControls
-                ? SystemMouseCursors.basic
-                : SystemMouseCursors.none,
-            onHover: _onMouseHover,
-            child: Stack(
-              children: [
-                _buildVideoLayer(engine, playerState),
-                if (playerState.activeSubtitle != null)
-                  const CustomSubtitleOverlay(),
-                Positioned.fill(
-                  child: PlayerGestureOverlay(
-                    onToggleControls: _toggleControls,
-                    onHideControls: _hideControls,
-                    onRightClick: _toggleEpisodePanel,
-                    onSeek: engine.seekRelative,
-                    onSetSpeed: engine.setSpeed,
-                  ),
+          child: Stack(
+            children: [
+              _buildVideoLayer(engine, playerState),
+              if (playerState.activeSubtitle != null)
+                const CustomSubtitleOverlay(),
+              if (_lockControls)
+                _buildLockedOverlay()
+              else
+                ..._buildControlsLayer(
+                  theme: theme,
+                  engine: engine,
+                  playerState: playerState,
+                  controller: controller,
+                  aniSkipArgs: aniSkipArgs,
                 ),
-                if (_lockControls)
-                  _buildLockedOverlay()
-                else
-                  ..._buildControlsLayer(
-                    theme: theme,
-                    engine: engine,
-                    playerState: playerState,
-                    controller: controller,
-                    aniSkipArgs: aniSkipArgs,
-                  ),
-              ],
-            ),
+            ],
           ),
         ),
       ),

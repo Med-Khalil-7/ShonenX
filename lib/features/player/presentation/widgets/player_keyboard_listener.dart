@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:volume_controller/volume_controller.dart';
 import 'package:shonenx/features/player/engine/video_engine.dart';
 import 'package:shonenx/features/player/providers/player_controller.dart';
 import 'package:shonenx/features/player/providers/video_engine_provider.dart';
@@ -11,6 +10,10 @@ class PlayerKeyboardListener extends ConsumerStatefulWidget {
   final VideoEngine engine;
   final PlayerController controller;
   final VoidCallback onUserInteraction;
+
+  /// When the controls are visible, arrow keys are released to focus
+  /// traversal instead of being consumed as transport shortcuts.
+  final bool controlsVisible;
   final VoidCallback onToggleEpisodePanel;
   final VoidCallback onShowShortcutsGuide;
   final VoidCallback? onExit;
@@ -21,6 +24,7 @@ class PlayerKeyboardListener extends ConsumerStatefulWidget {
     required this.engine,
     required this.controller,
     required this.onUserInteraction,
+    this.controlsVisible = false,
     required this.onToggleEpisodePanel,
     required this.onShowShortcutsGuide,
     this.onExit,
@@ -35,13 +39,7 @@ class _PlayerKeyboardListenerState
     extends ConsumerState<PlayerKeyboardListener> {
   double _currentPlaybackSpeed = 1.0;
 
-  Future<void> _adjustVolume(double delta) async {
-    try {
-      final current = await VolumeController.instance.getVolume();
-      final newVal = (current + delta).clamp(0.0, 1.0);
-      VolumeController.instance.setVolume(newVal);
-    } catch (_) {}
-  }
+
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
@@ -51,39 +49,64 @@ class _PlayerKeyboardListenerState
     final isPlaying = ref.read(videoEngineStateProvider).isPlaying;
     final key = event.logicalKey;
 
-    if (key == LogicalKeyboardKey.space || key == LogicalKeyboardKey.keyK) {
+    if (key == LogicalKeyboardKey.space ||
+        key == LogicalKeyboardKey.keyK ||
+        key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter ||
+        key == LogicalKeyboardKey.select ||
+        key == LogicalKeyboardKey.gameButtonA ||
+        key == LogicalKeyboardKey.mediaPlayPause) {
       if (event is KeyDownEvent) {
         isPlaying ? widget.engine.pause() : widget.engine.play();
         widget.onUserInteraction();
       }
       return KeyEventResult.handled;
+    } else if (key == LogicalKeyboardKey.mediaPlay) {
+      if (event is KeyDownEvent) {
+        widget.engine.play();
+        widget.onUserInteraction();
+      }
+      return KeyEventResult.handled;
+    } else if (key == LogicalKeyboardKey.mediaPause ||
+        key == LogicalKeyboardKey.mediaStop) {
+      if (event is KeyDownEvent) {
+        widget.engine.pause();
+        widget.onUserInteraction();
+      }
+      return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.arrowRight ||
+        key == LogicalKeyboardKey.mediaFastForward ||
         key == LogicalKeyboardKey.keyL) {
       widget.engine.seekRelative(const Duration(seconds: 10));
       widget.onUserInteraction();
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.arrowLeft ||
+        key == LogicalKeyboardKey.mediaRewind ||
         key == LogicalKeyboardKey.keyJ) {
       widget.engine.seekRelative(const Duration(seconds: -10));
       widget.onUserInteraction();
       return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.arrowUp) {
-      _adjustVolume(0.05);
-      widget.onUserInteraction();
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.arrowDown) {
-      _adjustVolume(-0.05);
-      widget.onUserInteraction();
+    } else if (key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.arrowDown) {
+      // The remote has dedicated volume keys; up/down reveal the controls so
+      // they can then be traversed. Returning ignored once the controls are
+      // showing lets DirectionalFocusIntent move focus between them.
+      if (widget.controlsVisible) return KeyEventResult.ignored;
+      if (event is KeyDownEvent) widget.onUserInteraction();
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.keyN ||
-        key == LogicalKeyboardKey.pageDown) {
+        key == LogicalKeyboardKey.pageDown ||
+        key == LogicalKeyboardKey.mediaTrackNext ||
+        key == LogicalKeyboardKey.channelDown) {
       if (event is KeyDownEvent) {
         widget.controller.skipEpisode(forward: true);
         widget.onUserInteraction();
       }
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.keyP ||
-        key == LogicalKeyboardKey.pageUp) {
+        key == LogicalKeyboardKey.pageUp ||
+        key == LogicalKeyboardKey.mediaTrackPrevious ||
+        key == LogicalKeyboardKey.channelUp) {
       if (event is KeyDownEvent) {
         widget.controller.skipEpisode(forward: false);
         widget.onUserInteraction();

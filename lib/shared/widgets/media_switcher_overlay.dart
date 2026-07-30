@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shonenx/core/tv/tv_focusable.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
 
 class MediaSwitcherOverlay extends StatelessWidget {
@@ -87,8 +88,9 @@ class MediaSwitcherOverlay extends StatelessWidget {
               ),
               if (hasSearch) ...[
                 const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: onSearchTap,
+                TvFocusable(
+                  onTap: onSearchTap ?? () {},
+                  borderRadius: BorderRadius.circular(24),
                   child: Container(
                     width: 48,
                     height: 48,
@@ -140,9 +142,11 @@ class _MediaTabPill extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return GestureDetector(
+    // Was a bare GestureDetector, so a remote could not reach the Library
+    // tabs at all. TvFocusable makes it a focus stop with a visible ring.
+    return TvFocusable(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      borderRadius: BorderRadius.circular(20),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,

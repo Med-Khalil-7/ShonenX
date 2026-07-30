@@ -5,7 +5,6 @@ import 'package:shonenx/features/player/domain/aniskip_prefs.dart';
 import 'package:shonenx/features/player/presentation/widgets/media_kit/media_kit_settings.dart';
 import 'package:shonenx/features/player/providers/aniskip_prefs_provider.dart';
 import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
-import 'package:shonenx/features/settings/presentation/widgets/gesture_settings_sheet.dart';
 import 'package:shonenx/features/settings/presentation/widgets/subtitle_settings_sheet.dart';
 import 'package:shonenx/features/settings/presentation/widgets/settings_ui_components.dart';
 import 'package:shonenx/shared/models/video_server.dart';
@@ -271,7 +270,7 @@ class PlayerSettingsScreen extends ConsumerWidget {
             ],
           ),
           SettingsSection(
-            title: 'Subtitles & Gestures',
+            title: 'Subtitles',
             children: [
               SettingsActionTile(
                 icon: Icons.subtitles_rounded,
@@ -290,46 +289,6 @@ class PlayerSettingsScreen extends ConsumerWidget {
                   );
                 },
               ),
-              SettingsActionTile(
-                icon: Icons.gesture_rounded,
-                title: 'Gesture Area',
-                subtitle: 'Customize active zones for volume and brightness',
-                onTap: () {
-                  showModalBottomSheet(
-                    context: context,
-                    constraints: const BoxConstraints(maxWidth: 1200),
-                    isScrollControlled: true,
-                    builder: (context) => const GestureSettingsSheet(),
-                  );
-                },
-              ),
-              SettingsSwitchTile(
-                icon: Icons.touch_app_rounded,
-                title: 'Enable Gestures',
-                subtitle:
-                    'Allow swiping to seek, change volume, and brightness',
-                value: playerPrefs.gesturePrefs.enableGestures,
-                onChanged: (val) {
-                  prefsNotifier.updateGesturePrefs(
-                    playerPrefs.gesturePrefs.copyWith(enableGestures: val),
-                  );
-                },
-              ),
-              if (playerPrefs.gesturePrefs.enableGestures)
-                SettingsSwitchTile(
-                  icon: Icons.swap_horiz_rounded,
-                  title: 'Swap Volume & Brightness',
-                  subtitle:
-                      'Place Volume on the left and Brightness on the right',
-                  value: playerPrefs.gesturePrefs.swapVolumeAndBrightness,
-                  onChanged: (val) {
-                    prefsNotifier.updateGesturePrefs(
-                      playerPrefs.gesturePrefs.copyWith(
-                        swapVolumeAndBrightness: val,
-                      ),
-                    );
-                  },
-                ),
             ],
           ),
         ],

@@ -439,16 +439,29 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
                   ),
                 ),
               ],
-              body: TabBarView(
-                controller: _tabController,
-                children: [
-                  AboutTabWidget(
-                    media: displayMedia,
-                    onEpisodesTabRequested: () => _tabController.animateTo(1),
-                    uiRoundness: uiRoundness,
-                  ),
-                  EpisodesTabWidget(media: displayMedia),
-                ],
+              // Unlike IndexedStack, TabBarView keeps the offscreen tab alive
+              // AND focusable, so pressing right at the edge of About would
+              // silently jump focus into the hidden Episodes tab.
+              body: AnimatedBuilder(
+                animation: _tabController,
+                builder: (context, _) => TabBarView(
+                  controller: _tabController,
+                  children: [
+                    ExcludeFocus(
+                      excluding: _tabController.index != 0,
+                      child: AboutTabWidget(
+                        media: displayMedia,
+                        onEpisodesTabRequested: () =>
+                            _tabController.animateTo(1),
+                        uiRoundness: uiRoundness,
+                      ),
+                    ),
+                    ExcludeFocus(
+                      excluding: _tabController.index != 1,
+                      child: EpisodesTabWidget(media: displayMedia),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
