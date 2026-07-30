@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shonenx/core/caching/cache_manager.dart';
@@ -6,7 +5,6 @@ import 'package:shonenx/shared/providers/database_provider.dart';
 import 'package:shonenx/features/discovery/domain/media_preference.dart';
 import 'package:shonenx/features/settings/presentation/widgets/settings_ui_components.dart';
 import 'package:shonenx/features/tracking/domain/isar_tracker_link.dart';
-import 'package:shonenx/shared/widgets/app_bottom_sheet.dart';
 import 'package:shonenx/shared/widgets/app_scaffold.dart';
 
 class TroubleshootSettingsScreen extends ConsumerStatefulWidget {

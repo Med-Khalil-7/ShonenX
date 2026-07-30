@@ -909,13 +909,6 @@ class _TrackerProfileSheetState extends ConsumerState<TrackerProfileSheet> {
                 m.uniqueSeriesTracked.toString(),
                 'Series',
               ),
-              _exclusiveMetric(
-                theme,
-                cs,
-                Icons.menu_book_rounded,
-                m.chaptersRead.toString(),
-                'Chapters',
-              ),
             ],
           ),
         ],

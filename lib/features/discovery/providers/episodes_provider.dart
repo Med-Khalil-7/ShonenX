@@ -80,23 +80,14 @@ final sourceEpisodesProvider =
 
         List<UnifiedEpisode> episodes = [];
 
-        if (args.type.usesAnimeSources) {
-          final animeSource = ref.watch(animeSourceProvider(sourceInfo));
-          log.i('Fetching episodes directly from ${sourceInfo.name}');
-          episodes = await animeSource.getEpisodes(args.providerId);
-        } else {
-          final mangaSource = ref.watch(mangaSourceProvider(sourceInfo));
-          log.i('Fetching chapters directly from ${sourceInfo.name}');
-          final chapters = await mangaSource.getChapters(args.providerId);
-          episodes = chapters
-              .map((c) => UnifiedEpisode.fromChapter(c))
-              .toList();
-        }
+        final animeSource = ref.watch(animeSourceProvider(sourceInfo));
+        log.i('Fetching episodes directly from ${sourceInfo.name}');
+        episodes = await animeSource.getEpisodes(args.providerId);
 
         episodes.sort((a, b) => a.number.compareTo(b.number));
 
         log.s(
-          'Fetched ${episodes.length} episodes/chapters from ${sourceInfo.name}',
+          'Fetched ${episodes.length} episodes from ${sourceInfo.name}',
         );
 
         return EpisodesListState(source: sourceInfo, episodes: episodes);

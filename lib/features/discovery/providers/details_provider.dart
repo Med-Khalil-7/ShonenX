@@ -50,9 +50,7 @@ final detailsProvider = FutureProvider.autoDispose
             .where((s) => s.id == args.sourceId)
             .firstOrNull;
         if (sourceInfo != null) {
-          final source = args.type.usesAnimeSources
-              ? ref.read(animeSourceProvider(sourceInfo))
-              : ref.read(mangaSourceProvider(sourceInfo));
+          final source = ref.read(animeSourceProvider(sourceInfo));
           return source.getDetails(args.id, args.type);
         }
       }

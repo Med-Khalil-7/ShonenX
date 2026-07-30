@@ -17,21 +17,12 @@ final sourceDiscoverFeedProvider = FutureProvider.autoDispose
       arg,
     ) async {
       ref.keepAlive();
-      if (arg.type == MediaType.ANIME) {
-        final source = ref.read(animeSourceProvider(arg.info));
-        try {
-          final trending = await source.getTrending();
-          if (trending.isNotEmpty) return trending;
-        } catch (_) {}
-        return await source.search('', arg.type, page: 1);
-      } else {
-        final source = ref.read(mangaSourceProvider(arg.info));
-        try {
-          final trending = await source.getTrending();
-          if (trending.isNotEmpty) return trending;
-        } catch (_) {}
-        return await source.search('', arg.type, page: 1);
-      }
+      final source = ref.read(animeSourceProvider(arg.info));
+      try {
+        final trending = await source.getTrending();
+        if (trending.isNotEmpty) return trending;
+      } catch (_) {}
+      return await source.search('', arg.type, page: 1);
     });
 
 class DynamicSourceFeed extends ConsumerWidget {
@@ -43,9 +34,7 @@ class DynamicSourceFeed extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final prefs = ref.watch(discoveryPrefsProvider);
-    final sourcesAsync = type == MediaType.ANIME
-        ? ref.watch(availableAnimeSourcesProvider)
-        : ref.watch(availableMangaSourcesProvider);
+    final sourcesAsync = ref.watch(availableAnimeSourcesProvider);
 
     return sourcesAsync.when(
       data: (allSources) {

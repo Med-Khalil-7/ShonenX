@@ -304,18 +304,16 @@ class HomeScreen extends ConsumerWidget {
           );
           return result.items;
         } else {
-          final allSources = mediaType == MediaType.ANIME
-              ? await ref.watch(availableAnimeSourcesProvider.future)
-              : await ref.watch(availableMangaSourcesProvider.future);
+          final allSources = await ref.watch(
+            availableAnimeSourcesProvider.future,
+          );
           final prefs = ref.watch(discoveryPrefsProvider);
           final activeSources = allSources
               .where((s) => prefs.activeSources.contains(s.id))
               .toList();
           if (activeSources.isEmpty) return const [];
           final sourceInfo = activeSources.first;
-          final source = mediaType == MediaType.ANIME
-              ? ref.read(animeSourceProvider(sourceInfo))
-              : ref.read(mangaSourceProvider(sourceInfo));
+          final source = ref.read(animeSourceProvider(sourceInfo));
           var items = await source.getTrending();
           if (items.isEmpty) {
             items = await source.search('', mediaType);
@@ -446,9 +444,7 @@ class HomeScreen extends ConsumerWidget {
     int discoveryIndex,
     int totalDiscoverySections,
   ) {
-    final allSourcesAsync = mediaType == MediaType.ANIME
-        ? ref.watch(availableAnimeSourcesProvider)
-        : ref.watch(availableMangaSourcesProvider);
+    final allSourcesAsync = ref.watch(availableAnimeSourcesProvider);
 
     return allSourcesAsync.when(
       data: (allSources) {

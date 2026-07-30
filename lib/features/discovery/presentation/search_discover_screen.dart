@@ -253,14 +253,10 @@ class _SearchDiscoverScreenState extends ConsumerState<SearchDiscoverScreen>
             filtersState.value!.tags.isNotEmpty);
 
     String pageTitle = 'Discover';
-    String pageSubtitle = 'Find your next anime or manga';
+    String pageSubtitle = 'Find your next anime';
 
     if (widget.source != null && widget.source!.isNotEmpty) {
-      final allAnimeSources =
-          ref.watch(availableAnimeSourcesProvider).value ?? [];
-      final allMangaSources =
-          ref.watch(availableMangaSourcesProvider).value ?? [];
-      final allSources = [...allAnimeSources, ...allMangaSources];
+      final allSources = ref.watch(availableAnimeSourcesProvider).value ?? [];
       final sourceObj = allSources
           .where((s) => s.id == widget.source)
           .firstOrNull;

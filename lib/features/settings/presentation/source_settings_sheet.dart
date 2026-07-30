@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shonenx/features/settings/presentation/widgets/settings_ui_components.dart';
-import 'package:shonenx/shared/models/unified_media.dart';
 import 'package:shonenx/shared/widgets/app_bottom_sheet.dart';
 import 'package:shonenx/source_engine/models/source_info.dart';
 import 'package:shonenx/source_engine/models/source_setting.dart';
@@ -38,11 +37,7 @@ class _SourceSettingsSheetState extends ConsumerState<SourceSettingsSheet> {
 
   MediaSource? _getMediaSource() {
     try {
-      if (widget.source.mediaType == MediaType.ANIME) {
-        return ref.read(animeSourceProvider(widget.source)) as MediaSource;
-      } else {
-        return ref.read(mangaSourceProvider(widget.source)) as MediaSource;
-      }
+      return ref.read(animeSourceProvider(widget.source)) as MediaSource;
     } catch (_) {
       return null;
     }

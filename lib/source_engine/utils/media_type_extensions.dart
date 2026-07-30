@@ -4,21 +4,10 @@ import 'package:shonenx/source_engine/models/source_info.dart';
 import 'package:shonenx/source_engine/source_registry.dart';
 
 extension MediaTypeSourceResolution on MediaType {
-  FutureProvider<List<SourceInfo>> get availableSourcesProvider {
-    if (this == MediaType.ANIME ||
-        this == MediaType.MOVIE ||
-        this == MediaType.TV) {
-      return availableAnimeSourcesProvider;
-    } else if (this == MediaType.NOVEL) {
-      return availableNovelSourcesProvider;
-    } else {
-      return availableMangaSourcesProvider;
-    }
-  }
+  /// Every remaining media type is video, so they all resolve to the anime
+  /// source pool. Kept as an extension so call sites stay unchanged.
+  FutureProvider<List<SourceInfo>> get availableSourcesProvider =>
+      availableAnimeSourcesProvider;
 
-  bool get usesAnimeSources {
-    return this == MediaType.ANIME ||
-        this == MediaType.MOVIE ||
-        this == MediaType.TV;
-  }
+  bool get usesAnimeSources => true;
 }

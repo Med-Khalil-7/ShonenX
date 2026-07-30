@@ -35,7 +35,7 @@ class KitsuTracker extends BaseTracker
   Future<bool> get isAuthenticated async => (await _getToken()) != null;
 
   @override
-  List<MediaType> get supportedMediaTypes => [MediaType.ANIME, MediaType.MANGA];
+  List<MediaType> get supportedMediaTypes => const [MediaType.ANIME];
 
   @override
   bool supportsMediaType(MediaType mediaType) =>

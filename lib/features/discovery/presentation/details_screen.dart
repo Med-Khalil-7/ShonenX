@@ -10,7 +10,6 @@ import 'package:shonenx/features/discovery/presentation/widgets/tabs/about_tab.d
 import 'package:shonenx/features/discovery/presentation/widgets/tabs/episodes_tab.dart';
 import 'package:shonenx/features/discovery/providers/details_provider.dart';
 import 'package:shonenx/features/player/domain/player_mode.dart';
-import 'package:shonenx/features/reader/domain/reader_mode.dart';
 import 'package:shonenx/features/tracking/domain/isar_tracker_link.dart';
 import 'package:shonenx/features/tracking/domain/models/tracked_list_item.dart';
 import 'package:shonenx/features/tracking/domain/models/tracker_type.dart';
@@ -24,7 +23,6 @@ import 'package:shonenx/features/tracking/providers/tracker_registry.dart';
 import 'package:shonenx/features/tracking/providers/tracking_prefs_provider.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
 import 'package:shonenx/shared/providers/theme_prefs_provider.dart';
-import 'package:shonenx/shared/widgets/app_bottom_sheet.dart';
 import 'package:shonenx/shared/widgets/app_icon_button.dart';
 import 'package:shonenx/shared/widgets/app_scaffold.dart';
 
@@ -68,8 +66,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
       if (!mounted) return;
       if (widget.autoPlayMode is PlayerMode) {
         context.push('/player', extra: widget.autoPlayMode);
-      } else if (widget.autoPlayMode is ReaderModeOnline) {
-        context.push('/reader', extra: widget.autoPlayMode);
       }
     });
   }

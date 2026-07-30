@@ -186,8 +186,6 @@ class _ManageReposSheetState extends ConsumerState<ManageReposSheet> {
           // Invalidate so the UI rebuilds with fresh data
           ref.invalidate(activeExtReposProvider);
           ref.invalidate(availableAnimeSourcesProvider);
-          ref.invalidate(availableMangaSourcesProvider);
-          ref.invalidate(availableNovelSourcesProvider);
           _showSnackBar(
             'Repository added to ${_getEngineName(_selectedEngineId)} successfully!',
             isSuccess: true,
@@ -213,8 +211,6 @@ class _ManageReposSheetState extends ConsumerState<ManageReposSheet> {
       if (removed) {
         ref.invalidate(activeExtReposProvider);
         ref.invalidate(availableAnimeSourcesProvider);
-        ref.invalidate(availableMangaSourcesProvider);
-        ref.invalidate(availableNovelSourcesProvider);
         if (mounted) _showSnackBar('Repository removed');
       } else {
         if (mounted) {

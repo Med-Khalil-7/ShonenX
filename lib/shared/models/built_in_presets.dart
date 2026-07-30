@@ -32,7 +32,6 @@ class BuiltInPresets {
       uiRoundness: 16.0,
       cardStyle: MediaCardStyle.expressive,
       continueWatchingStyle: ContinueWatchingStyle.expressive,
-      continueReadingStyle: ContinueReadingStyle.expressive,
       cardStyleWideModes: const {
         "cw_expressive": true,
         "media_expressive": false,
@@ -61,7 +60,6 @@ class BuiltInPresets {
       uiRoundness: 18.0,
       cardStyle: MediaCardStyle.expressive,
       continueWatchingStyle: ContinueWatchingStyle.editorial,
-      continueReadingStyle: ContinueReadingStyle.editorial,
       episodeViewMode: EpisodeViewMode.classic,
     ),
     AppThemePreset(
@@ -86,7 +84,6 @@ class BuiltInPresets {
       uiRoundness: 16.0,
       cardStyle: MediaCardStyle.material,
       continueWatchingStyle: ContinueWatchingStyle.material,
-      continueReadingStyle: ContinueReadingStyle.material,
       episodeViewMode: EpisodeViewMode.classic,
     ),
     AppThemePreset(
@@ -109,7 +106,6 @@ class BuiltInPresets {
       uiRoundness: 20.0,
       cardStyle: MediaCardStyle.expressive,
       continueWatchingStyle: ContinueWatchingStyle.expressive,
-      continueReadingStyle: ContinueReadingStyle.expressive,
       episodeViewMode: EpisodeViewMode.classic,
     ),
     AppThemePreset(
@@ -133,7 +129,6 @@ class BuiltInPresets {
       uiRoundness: 16.0,
       cardStyle: MediaCardStyle.wideBanner,
       continueWatchingStyle: ContinueWatchingStyle.wideBanner,
-      continueReadingStyle: ContinueReadingStyle.wideBanner,
       episodeViewMode: EpisodeViewMode.classic,
       navBarStyle: NavBarStyle.minimal,
     ),

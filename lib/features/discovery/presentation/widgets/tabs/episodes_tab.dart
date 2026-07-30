@@ -7,9 +7,7 @@ import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/e
 import 'package:shonenx/features/discovery/presentation/widgets/sheets/manual_match_sheet.dart';
 import 'package:shonenx/features/discovery/providers/matched_media_provider.dart';
 import 'package:shonenx/features/discovery/providers/media_preference_provider.dart';
-import 'package:shonenx/features/history/providers/read_history_provider.dart';
 import 'package:shonenx/features/player/domain/player_mode.dart';
-import 'package:shonenx/features/reader/domain/reader_mode.dart';
 import 'package:shonenx/features/tracking/providers/media_tracking_provider.dart';
 import 'package:shonenx/features/tracking/providers/tracker_registry.dart';
 import 'package:shonenx/shared/models/unified_episode.dart';
@@ -52,11 +50,7 @@ class EpisodesTabWidget extends ConsumerWidget {
 
     final watchHistoryEntries =
         ref.watch(historyEpisodesProvider(media.id)).value ?? [];
-    final readHistoryEntries =
-        ref.watch(historyChaptersProvider(media.id)).value ?? [];
-    final currentEpisodeNumber = media.type == MediaType.ANIME
-        ? watchHistoryEntries.firstOrNull?.episodeNumber
-        : readHistoryEntries.firstOrNull?.chapterNumber;
+    final currentEpisodeNumber = watchHistoryEntries.firstOrNull?.episodeNumber;
 
     return Column(
       children: [
@@ -73,31 +67,6 @@ class EpisodesTabWidget extends ConsumerWidget {
             currentEpisodeNumber: currentEpisodeNumber,
             useScrollController: false,
             onEpisodeTap: (UnifiedEpisode episode, SourceInfo sourceInfo) {
-              if (media.type == MediaType.MANGA ||
-                  media.type == MediaType.NOVEL) {
-                final historyEntry = readHistoryEntries
-                    .where((e) => e.chapterNumber == episode.number)
-                    .firstOrNull;
-
-                final int startPosition;
-                if (historyEntry != null &&
-                    historyEntry.positionPage > 0 &&
-                    historyEntry.positionPage <= historyEntry.totalPages) {
-                  startPosition = historyEntry.positionPage;
-                } else {
-                  startPosition = 1;
-                }
-
-                context.push(
-                  '/reader',
-                  extra: ReaderModeOnline(
-                    media: media,
-                    episode: episode,
-                    sourceInfo: sourceInfo,
-                    startPosition: startPosition,
-                  ),
-                );
-              } else {
                 final historyEntry = watchHistoryEntries
                     .where((e) => e.episodeNumber == episode.number)
                     .firstOrNull;
@@ -123,7 +92,6 @@ class EpisodesTabWidget extends ConsumerWidget {
                     startPosition: startPosition,
                   ),
                 );
-              }
             },
           ),
         ),

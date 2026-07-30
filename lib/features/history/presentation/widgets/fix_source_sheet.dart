@@ -76,9 +76,7 @@ class _FixSourceSheetState extends ConsumerState<FixSourceSheet> {
     });
 
     try {
-      final source = widget.type == MediaType.ANIME
-          ? ref.read(animeSourceProvider(_selectedSource!))
-          : ref.read(mangaSourceProvider(_selectedSource!));
+      final source = ref.read(animeSourceProvider(_selectedSource!));
       final results = await source.search(cleanQuery, widget.type);
       if (mounted) setState(() => _results = results);
     } catch (_) {
@@ -116,9 +114,7 @@ class _FixSourceSheetState extends ConsumerState<FixSourceSheet> {
   }
 
   Widget _buildSelectSourceStep() {
-    final provider = widget.type == MediaType.ANIME
-        ? availableAnimeSourcesProvider
-        : availableMangaSourcesProvider;
+    final provider = availableAnimeSourcesProvider;
 
     final sourcesAsync = ref.watch(provider);
 

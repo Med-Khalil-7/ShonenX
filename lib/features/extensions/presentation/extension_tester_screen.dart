@@ -171,7 +171,6 @@ class _ExtensionTesterScreenState extends ConsumerState<ExtensionTesterScreen> {
           if (itemType == bridge.ItemType.anime) {
             ref.invalidate(availableAnimeSourcesProvider);
           } else {
-            ref.invalidate(availableMangaSourcesProvider);
           }
 
           if (mounted) {
@@ -344,9 +343,7 @@ class _ExtensionTesterScreenState extends ConsumerState<ExtensionTesterScreen> {
       );
     });
 
-    final mediaSource = isAnime
-        ? ref.read(animeSourceProvider(source))
-        : ref.read(mangaSourceProvider(source));
+    final mediaSource = ref.read(animeSourceProvider(source));
 
     // Step 1: Search
     final searchStopwatch = Stopwatch()..start();
@@ -874,11 +871,9 @@ class _ExtensionTesterScreenState extends ConsumerState<ExtensionTesterScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final animeSourcesAsync = ref.watch(availableAnimeSourcesProvider);
-    final mangaSourcesAsync = ref.watch(availableMangaSourcesProvider);
 
-    final isLoading =
-        animeSourcesAsync.isLoading || mangaSourcesAsync.isLoading;
-    final hasError = animeSourcesAsync.hasError || mangaSourcesAsync.hasError;
+    final isLoading = animeSourcesAsync.isLoading;
+    final hasError = animeSourcesAsync.hasError;
 
     return AppScaffold(
       title: 'Extension Speed Tester',
@@ -929,9 +924,6 @@ class _ExtensionTesterScreenState extends ConsumerState<ExtensionTesterScreen> {
           if (_selectedMediaType == MediaType.ANIME &&
               animeSourcesAsync.value != null) {
             rawSources = animeSourcesAsync.value!;
-          } else if (_selectedMediaType == MediaType.MANGA &&
-              mangaSourcesAsync.value != null) {
-            rawSources = mangaSourcesAsync.value!;
           }
 
           final Map<String, List<SourceInfo>> grouped = {};
@@ -1370,9 +1362,6 @@ class _ExtensionTesterScreenState extends ConsumerState<ExtensionTesterScreen> {
           if (_selectedMediaType == MediaType.ANIME &&
               animeSourcesAsync.value != null) {
             rawSources = animeSourcesAsync.value!;
-          } else if (_selectedMediaType == MediaType.MANGA &&
-              mangaSourcesAsync.value != null) {
-            rawSources = mangaSourcesAsync.value!;
           }
 
           final Map<String, List<SourceInfo>> grouped = {};

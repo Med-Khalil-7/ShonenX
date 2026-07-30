@@ -4,15 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:isar_community/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shonenx/features/discovery/domain/media_preference.dart';
-import 'package:shonenx/features/history/domain/models/read_history_entry.dart';
 import 'package:shonenx/features/history/domain/models/watch_history_entry.dart';
 import 'package:shonenx/features/library/domain/models/library_entry.dart';
 import 'package:shonenx/features/tracking/domain/isar_tracker_link.dart';
 
 enum BackupCategory {
-  library('Library', 'Saved anime & manga with status & progress'),
+  library('Library', 'Saved anime with status & progress'),
   watchHistory('Watch History', 'Episode watch positions & progress'),
-  readHistory('Read History', 'Manga chapter reading progress'),
   trackerLinks('Tracker Links', 'AniList / MAL mappings'),
   mediaPreferences(
     'Source Preferences',
@@ -27,7 +25,6 @@ enum BackupCategory {
   IconData get icon => switch (this) {
     library => Icons.collections_bookmark_outlined,
     watchHistory => Icons.history_outlined,
-    readHistory => Icons.menu_book_outlined,
     trackerLinks => Icons.link_outlined,
     mediaPreferences => Icons.swap_horiz_outlined,
     appPreferences => Icons.tune_outlined,
@@ -115,8 +112,6 @@ class BackupService {
           data['library'] = await _exportLibrary();
         case BackupCategory.watchHistory:
           data['watchHistory'] = await _exportWatchHistory();
-        case BackupCategory.readHistory:
-          data['readHistory'] = await _exportReadHistory();
         case BackupCategory.trackerLinks:
           data['trackerLinks'] = await _exportTrackerLinks();
         case BackupCategory.mediaPreferences:
@@ -147,10 +142,6 @@ class BackupService {
           await _importWatchHistory(
             manifest.data['watchHistory'] as List<dynamic>?,
           );
-        case BackupCategory.readHistory:
-          await _importReadHistory(
-            manifest.data['readHistory'] as List<dynamic>?,
-          );
         case BackupCategory.trackerLinks:
           await _importTrackerLinks(
             manifest.data['trackerLinks'] as List<dynamic>?,
@@ -171,7 +162,6 @@ class BackupService {
     return {
       BackupCategory.library: await _isar.libraryEntrys.count(),
       BackupCategory.watchHistory: await _isar.watchHistoryEntrys.count(),
-      BackupCategory.readHistory: await _isar.readHistoryEntrys.count(),
       BackupCategory.trackerLinks: await _isar.isarTrackerLinks.count(),
       BackupCategory.mediaPreferences: await _isar.mediaPreferences.count(),
       BackupCategory.appPreferences: _prefKeys
@@ -189,11 +179,6 @@ class BackupService {
 
   Future<List<Map<String, dynamic>>> _exportWatchHistory() async {
     final entries = await _isar.watchHistoryEntrys.where().findAll();
-    return entries.map((e) => e.toBackupMap()).toList();
-  }
-
-  Future<List<Map<String, dynamic>>> _exportReadHistory() async {
-    final entries = await _isar.readHistoryEntrys.where().findAll();
     return entries.map((e) => e.toBackupMap()).toList();
   }
 
@@ -248,18 +233,6 @@ class BackupService {
       for (final item in items) {
         await _isar.watchHistoryEntrys.put(
           WatchHistoryEntry.fromBackupMap(item as Map<String, dynamic>),
-        );
-      }
-    });
-  }
-
-  Future<void> _importReadHistory(List<dynamic>? items) async {
-    if (items == null || items.isEmpty) return;
-    await _isar.writeTxn(() async {
-      await _isar.readHistoryEntrys.clear();
-      for (final item in items) {
-        await _isar.readHistoryEntrys.put(
-          ReadHistoryEntry.fromBackupMap(item as Map<String, dynamic>),
         );
       }
     });

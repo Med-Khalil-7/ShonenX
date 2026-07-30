@@ -265,8 +265,6 @@ class ExtensionsController extends Notifier<Set<String>> {
       final bridgeManager = Get.find<bridge.ExtensionManager>();
       await bridgeManager.updateAll();
       ref.invalidate(availableAnimeSourcesProvider);
-      ref.invalidate(availableMangaSourcesProvider);
-      ref.invalidate(availableNovelSourcesProvider);
       ref.invalidate(allAvailableSourcesProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -295,8 +293,6 @@ class ExtensionsController extends Notifier<Set<String>> {
       final bridgeManager = Get.find<bridge.ExtensionManager>();
       await bridgeManager.refreshExtensions(refreshAvailableSource: true);
       ref.invalidate(availableAnimeSourcesProvider);
-      ref.invalidate(availableMangaSourcesProvider);
-      ref.invalidate(availableNovelSourcesProvider);
       ref.invalidate(allAvailableSourcesProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -329,8 +325,6 @@ class ExtensionsController extends Notifier<Set<String>> {
     final newOrder = [source.id, ...order.where((id) => id != source.id)];
     await _storage.setStringList(prefKey, newOrder);
     ref.invalidate(availableAnimeSourcesProvider);
-    ref.invalidate(availableMangaSourcesProvider);
-    ref.invalidate(availableNovelSourcesProvider);
   }
 
   bool isDefaultSource(

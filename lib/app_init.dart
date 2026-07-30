@@ -17,7 +17,6 @@ import 'package:shonenx/core/utils/app_logger.dart';
 import 'package:shonenx/features/discovery/domain/media_preference.dart';
 import 'package:shonenx/features/discovery/domain/media_source_preference.dart';
 import 'package:shonenx/features/history/domain/models/watch_history_entry.dart';
-import 'package:shonenx/features/history/domain/models/read_history_entry.dart';
 import 'package:shonenx/features/library/domain/models/library_entry.dart';
 import 'package:shonenx/features/tracking/domain/isar_tracker_link.dart';
 import 'package:window_manager/window_manager.dart';
@@ -129,7 +128,6 @@ class AppInit {
           MediaPreferenceSchema,
           IsarTrackerLinkSchema,
           WatchHistoryEntrySchema,
-          ReadHistoryEntrySchema,
 
           // MSourceSchema,
           // SourcePreferenceSchema,

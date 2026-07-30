@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:shonenx/features/discovery/presentation/widgets/cards/media_card.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/continue/continue_reading_card.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/continue/continue_watching_card.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_tiles.dart';
-import 'package:shonenx/features/history/domain/models/read_history_entry.dart';
 import 'package:shonenx/features/history/domain/models/watch_history_entry.dart';
 import 'package:shonenx/features/settings/presentation/widgets/settings_ui_components.dart';
 import 'package:shonenx/shared/providers/theme_prefs_provider.dart';
@@ -20,16 +18,6 @@ final _previewHistoryEntry = WatchHistoryEntry()
   ..positionInMilliseconds = 720000
   ..durationInMilliseconds = 1200000
   ..thumbnailUrl =
-      'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT8--VpUm_3ewaKmioaFpTjAUA4z46Qbb-4GQ&s';
-
-final _previewReadHistoryEntry = ReadHistoryEntry()
-  ..mangaId = '2'
-  ..mangaTitle = 'One Piece'
-  ..chapterNumber = 236
-  ..chapterTitle = 'Orewa Kaizoku Ou Ni Naru!'
-  ..positionPage = 14
-  ..totalPages = 20
-  ..cover =
       'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT8--VpUm_3ewaKmioaFpTjAUA4z46Qbb-4GQ&s';
 
 class UiSettingsSheetLayout extends StatelessWidget {
@@ -571,138 +559,6 @@ void showContinueWatchingSheet(
                 subtitle: _cwStyleDesc(style),
                 selectedColor: cs.primary,
                 onTap: () => notifier.updateContinueWatchingStyle(style),
-              );
-            },
-          );
-        },
-      ),
-    ),
-  );
-}
-
-void showContinueReadingSheet(
-  BuildContext context,
-  WidgetRef ref,
-  UiPrefsNotifier notifier,
-  ThemeData theme,
-) {
-  final cs = theme.colorScheme;
-
-  AppBottomSheet.show(
-    context: context,
-    title: 'Continue Reading Style',
-    actions: [
-      Consumer(
-        builder: (_, r, __) {
-          final current = r.watch(
-            uiPrefsProvider.select((s) => s.continueReadingStyle),
-          );
-          final isWide = r.watch(
-            uiPrefsProvider.select(
-              (s) => s.isContinueReadingWide(current.name),
-            ),
-          );
-          final canToggleWide =
-              current != ContinueReadingStyle.compact &&
-              current != ContinueReadingStyle.cinematic &&
-              current != ContinueReadingStyle.wideBanner;
-
-          if (!canToggleWide) return const SizedBox.shrink();
-
-          return Tooltip(
-            message: isWide ? 'Switch to Portrait Mode' : 'Switch to Wide Mode',
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => notifier.toggleContinueReadingWide(current.name),
-                borderRadius: BorderRadius.circular(20),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isWide
-                        ? cs.primaryContainer
-                        : cs.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isWide
-                          ? cs.primary
-                          : cs.outlineVariant.withValues(alpha: 0.4),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isWide
-                            ? Icons.table_rows_rounded
-                            : Icons.grid_view_rounded,
-                        size: 15,
-                        color: isWide
-                            ? cs.onPrimaryContainer
-                            : cs.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        isWide ? 'Wide' : 'Normal',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: isWide
-                              ? cs.onPrimaryContainer
-                              : cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    ],
-    child: UiSettingsSheetLayout(
-      preview: Consumer(
-        builder: (_, r, _) {
-          final current = r.watch(
-            uiPrefsProvider.select((s) => s.continueReadingStyle),
-          );
-          return ContinueReadingItem(
-            style: current,
-            progress: 0.7,
-            entry: _previewReadHistoryEntry,
-          );
-        },
-      ),
-      optionsTitle: 'Continue Reading Style Preset',
-      options: Consumer(
-        builder: (_, r, _) {
-          final current = r.watch(
-            uiPrefsProvider.select((s) => s.continueReadingStyle),
-          );
-          return GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisExtent: 54,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-            ),
-            itemCount: ContinueReadingStyle.values.length,
-            itemBuilder: (context, index) {
-              final style = ContinueReadingStyle.values[index];
-              return _StyleGridCard(
-                selected: current == style,
-                icon: _crStyleIcon(style),
-                title: style.displayName,
-                subtitle: _crStyleDesc(style),
-                selectedColor: cs.primary,
-                onTap: () => notifier.updateContinueReadingStyle(style),
               );
             },
           );
@@ -1370,29 +1226,7 @@ IconData _cwStyleIcon(ContinueWatchingStyle s) => switch (s) {
   ContinueWatchingStyle.wideBanner => Icons.view_headline_rounded,
 };
 
-String _crStyleDesc(ContinueReadingStyle s) => switch (s) {
-  ContinueReadingStyle.classic => 'Classic grid square continue card',
-  ContinueReadingStyle.minimal => 'Border-free clean image card',
-  ContinueReadingStyle.expressive => 'Spacious container with bold labels',
-  ContinueReadingStyle.material => 'Unified color background material card',
-  ContinueReadingStyle.cinematic => 'Horizontal full-bleed background banner',
-  ContinueReadingStyle.neon => 'Vivid accent glowing neon borders',
-  ContinueReadingStyle.compact => 'Super dense layout for small lists',
-  ContinueReadingStyle.editorial => 'High-whitespace magazine design',
-  ContinueReadingStyle.wideBanner => 'Wide horizontal banner card',
-};
 
-IconData _crStyleIcon(ContinueReadingStyle s) => switch (s) {
-  ContinueReadingStyle.classic => Icons.grid_view_rounded,
-  ContinueReadingStyle.minimal => Icons.photo_size_select_actual_rounded,
-  ContinueReadingStyle.expressive => Icons.featured_play_list_rounded,
-  ContinueReadingStyle.material => Icons.crop_portrait_rounded,
-  ContinueReadingStyle.cinematic => Icons.movie_filter_rounded,
-  ContinueReadingStyle.neon => Icons.electric_bolt_rounded,
-  ContinueReadingStyle.compact => Icons.table_rows_rounded,
-  ContinueReadingStyle.editorial => Icons.newspaper_rounded,
-  ContinueReadingStyle.wideBanner => Icons.view_headline_rounded,
-};
 
 String _episodeModeLabel(EpisodeViewMode m) => switch (m) {
   EpisodeViewMode.classic => 'Classic',

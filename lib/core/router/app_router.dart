@@ -16,13 +16,10 @@ import 'package:shonenx/features/history/presentation/continue_history_screen.da
 import 'package:shonenx/features/library/presentation/library_screen.dart';
 import 'package:shonenx/features/player/domain/player_mode.dart';
 import 'package:shonenx/features/player/presentation/player_screen.dart';
-import 'package:shonenx/features/reader/domain/reader_mode.dart';
-import 'package:shonenx/features/reader/presentation/reader_screen.dart';
 import 'package:shonenx/features/settings/presentation/cache_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/home_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/player_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/settings_screen.dart';
-import 'package:shonenx/features/settings/presentation/reader_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/theme_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/tracking_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/ui_settings_screen.dart';
@@ -234,13 +231,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: '/reader',
-        builder: (context, state) {
-          final mode = state.extra as ReaderModeOnline;
-          return ReaderScreen(key: ValueKey(mode.episode.id), mode: mode);
-        },
-      ),
-      GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
         routes: [
@@ -287,10 +277,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'player',
             builder: (context, state) => const PlayerSettingsScreen(),
-          ),
-          GoRoute(
-            path: 'reader',
-            builder: (context, state) => const ReaderSettingsScreen(),
           ),
           GoRoute(
             path: 'cache',

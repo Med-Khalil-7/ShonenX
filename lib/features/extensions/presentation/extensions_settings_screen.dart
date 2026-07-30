@@ -92,7 +92,7 @@ class _ExtensionsSettingsScreenState
     final theme = Theme.of(context);
 
     return DefaultTabController(
-      length: 6,
+      length: 2,
       child: AppScaffold(
         title: 'Sources',
         subtitle: 'Extensions & Catalogs',
@@ -110,35 +110,7 @@ class _ExtensionsSettingsScreenState
             ),
             SourcesTab(
               engineFilter: _selectedEngineFilter,
-              type: MediaType.MANGA,
-              searchQuery: _searchQuery,
-              langFilter: _selectedLangFilter,
-              isInstalled: true,
-            ),
-            SourcesTab(
-              engineFilter: _selectedEngineFilter,
-              type: MediaType.NOVEL,
-              searchQuery: _searchQuery,
-              langFilter: _selectedLangFilter,
-              isInstalled: true,
-            ),
-            SourcesTab(
-              engineFilter: _selectedEngineFilter,
               type: MediaType.ANIME,
-              searchQuery: _searchQuery,
-              langFilter: _selectedLangFilter,
-              isInstalled: false,
-            ),
-            SourcesTab(
-              engineFilter: _selectedEngineFilter,
-              type: MediaType.MANGA,
-              searchQuery: _searchQuery,
-              langFilter: _selectedLangFilter,
-              isInstalled: false,
-            ),
-            SourcesTab(
-              engineFilter: _selectedEngineFilter,
-              type: MediaType.NOVEL,
               searchQuery: _searchQuery,
               langFilter: _selectedLangFilter,
               isInstalled: false,
@@ -395,75 +367,17 @@ class _ExtensionsSettingsScreenState
 
   Widget _buildTabBarContent() {
     final animeSources = ref.watch(availableAnimeSourcesProvider).value ?? [];
-    final mangaSources = ref.watch(availableMangaSourcesProvider).value ?? [];
-    final novelSources = ref.watch(availableNovelSourcesProvider).value ?? [];
     final enabledManagers = ref.watch(enabledExtensionManagersProvider);
 
-    // 5. Removed Obx entirely. Riverpod's `ref.watch` already triggers rebuilds.
-    final countInstalledAnime = ExtensionsService.getSourcesTabCount(
+    int countFor(bool isInstalled) => ExtensionsService.getSourcesTabCount(
       type: MediaType.ANIME,
-      isInstalled: true,
+      isInstalled: isInstalled,
       engineFilter: _selectedEngineFilter,
       searchQuery: _searchQuery,
       langFilter: _selectedLangFilter,
       animeSources: animeSources,
-      mangaSources: mangaSources,
-      novelSources: novelSources,
-      enabledManagers: enabledManagers.toList(),
-    );
-    final countInstalledManga = ExtensionsService.getSourcesTabCount(
-      type: MediaType.MANGA,
-      isInstalled: true,
-      engineFilter: _selectedEngineFilter,
-      searchQuery: _searchQuery,
-      langFilter: _selectedLangFilter,
-      animeSources: animeSources,
-      mangaSources: mangaSources,
-      novelSources: novelSources,
-      enabledManagers: enabledManagers.toList(),
-    );
-    final countInstalledNovel = ExtensionsService.getSourcesTabCount(
-      type: MediaType.NOVEL,
-      isInstalled: true,
-      engineFilter: _selectedEngineFilter,
-      searchQuery: _searchQuery,
-      langFilter: _selectedLangFilter,
-      animeSources: animeSources,
-      mangaSources: mangaSources,
-      novelSources: novelSources,
-      enabledManagers: enabledManagers.toList(),
-    );
-    final countAvailableAnime = ExtensionsService.getSourcesTabCount(
-      type: MediaType.ANIME,
-      isInstalled: false,
-      engineFilter: _selectedEngineFilter,
-      searchQuery: _searchQuery,
-      langFilter: _selectedLangFilter,
-      animeSources: animeSources,
-      mangaSources: mangaSources,
-      novelSources: novelSources,
-      enabledManagers: enabledManagers.toList(),
-    );
-    final countAvailableManga = ExtensionsService.getSourcesTabCount(
-      type: MediaType.MANGA,
-      isInstalled: false,
-      engineFilter: _selectedEngineFilter,
-      searchQuery: _searchQuery,
-      langFilter: _selectedLangFilter,
-      animeSources: animeSources,
-      mangaSources: mangaSources,
-      novelSources: novelSources,
-      enabledManagers: enabledManagers.toList(),
-    );
-    final countAvailableNovel = ExtensionsService.getSourcesTabCount(
-      type: MediaType.NOVEL,
-      isInstalled: false,
-      engineFilter: _selectedEngineFilter,
-      searchQuery: _searchQuery,
-      langFilter: _selectedLangFilter,
-      animeSources: animeSources,
-      mangaSources: mangaSources,
-      novelSources: novelSources,
+      mangaSources: const [],
+      novelSources: const [],
       enabledManagers: enabledManagers.toList(),
     );
 
@@ -474,12 +388,8 @@ class _ExtensionsSettingsScreenState
       tabAlignment: TabAlignment.start,
       dividerColor: Colors.transparent,
       tabs: [
-        _buildTab('Installed Anime', countInstalledAnime),
-        _buildTab('Installed Manga', countInstalledManga),
-        _buildTab('Installed Novel', countInstalledNovel),
-        _buildTab('Available Anime', countAvailableAnime),
-        _buildTab('Available Manga', countAvailableManga),
-        _buildTab('Available Novel', countAvailableNovel),
+        _buildTab('Installed', countFor(true)),
+        _buildTab('Available', countFor(false)),
       ],
     );
   }
@@ -699,8 +609,6 @@ class _ExtensionsSettingsScreenState
                               onComplete: () {
                                 notifier.toggleManager(id, true);
                                 ref.invalidate(availableAnimeSourcesProvider);
-                                ref.invalidate(availableMangaSourcesProvider);
-                                ref.invalidate(availableNovelSourcesProvider);
                               },
                             );
                             return;
@@ -708,8 +616,6 @@ class _ExtensionsSettingsScreenState
                         }
                         notifier.toggleManager(id, val);
                         ref.invalidate(availableAnimeSourcesProvider);
-                        ref.invalidate(availableMangaSourcesProvider);
-                        ref.invalidate(availableNovelSourcesProvider);
                       },
                     );
                   }),

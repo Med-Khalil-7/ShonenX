@@ -644,13 +644,6 @@ class _SideNavBar extends ConsumerWidget {
       tight: 8.0,
       cramped: 6.0,
     );
-    final gapBetween = h.pick(
-      spacious: 14.0,
-      normal: 12.0,
-      compact: 10.0,
-      tight: 8.0,
-      cramped: 4.0,
-    );
 
     final hideNavLabels = h == HeightTier.cramped;
 

@@ -64,17 +64,6 @@ class UiSettingsScreen extends ConsumerWidget {
                 onTap: () =>
                     showContinueWatchingSheet(context, ref, notifier, theme),
               ),
-              SettingsActionTile(
-                icon: Icons.menu_book_rounded,
-                title: 'Continue Reading Style',
-                subtitle: 'Style of cards on the Continue Reading row',
-                trailing: _Chip(
-                  label: prefs.continueReadingStyle.displayName,
-                  cs: cs,
-                ),
-                onTap: () =>
-                    showContinueReadingSheet(context, ref, notifier, theme),
-              ),
             ],
           ),
 

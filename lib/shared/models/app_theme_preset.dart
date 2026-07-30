@@ -42,7 +42,6 @@ class AppThemePreset {
 
   final MediaCardStyle cardStyle;
   final ContinueWatchingStyle continueWatchingStyle;
-  final ContinueReadingStyle continueReadingStyle;
   final EpisodeViewMode episodeViewMode;
   final NavBarStyle navBarStyle;
   final Map<String, dynamic> experimentalConfig;
@@ -83,7 +82,6 @@ class AppThemePreset {
     this.surfaceColor,
     this.cardStyle = MediaCardStyle.classic,
     this.continueWatchingStyle = ContinueWatchingStyle.classic,
-    this.continueReadingStyle = ContinueReadingStyle.classic,
     this.episodeViewMode = EpisodeViewMode.classic,
     this.navBarStyle = NavBarStyle.classic,
     this.experimentalConfig = UiPrefState.defaultExperimentalConfig,
@@ -131,7 +129,6 @@ class AppThemePreset {
       surfaceColor: themePrefs.surfaceColor,
       cardStyle: uiPrefs.cardStyle,
       continueWatchingStyle: uiPrefs.continueWatchingStyle,
-      continueReadingStyle: uiPrefs.continueReadingStyle,
       episodeViewMode: uiPrefs.episodeViewMode,
       navBarStyle: uiPrefs.navBarStyle,
       experimentalConfig: uiPrefs.experimentalConfig,
@@ -185,7 +182,6 @@ class AppThemePreset {
     return current.copyWith(
       cardStyle: cardStyle,
       continueWatchingStyle: continueWatchingStyle,
-      continueReadingStyle: continueReadingStyle,
       episodeViewMode: episodeViewMode,
       navBarStyle: navBarStyle,
       experimentalConfig: {
@@ -235,7 +231,6 @@ class AppThemePreset {
       if (surfaceColor != null) 'surfaceColor': surfaceColor,
       'cardStyle': cardStyle.name,
       'continueWatchingStyle': continueWatchingStyle.name,
-      'continueReadingStyle': continueReadingStyle.name,
       'episodeViewMode': episodeViewMode.name,
       'navBarStyle': navBarStyle.name,
       'experimentalConfig': experimentalConfig,
@@ -341,10 +336,6 @@ class AppThemePreset {
       continueWatchingStyle: ContinueWatchingStyle.values.firstWhere(
         (e) => e.name == map['continueWatchingStyle'],
         orElse: () => ContinueWatchingStyle.classic,
-      ),
-      continueReadingStyle: ContinueReadingStyle.values.firstWhere(
-        (e) => e.name == map['continueReadingStyle'],
-        orElse: () => ContinueReadingStyle.classic,
       ),
       episodeViewMode: EpisodeViewMode.values.firstWhere(
         (e) => e.name == map['episodeViewMode'],

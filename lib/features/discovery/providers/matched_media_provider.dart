@@ -92,9 +92,7 @@ class MediaMatchNotifier extends AsyncNotifier<MatchedMediaState> {
       );
     }
 
-    final sourceImpl = args.type.usesAnimeSources
-        ? ref.read(animeSourceProvider(prefs.sourceInfo))
-        : ref.read(mangaSourceProvider(prefs.sourceInfo));
+    final sourceImpl = ref.read(animeSourceProvider(prefs.sourceInfo));
 
     final result = await MediaMatchService(
       sourceImpl,

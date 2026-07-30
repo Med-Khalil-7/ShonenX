@@ -46,9 +46,7 @@ final discoveryFiltersProvider = FutureProvider.autoDispose
 
         for (final info in activeSources) {
           try {
-            final source = args.type.usesAnimeSources
-                ? ref.read(animeSourceProvider(info))
-                : ref.read(mangaSourceProvider(info));
+            final source = ref.read(animeSourceProvider(info));
 
             final genres = await source.getFilterGenres();
             final tags = await source.getFilterTags();

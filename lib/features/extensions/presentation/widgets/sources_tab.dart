@@ -74,9 +74,7 @@ class _SourceSettingsButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sourceImpl = type == MediaType.ANIME
-        ? ref.read(animeSourceProvider(sourceInfo)) as MediaSource
-        : ref.read(mangaSourceProvider(sourceInfo)) as MediaSource;
+    final sourceImpl = ref.read(animeSourceProvider(sourceInfo)) as MediaSource;
 
     return FutureBuilder<List<SourceSetting>>(
       future: sourceImpl.getSettingsSchema(),
@@ -131,11 +129,7 @@ class _GroupHeaderTile extends ConsumerWidget {
         .contains(name);
     final isNsfw = groupSources.any((s) => s.effectiveNsfw);
     final controller = ref.read(extensionsControllerProvider.notifier);
-    final availableList = type == MediaType.ANIME
-        ? ref.watch(availableAnimeSourcesProvider).value
-        : (type == MediaType.MANGA
-              ? ref.watch(availableMangaSourcesProvider).value
-              : ref.watch(availableNovelSourcesProvider).value);
+    final availableList = ref.watch(availableAnimeSourcesProvider).value;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -663,12 +657,7 @@ class _SourcesTabState extends ConsumerState<SourcesTab> {
   @override
   Widget build(BuildContext context) {
     if (widget.isInstalled) {
-      final sourcesAsync = switch (widget.type) {
-        MediaType.ANIME => ref.watch(availableAnimeSourcesProvider),
-        MediaType.MANGA => ref.watch(availableMangaSourcesProvider),
-        MediaType.NOVEL => ref.watch(availableNovelSourcesProvider),
-        _ => ref.watch(availableAnimeSourcesProvider),
-      };
+      final sourcesAsync = ref.watch(availableAnimeSourcesProvider);
 
       return sourcesAsync.when(
         data: (sources) {
@@ -703,10 +692,8 @@ class _SourcesTabState extends ConsumerState<SourcesTab> {
       return Obx(() {
         final animeSources =
             ref.watch(availableAnimeSourcesProvider).value ?? [];
-        final mangaSources =
-            ref.watch(availableMangaSourcesProvider).value ?? [];
-        final novelSources =
-            ref.watch(availableNovelSourcesProvider).value ?? [];
+        const mangaSources = <SourceInfo>[];
+        const novelSources = <SourceInfo>[];
         final enabledManagers = ref.watch(enabledExtensionManagersProvider);
 
         final unified = ExtensionsService.getFilteredSources(
@@ -802,8 +789,6 @@ class _SourcesTabState extends ConsumerState<SourcesTab> {
                               await bridge
                                   .AnymeXRuntimeBridge.checkAndInitialize();
                               ref.invalidate(availableAnimeSourcesProvider);
-                              ref.invalidate(availableMangaSourcesProvider);
-                              ref.invalidate(availableNovelSourcesProvider);
                             },
                             icon: const Icon(Icons.refresh_rounded, size: 18),
                             label: const Text('Recheck'),
@@ -1134,11 +1119,7 @@ class _SourcesTabState extends ConsumerState<SourcesTab> {
           if (widget.isInstalled && source.sourceInfo != null) ...[
             Builder(
               builder: (context) {
-                final availableList = widget.type == MediaType.ANIME
-                    ? ref.watch(availableAnimeSourcesProvider).value
-                    : (widget.type == MediaType.MANGA
-                          ? ref.watch(availableMangaSourcesProvider).value
-                          : ref.watch(availableNovelSourcesProvider).value);
+                final availableList = ref.watch(availableAnimeSourcesProvider).value;
                 final isDefault = controller.isDefaultSource(
                   source,
                   widget.type,
@@ -1308,9 +1289,7 @@ class _SourcesTabState extends ConsumerState<SourcesTab> {
   }
 
   Widget _buildSettingsButton(BuildContext context, SourceInfo sourceInfo) {
-    final sourceImpl = widget.type == MediaType.ANIME
-        ? ref.read(animeSourceProvider(sourceInfo)) as MediaSource
-        : ref.read(mangaSourceProvider(sourceInfo)) as MediaSource;
+    final sourceImpl = ref.read(animeSourceProvider(sourceInfo)) as MediaSource;
 
     return FutureBuilder<List<SourceSetting>>(
       future: sourceImpl.getSettingsSchema(),

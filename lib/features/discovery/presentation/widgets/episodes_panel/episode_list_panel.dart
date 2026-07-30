@@ -6,14 +6,12 @@ import 'package:shonenx/features/discovery/domain/media_args.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_tiles.dart';
 import 'package:shonenx/features/discovery/providers/episodes_provider.dart';
 import 'package:shonenx/features/discovery/providers/matched_media_provider.dart';
-import 'package:shonenx/features/reader/providers/preferred_scanlator_provider.dart';
 import 'package:shonenx/shared/models/unified_episode.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
 import 'package:shonenx/shared/providers/ui_prefs_provider.dart';
 import 'package:shonenx/shared/widgets/staggered_fade_in.dart';
 import 'package:shonenx/source_engine/models/source_info.dart';
 
-import 'package:shonenx/features/history/providers/read_history_provider.dart';
 import 'package:shonenx/features/history/providers/watch_history_provider.dart';
 import 'package:shonenx/features/tracking/providers/media_tracking_provider.dart';
 import 'package:shonenx/features/tracking/providers/tracker_registry.dart';
@@ -141,12 +139,9 @@ class _EpisodeListPanelState extends ConsumerState<EpisodeListPanel> {
 
     final watchHistoryEntries =
         ref.watch(historyEpisodesProvider(widget.media.id)).value ?? [];
-    final readHistoryEntries =
-        ref.watch(historyChaptersProvider(widget.media.id)).value ?? [];
-
-    final historyWatchedSet = widget.media.type == MediaType.ANIME
-        ? watchHistoryEntries.map((e) => e.episodeNumber).toSet()
-        : readHistoryEntries.map((e) => e.chapterNumber).toSet();
+    final historyWatchedSet = watchHistoryEntries
+        .map((e) => e.episodeNumber)
+        .toSet();
 
     final maxHistoryEp = historyWatchedSet.fold<double>(
       0.0,
@@ -321,10 +316,6 @@ class _EpisodeListPanelState extends ConsumerState<EpisodeListPanel> {
 
         final safeIdx = _chunkIndex < chunks.length ? _chunkIndex : 0;
         final activeChunk = chunks[safeIdx];
-        final prefScanlator = ref.read(
-          preferredScanlatorProvider(widget.media.id),
-        );
-
         // 5. Single-pass Deduplication & Chunk Filtering
         final dedupedMap = <double, UnifiedEpisode>{};
 
@@ -333,8 +324,7 @@ class _EpisodeListPanelState extends ConsumerState<EpisodeListPanel> {
               (ep.number < activeChunk.min! || ep.number > activeChunk.max!)) {
             continue;
           }
-          if (!dedupedMap.containsKey(ep.number) ||
-              ep.scanlator == prefScanlator) {
+          if (!dedupedMap.containsKey(ep.number)) {
             dedupedMap[ep.number] = ep;
           }
         }

@@ -18,7 +18,7 @@ class LocalTracker implements TrackingService {
   Future<bool> get isAuthenticated async => true; // Local tracker is always ready
 
   @override
-  List<MediaType> get supportedMediaTypes => MediaType.values;
+  List<MediaType> get supportedMediaTypes => const [MediaType.ANIME];
 
   @override
   bool supportsMediaType(MediaType mediaType) => true;
