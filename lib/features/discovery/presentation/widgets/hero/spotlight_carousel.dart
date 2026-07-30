@@ -300,7 +300,7 @@ class _Details extends StatelessWidget {
 /// This replaces a dot indicator plus a pair of action buttons. Dots say which
 /// slide you are on but not what is on it, and the buttons duplicated what the
 /// detail screen already does one press later.
-class _SlideStrip extends StatelessWidget {
+class _SlideStrip extends StatefulWidget {
   final List<UnifiedMedia> items;
   final int index;
   final ShonenXMetrics metrics;
@@ -318,25 +318,65 @@ class _SlideStrip extends StatelessWidget {
   });
 
   @override
+  State<_SlideStrip> createState() => _SlideStripState();
+}
+
+class _SlideStripState extends State<_SlideStrip> {
+  final ScrollController _controller = ScrollController();
+
+  double get _itemExtent =>
+      widget.metrics.heroThumb * 1.22; // thumbnail plus separator
+
+  @override
+  void didUpdateWidget(covariant _SlideStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.index != widget.index) _revealSelected();
+  }
+
+  /// Keeps the selected thumbnail on screen by scrolling *this* list only.
+  ///
+  /// `Scrollable.ensureVisible` -- which is what TvFocusable does by default --
+  /// walks up and scrolls every enclosing scrollable, so letting it handle the
+  /// strip dragged the whole page down a little on each step.
+  void _revealSelected() {
+    if (!_controller.hasClients) return;
+    final viewport = _controller.position.viewportDimension;
+    final target =
+        widget.index * _itemExtent - (viewport - _itemExtent) / 2;
+    _controller.animateTo(
+      target.clamp(0.0, _controller.position.maxScrollExtent),
+      duration: TvFocus.animation,
+      curve: TvFocus.curve,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final m = metrics;
+    final m = widget.metrics;
     return SizedBox(
       height: m.heroThumb / ShonenX.thumbAspect + TvFocus.ringWidth * 2,
       child: FocusTraversalGroup(
         child: ListView.separated(
+          controller: _controller,
           scrollDirection: Axis.horizontal,
           clipBehavior: Clip.none,
           // Directional traversal only reaches nodes that have been built.
           cacheExtent: 1600,
-          itemCount: items.length,
+          itemCount: widget.items.length,
           separatorBuilder: (_, __) => SizedBox(width: m.heroThumb * 0.22),
           itemBuilder: (context, i) => _Thumb(
-            media: items[i],
+            media: widget.items[i],
             metrics: m,
-            selected: i == index,
-            focusNode: focusFor(i),
-            autofocus: autofocus && i == 0,
-            onTap: () => onOpen(items[i]),
+            selected: i == widget.index,
+            focusNode: widget.focusFor(i),
+            autofocus: widget.autofocus && i == 0,
+            onTap: () => widget.onOpen(widget.items[i]),
           ),
         ),
       ),
@@ -374,6 +414,8 @@ class _Thumb extends StatelessWidget {
       autofocus: autofocus,
       borderRadius: radius,
       scaleOnFocus: false,
+      // The strip scrolls itself -- see _SlideStripState._revealSelected.
+      ensureVisible: false,
       // The ring already marks the selection; a second highlight would be
       // saying the same thing twice.
       ringColor: cs.onSurface,
