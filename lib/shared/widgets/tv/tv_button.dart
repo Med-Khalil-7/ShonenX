@@ -34,6 +34,10 @@ class TvButton extends StatelessWidget {
   final bool autofocus;
   final FocusNode? focusNode;
 
+  /// Swaps the icon for a spinner and swallows presses. Resolving a stream can
+  /// take a couple of seconds, and without this the button looks dead.
+  final bool loading;
+
   /// Null lets the button size to its content, which is what the bare variant
   /// and dialog buttons want.
   final double? width;
@@ -49,6 +53,7 @@ class TvButton extends StatelessWidget {
     this.variant = TvButtonVariant.filledRed,
     this.autofocus = false,
     this.focusNode,
+    this.loading = false,
     this.width,
     this.height = 64,
   });
@@ -71,7 +76,7 @@ class TvButton extends StatelessWidget {
     );
 
     return TvFocusable(
-      onTap: onPressed,
+      onTap: loading ? null : onPressed,
       autofocus: autofocus,
       focusNode: focusNode,
       borderRadius: BorderRadius.circular(8),
@@ -92,7 +97,17 @@ class TvButton extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (icon != null) ...[
+            if (loading) ...[
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: foreground,
+                ),
+              ),
+              const SizedBox(width: 12),
+            ] else if (icon != null) ...[
               Icon(icon, size: 24, color: foreground),
               const SizedBox(width: 12),
             ],

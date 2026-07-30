@@ -1,31 +1,50 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
+import 'package:shonenx/core/tv/tv_focusable.dart';
+import 'package:shonenx/core/tv/tv_metrics.dart';
+import 'package:shonenx/core/utils/extensions.dart';
 import 'package:shonenx/features/auth/providers/auth_provider.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/tabs/about_tab.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/tabs/episodes_tab.dart';
+import 'package:shonenx/features/discovery/domain/media_args.dart';
+import 'package:shonenx/features/discovery/presentation/widgets/details/detail_media_row.dart';
+import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_list_panel.dart';
+import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_source_header.dart';
 import 'package:shonenx/features/discovery/providers/details_provider.dart';
+import 'package:shonenx/features/discovery/providers/episodes_provider.dart';
+import 'package:shonenx/features/history/domain/models/watch_history_entry.dart';
+import 'package:shonenx/features/history/providers/watch_history_provider.dart';
 import 'package:shonenx/features/player/domain/player_mode.dart';
+import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
 import 'package:shonenx/features/tracking/domain/isar_tracker_link.dart';
-import 'package:shonenx/features/tracking/domain/models/tracked_list_item.dart';
+import 'package:shonenx/features/tracking/domain/models/tracked_status.dart';
 import 'package:shonenx/features/tracking/domain/models/tracker_type.dart';
 import 'package:shonenx/features/tracking/engine/remote_tracker.dart';
-import 'package:shonenx/features/tracking/engine/tracking_service.dart';
-import 'package:shonenx/features/tracking/presentation/widgets/edit_tracker_sheet.dart';
 import 'package:shonenx/features/tracking/presentation/widgets/tracker_manager_sheet.dart';
 import 'package:shonenx/features/tracking/providers/media_tracking_provider.dart';
 import 'package:shonenx/features/tracking/providers/tracker_link_provider.dart';
 import 'package:shonenx/features/tracking/providers/tracker_registry.dart';
 import 'package:shonenx/features/tracking/providers/tracking_prefs_provider.dart';
+import 'package:shonenx/shared/models/unified_episode.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
-import 'package:shonenx/shared/providers/theme_prefs_provider.dart';
-import 'package:shonenx/shared/widgets/app_icon_button.dart';
+import 'package:shonenx/shared/models/video_server.dart';
 import 'package:shonenx/shared/widgets/app_scaffold.dart';
+import 'package:shonenx/shared/widgets/tv/tv_badge.dart';
+import 'package:shonenx/shared/widgets/tv/tv_button.dart';
+import 'package:shonenx/shared/widgets/tv/tv_side_sheet.dart';
+import 'package:shonenx/source_engine/utils/media_type_extensions.dart';
 
+/// Single-page detail view.
+///
+/// The previous version was a collapsing header over About/Episodes tabs.
+/// Tabs are an awkward control on a remote -- reaching episode 3 meant
+/// scrolling to the bottom of the screen, moving to a tab strip, switching,
+/// then scrolling back up -- and the tab strip carried an autofocusing
+/// KeyboardListener that stole the screen's first focus. Playback is now one
+/// press away and the episode list opens as a side sheet.
 class DetailsScreen extends ConsumerStatefulWidget {
   final String tag;
   final MediaType mediaType;
@@ -46,21 +65,12 @@ class DetailsScreen extends ConsumerStatefulWidget {
   ConsumerState<DetailsScreen> createState() => _DetailsScreenState();
 }
 
-class _DetailsScreenState extends ConsumerState<DetailsScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
-  late final FocusNode _keyboardFocusNode;
+class _DetailsScreenState extends ConsumerState<DetailsScreen> {
+  bool _resolving = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(
-      length: 2,
-      vsync: this,
-      initialIndex: widget.initialTabIndex.clamp(0, 1),
-    );
-    _keyboardFocusNode = FocusNode();
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _autoLinkPrimaryTracker();
       if (!mounted) return;
@@ -68,14 +78,6 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         context.push('/player', extra: widget.autoPlayMode);
       }
     });
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _keyboardFocusNode.dispose();
-
-    super.dispose();
   }
 
   Future<void> _autoLinkPrimaryTracker() async {
@@ -86,21 +88,15 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     if (primaryType == TrackerType.local) return;
 
     final media = widget.media;
-
-    // Only auto-link if it's tracker-based metadata
-    final isTrackerMedia = media.sourceId == null;
-
-    if (!isTrackerMedia) return;
-
-    String? trackingId;
-    trackingId = media.id;
+    // Only tracker-sourced metadata carries an id the tracker will recognise.
+    if (media.sourceId != null) return;
 
     final linksMap = await ref.read(trackerLinkProvider(media.id).future);
     if (linksMap.containsKey(primaryType)) return;
 
     final mapping = TrackerMapping()
       ..trackerId = primaryType.id
-      ..trackingId = trackingId
+      ..trackingId = media.id
       ..trackingTitle = media.title.availableTitle;
 
     ref
@@ -108,11 +104,203 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         .saveLink(primaryType, mapping);
   }
 
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Resumes the part-watched episode if there is one, otherwise starts the
+  /// one after the last finished episode, otherwise episode one.
+  ///
+  /// [serverType] is applied as the player's preference rather than resolved
+  /// here: PlayerController already picks a sub or dub server from that
+  /// preference, and pre-resolving would run the whole source pipeline on a
+  /// screen the user may never play from.
+  Future<void> _play(UnifiedMedia media, {ServerType? serverType}) async {
+    if (_resolving) return;
+
+    if (serverType != null) {
+      ref.read(playerPrefsProvider.notifier).setDefaultServerType(serverType);
+    }
+
+    setState(() => _resolving = true);
+    try {
+      final state = await ref.read(
+        episodesListProvider(MediaArgs.fromMedia(media)).future,
+      );
+      final episodes = state.episodes;
+      if (episodes.isEmpty) {
+        _toast('No episodes found for this source.');
+        return;
+      }
+
+      final history = ref.read(historyEpisodesProvider(media.id)).value ?? [];
+      final last = history.firstOrNull;
+
+      UnifiedEpisode? target;
+      Duration? startPosition;
+
+      if (last != null) {
+        final partway =
+            last.positionInMilliseconds > 0 &&
+            last.positionInMilliseconds < last.durationInMilliseconds;
+        if (partway) {
+          target = episodes.firstWhereOrNull(
+            (e) => e.number == last.episodeNumber,
+          );
+          startPosition = Duration(milliseconds: last.positionInMilliseconds);
+        } else {
+          target = episodes.firstWhereOrNull(
+            (e) => e.number == last.episodeNumber + 1,
+          );
+        }
+      }
+      target ??= episodes.first;
+
+      if (!mounted) return;
+      context.push(
+        '/player',
+        extra: PlayerModeOnline(
+          media: media,
+          episode: target,
+          sourceInfo: state.source,
+          startPosition: startPosition,
+        ),
+      );
+    } catch (e) {
+      _toast('Could not start playback: $e');
+    } finally {
+      if (mounted) setState(() => _resolving = false);
+    }
+  }
+
+  void _openEpisodes(UnifiedMedia media) {
+    final history = ref.read(historyEpisodesProvider(media.id)).value ?? [];
+    final hasSources =
+        (ref.read(media.type.availableSourcesProvider).value ?? []).isNotEmpty;
+
+    TvSideSheet.show(
+      context: context,
+      label: 'Episodes',
+      builder: (sheetContext) => !hasSources
+          ? const NoExtensionsPlaceholder()
+          : Column(
+              children: [
+                EpisodeSourceHeader(media: media),
+                Expanded(child: _episodeList(sheetContext, media, history)),
+              ],
+            ),
+    );
+  }
+
+  Widget _episodeList(
+    BuildContext sheetContext,
+    UnifiedMedia media,
+    List<WatchHistoryEntry> history,
+  ) {
+    return EpisodeListPanel(
+      media: media,
+      currentEpisodeNumber: history.firstOrNull?.episodeNumber,
+      onEpisodeTap: (episode, sourceInfo) {
+        final entry = history
+            .where((e) => e.episodeNumber == episode.number)
+            .firstOrNull;
+        final resume =
+            entry != null &&
+            entry.positionInMilliseconds > 0 &&
+            entry.positionInMilliseconds < entry.durationInMilliseconds;
+
+        Navigator.of(sheetContext).pop();
+        context.push(
+          '/player',
+          extra: PlayerModeOnline(
+            media: media,
+            episode: episode,
+            sourceInfo: sourceInfo,
+            startPosition: resume
+                ? Duration(milliseconds: entry.positionInMilliseconds)
+                : null,
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _addToWatchList(UnifiedMedia media) async {
+    final tracker = ref.read(primaryTrackerProvider);
+    if (!(await tracker.isAuthenticated)) {
+      if (!mounted) return;
+      _openTrackerManager(media);
+      return;
+    }
+
+    final links = ref.read(trackerLinkProvider(media.id)).value ?? {};
+    final trackingId = tracker.type == TrackerType.local
+        ? media.id
+        : links[tracker.type]?.trackingId;
+
+    if (trackingId == null) {
+      // Nothing to write against yet; the manager is where a link is made.
+      if (!mounted) return;
+      _openTrackerManager(media);
+      return;
+    }
+
+    final existing = ref
+        .read(
+          mediaTrackingProvider(
+            TrackingQuery(tracker.type, media.id, media.type),
+          ),
+        )
+        .value;
+
+    try {
+      await tracker.updateListItem(
+        media: media,
+        trackingId: trackingId,
+        status: TrackedStatus.planning,
+        progress: existing?.progress ?? 0,
+        score: existing?.score ?? 0,
+      );
+      ref.invalidate(
+        mediaTrackingProvider(TrackingQuery(tracker.type, media.id, media.type)),
+      );
+      _toast('Added to ${tracker.type.displayName} plan to watch');
+    } catch (e) {
+      _toast('Could not add to watch list: $e');
+    }
+  }
+
+  void _openTrackerManager(UnifiedMedia media) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      useRootNavigator: true,
+      builder: (_) => TrackerManagerSheet(media: media),
+    );
+  }
+
+  void _share(UnifiedMedia media) {
+    final providerId = media.providerId ?? 'anilist';
+    final url = switch (providerId) {
+      'myanimelist' || 'mal' => 'https://myanimelist.net/anime/${media.id}',
+      'kitsu' => 'https://kitsu.io/anime/${media.id}',
+      _ => 'https://anilist.co/anime/${media.id}',
+    };
+    SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
-    final colorScheme = theme.colorScheme;
+    final cs = theme.colorScheme;
+    final size = MediaQuery.sizeOf(context);
+    final gutter = ShonenX.gutter(size);
+    final topInset = TvMetrics.verticalOfSize(size);
+
     final detailsState = ref.watch(
       detailsProvider(
         DetailsArgs(
@@ -123,379 +311,265 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         ),
       ),
     );
-    final uiRoundness = ref.watch(
-      themePrefsProvider.select((s) => s.uiRoundness),
-    );
+    final media = detailsState.value?.merge(widget.media) ?? widget.media;
 
-    final displayMedia =
-        detailsState.value?.merge(widget.media) ?? widget.media;
+    final relations = media.relations ?? const <UnifiedMedia>[];
+    final recommendations = media.recommendations ?? const <UnifiedMedia>[];
+    final characters = media.characters ?? const <MediaCharacter>[];
 
     return AppScaffold(
+      fullBleed: true,
       body: Stack(
-          children: [
-            NestedScrollView(
-              headerSliverBuilder: (context, innerBoxIsScrolled) => [
-                SliverAppBar(
-                  backgroundColor: Colors.transparent,
-                  automaticallyImplyLeading: false,
-                  expandedHeight: 350.0,
-                  leading: AppIconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new),
-                    onPressed: () => context.pop(),
+        children: [
+          _Backdrop(url: media.banner ?? media.cover),
+          CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    gutter,
+                    topInset + 16,
+                    gutter,
+                    40,
                   ),
-                  actions: [
-                    AppIconButton(
-                      tooltip: 'Share',
-                      backgroundColor: theme.colorScheme.secondaryContainer,
-                      foregroundColor: theme.colorScheme.onSecondaryContainer,
-                      radius: uiRoundness,
-                      icon: const Icon(Icons.share, size: 18),
-                      onPressed: () {
-                        final providerId = displayMedia.providerId ?? 'anilist';
-                        final id = displayMedia.id;
-                        final type = widget.mediaType == MediaType.ANIME
-                            ? 'anime'
-                            : 'manga';
-                        String url;
-                        if (providerId == 'myanimelist' ||
-                            providerId == 'mal') {
-                          url = 'https://myanimelist.net/$type/$id';
-                        } else if (providerId == 'kitsu') {
-                          url = 'https://kitsu.io/$type/$id';
-                        } else {
-                          url = 'https://anilist.co/$type/$id';
-                        }
-                        SharePlus.instance.share(
-                          ShareParams(uri: Uri.parse(url)),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 5),
-                    _TrackerAppBarButton(
-                      media: displayMedia,
-                      uiRoundness: uiRoundness,
-                    ),
-                  ],
-                  flexibleSpace: FlexibleSpaceBar(
-                    titlePadding: EdgeInsets.zero,
-                    background: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: ShaderMask(
-                            shaderCallback: (Rect bounds) {
-                              return LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.white,
-                                  Colors.white,
-                                  Colors.transparent,
-                                ],
-                                stops: const [0.0, 0.3, 1.0],
-                              ).createShader(bounds);
-                            },
-                            blendMode: BlendMode.dstIn,
-                            child: CachedNetworkImage(
-                              imageUrl:
-                                  displayMedia.banner ??
-                                  displayMedia.cover ??
-                                  '',
-                              fit: BoxFit.cover,
-                              placeholder: (_, __) => const Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                              errorWidget: (_, __, ___) =>
-                                  const Center(child: Icon(Icons.error)),
-                            ),
-                          ),
-                        ),
-                        Positioned.fill(
-                          child: Container(
-                            padding: const EdgeInsets.only(bottom: 5),
-                            margin: const EdgeInsets.only(top: 10),
-                            alignment: Alignment.bottomLeft,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(10.0),
-                                  child: SizedBox(
-                                    width: 112,
-                                    child: AspectRatio(
-                                      aspectRatio: 2 / 3,
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(
-                                          uiRoundness,
-                                        ),
-                                        child: Hero(
-                                          tag: widget.tag,
-                                          child: CachedNetworkImage(
-                                            imageUrl: displayMedia.cover ?? '',
-                                            fit: BoxFit.cover,
-                                            placeholder: (context, url) =>
-                                                Container(
-                                                  color: colorScheme
-                                                      .surfaceContainerHighest,
-                                                ),
-                                            errorWidget: (_, __, ___) =>
-                                                const Icon(Icons.error),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(
-                                      bottom: 10.0,
-                                      right: 10.0,
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          displayMedia.title.availableTitle,
-                                          style: textTheme.titleLarge,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        if (displayMedia.title.native != null ||
-                                            displayMedia.title.romaji != null)
-                                          Text(
-                                            displayMedia.title.native ??
-                                                displayMedia.title.romaji ??
-                                                '',
-                                            style: textTheme.labelLarge
-                                                ?.copyWith(
-                                                  color: colorScheme
-                                                      .onSurfaceVariant,
-                                                ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        const SizedBox(height: 10),
-                                        Wrap(
-                                          spacing: 4.0,
-                                          runSpacing: 4.0,
-                                          alignment: WrapAlignment.start,
-                                          children: [
-                                            if (displayMedia.score != null &&
-                                                displayMedia.score! > 0)
-                                              Chip(
-                                                materialTapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                                side: BorderSide.none,
-                                                color: WidgetStatePropertyAll(
-                                                  colorScheme
-                                                      .surfaceContainerHighest,
-                                                ),
-                                                avatar: Icon(
-                                                  Icons.star_rounded,
-                                                  size: 14,
-                                                  color: colorScheme.primary,
-                                                ),
-                                                label: Text(
-                                                  displayMedia.score!
-                                                      .toStringAsFixed(1),
-                                                  style: textTheme.bodySmall
-                                                      ?.copyWith(
-                                                        color: colorScheme
-                                                            .onSurfaceVariant,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                      ),
-                                                ),
-                                              ),
-                                            if (displayMedia.format != null &&
-                                                displayMedia.format!.isNotEmpty)
-                                              Chip(
-                                                materialTapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                                side: BorderSide.none,
-                                                color: WidgetStatePropertyAll(
-                                                  colorScheme
-                                                      .surfaceContainerHighest,
-                                                ),
-                                                avatar: Icon(
-                                                  Icons.tv_rounded,
-                                                  size: 14,
-                                                  color: colorScheme.primary,
-                                                ),
-                                                label: Text(
-                                                  displayMedia.format!,
-                                                  style: textTheme.bodySmall
-                                                      ?.copyWith(
-                                                        color: colorScheme
-                                                            .onSurfaceVariant,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                      ),
-                                                ),
-                                              ),
-                                            if (displayMedia.status != null &&
-                                                displayMedia.status!.isNotEmpty)
-                                              Chip(
-                                                materialTapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                                side: BorderSide.none,
-                                                color: WidgetStatePropertyAll(
-                                                  colorScheme
-                                                      .surfaceContainerHighest,
-                                                ),
-                                                avatar: Icon(
-                                                  Icons
-                                                      .fiber_manual_record_rounded,
-                                                  size: 14,
-                                                  color:
-                                                      displayMedia.status!
-                                                              .toLowerCase() ==
-                                                          'releasing'
-                                                      ? Colors.greenAccent
-                                                      : colorScheme.primary,
-                                                ),
-                                                label: Text(
-                                                  displayMedia.status!
-                                                      .toUpperCase()
-                                                      .replaceAll('_', ' '),
-                                                  style: textTheme.bodySmall
-                                                      ?.copyWith(
-                                                        color: colorScheme
-                                                            .onSurfaceVariant,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                      ),
-                                                ),
-                                              ),
-                                            Chip(
-                                              materialTapTargetSize:
-                                                  MaterialTapTargetSize
-                                                      .shrinkWrap,
-                                              side: BorderSide.none,
-                                              color: WidgetStatePropertyAll(
-                                                colorScheme
-                                                    .surfaceContainerHighest,
-                                              ),
-                                              avatar: Icon(
-                                                Icons.video_library_rounded,
-                                                size: 14,
-                                                color: colorScheme.primary,
-                                              ),
-                                              label: Text(
-                                                '${displayMedia.episodes ?? '?'} eps',
-                                                style: textTheme.bodySmall
-                                                    ?.copyWith(
-                                                      color: colorScheme
-                                                          .onSurfaceVariant,
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
-                                              ),
-                                            ),
-                                            if (displayMedia.season != null &&
-                                                displayMedia.season!.isNotEmpty)
-                                              Chip(
-                                                materialTapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                                side: BorderSide.none,
-                                                color: WidgetStatePropertyAll(
-                                                  colorScheme
-                                                      .surfaceContainerHighest,
-                                                ),
-                                                avatar: Icon(
-                                                  Icons.calendar_today_rounded,
-                                                  size: 14,
-                                                  color: colorScheme.primary,
-                                                ),
-                                                label: Text(
-                                                  displayMedia.season!,
-                                                  style: textTheme.bodySmall
-                                                      ?.copyWith(
-                                                        color: colorScheme
-                                                            .onSurfaceVariant,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                      ),
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-              // Unlike IndexedStack, TabBarView keeps the offscreen tab alive
-              // AND focusable, so pressing right at the edge of About would
-              // silently jump focus into the hidden Episodes tab.
-              body: AnimatedBuilder(
-                animation: _tabController,
-                builder: (context, _) => TabBarView(
-                  controller: _tabController,
-                  children: [
-                    ExcludeFocus(
-                      excluding: _tabController.index != 0,
-                      child: AboutTabWidget(
-                        media: displayMedia,
-                        onEpisodesTabRequested: () =>
-                            _tabController.animateTo(1),
-                        uiRoundness: uiRoundness,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _IconButton(
+                        icon: Icons.arrow_back,
+                        onPressed: () => context.pop(),
+                        tooltip: 'Back',
                       ),
-                    ),
-                    ExcludeFocus(
-                      excluding: _tabController.index != 1,
-                      child: EpisodesTabWidget(media: displayMedia),
-                    ),
-                  ],
+                      const SizedBox(width: 24),
+                      Expanded(child: _buildInfoColumn(media, theme, cs)),
+                      const SizedBox(width: 40),
+                      _Poster(media: media, tag: widget.tag),
+                    ],
+                  ),
                 ),
               ),
+              if (relations.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: DetailMediaRow(
+                    title: 'Related Anime',
+                    items: relations,
+                    tagPrefix: 'details-rel',
+                  ),
+                ),
+              if (characters.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: DetailCharacterRow(characters: characters),
+                ),
+              if (recommendations.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: DetailMediaRow(
+                    title: 'Recommendations',
+                    items: recommendations,
+                    tagPrefix: 'details-rec',
+                  ),
+                ),
+              SliverToBoxAdapter(child: SizedBox(height: topInset + 40)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoColumn(UnifiedMedia media, ThemeData theme, ColorScheme cs) {
+    final genres = media.genres ?? const <String>[];
+    final description = media.description;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            TvMetaRow(media: media),
+            const SizedBox(width: 32),
+            _IconButton(
+              icon: Icons.share_outlined,
+              tooltip: 'Share',
+              onPressed: () => _share(media),
+            ),
+            const SizedBox(width: 12),
+            _TrackerButton(
+              media: media,
+              onOpenManager: () => _openTrackerManager(media),
             ),
           ],
         ),
-      bottomNavigationBar: SafeArea(
-        child: KeyboardListener(
-          focusNode: _keyboardFocusNode,
-          autofocus: true,
-          onKeyEvent: (event) {
-            if (event is! KeyDownEvent) {
-              return;
-            }
-
-            switch (event.logicalKey) {
-              case LogicalKeyboardKey.digit1:
-                _tabController.animateTo(0);
-                break;
-              case LogicalKeyboardKey.digit2:
-                _tabController.animateTo(1);
-                break;
-            }
-          },
-          child: TabBar(
-            dividerHeight: 0,
-            controller: _tabController,
-            dividerColor: Colors.transparent,
-            indicatorSize: TabBarIndicatorSize.tab,
-            textScaler: const TextScaler.linear(1.15),
-            tabs: [
-              const Tab(text: 'About'),
-              Tab(
-                text: 'Episodes',
+        const SizedBox(height: 20),
+        Text(
+          media.title.availableTitle,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.displaySmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            height: 1.1,
+          ),
+        ),
+        const SizedBox(height: 22),
+        if (description != null && description.isNotEmpty)
+          Text(
+            _plainText(description),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: cs.onSurfaceVariant,
+              height: 1.5,
+            ),
+          ),
+        const SizedBox(height: 18),
+        Text(
+          'Genres: ${genres.join(', ')}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: cs.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 32),
+        FocusTraversalGroup(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  TvButton(
+                    label: 'Play now',
+                    icon: Icons.play_arrow_rounded,
+                    width: 280,
+                    loading: _resolving,
+                    // The reason the screen exists. Land here on arrival so
+                    // watching something is a single press.
+                    autofocus: true,
+                    onPressed: () => _play(media),
+                  ),
+                  const SizedBox(width: 16),
+                  TvButton(
+                    label: 'More episodes',
+                    icon: Icons.layers_outlined,
+                    width: 280,
+                    variant: TvButtonVariant.filledWhite,
+                    onPressed: () => _openEpisodes(media),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 280,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TvButton(
+                        label: 'Watch',
+                        emphasis: 'Dubbed',
+                        icon: Icons.mic_none_rounded,
+                        height: 52,
+                        variant: TvButtonVariant.bare,
+                        onPressed: () =>
+                            _play(media, serverType: ServerType.dub),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  TvButton(
+                    label: 'Add to watch list',
+                    icon: Icons.add_circle_outline,
+                    height: 52,
+                    variant: TvButtonVariant.bare,
+                    onPressed: () => _addToWatchList(media),
+                  ),
+                ],
+              ),
+              TvButton(
+                label: 'Watch',
+                emphasis: 'Subbed',
+                icon: Icons.closed_caption_off_rounded,
+                height: 52,
+                variant: TvButtonVariant.bare,
+                onPressed: () => _play(media, serverType: ServerType.sub),
               ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Descriptions arrive as fragments of HTML from every tracker.
+  static String _plainText(String raw) => raw
+      .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), ' ')
+      .replaceAll(RegExp(r'<[^>]*>'), '')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+
+class _Backdrop extends StatelessWidget {
+  final String? url;
+
+  const _Backdrop({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    if (url == null || url!.isEmpty) return const SizedBox.shrink();
+
+    return Positioned.fill(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          CachedNetworkImage(
+            imageUrl: url!,
+            fit: BoxFit.cover,
+            alignment: Alignment.topCenter,
+            errorWidget: (_, __, ___) => const SizedBox.shrink(),
+          ),
+          // Heavy enough that white body text stays legible over any artwork.
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: cs.surface.withValues(alpha: 0.88),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Poster extends StatelessWidget {
+  final UnifiedMedia media;
+  final String tag;
+
+  const _Poster({required this.media, required this.tag});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final url = media.cover ?? media.banner;
+
+    // Not focusable: it is an illustration, and a focus stop here would sit
+    // between the action buttons and the rows below for no gain.
+    return SizedBox(
+      width: ShonenX.detailPosterWidth,
+      child: AspectRatio(
+        aspectRatio: 2 / 3,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(ShonenX.posterRadius),
+          child: Hero(
+            tag: tag,
+            child: (url == null || url.isEmpty)
+                ? Container(color: cs.surfaceContainer)
+                : CachedNetworkImage(
+                    imageUrl: url,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) =>
+                        Container(color: cs.surfaceContainer),
+                    errorWidget: (_, __, ___) =>
+                        Container(color: cs.surfaceContainer),
+                  ),
           ),
         ),
       ),
@@ -503,156 +577,90 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
   }
 }
 
-class _TrackerAppBarButton extends ConsumerWidget {
-  final UnifiedMedia media;
-  final double uiRoundness;
+class _IconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onPressed;
+  final String tooltip;
 
-  const _TrackerAppBarButton({required this.media, required this.uiRoundness});
+  const _IconButton({
+    required this.icon,
+    required this.onPressed,
+    required this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return TvFocusable(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(10),
+      scaleOnFocus: false,
+      builder: (context, isFocused) => SizedBox(
+        width: 44,
+        height: 44,
+        child: Icon(
+          icon,
+          size: 28,
+          semanticLabel: tooltip,
+          color: isFocused ? cs.onSurface : cs.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
+/// Tracker state as a single icon.
+///
+/// The old version was a labelled button whose only route to editing an entry
+/// was a long-press -- a gesture no remote can produce. Everything now goes
+/// through the manager sheet.
+class _TrackerButton extends ConsumerWidget {
+  final UnifiedMedia media;
+  final VoidCallback onOpenManager;
+
+  const _TrackerButton({required this.media, required this.onOpenManager});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-
     final activeTrackers = ref.watch(activeTrackersProvider(media.type));
-
     if (activeTrackers.isEmpty) return const SizedBox.shrink();
 
-    final trackerLinksAsync = ref.watch(trackerLinkProvider(media.id));
     final tracker = ref.watch(primaryTrackerProvider);
-
+    final links = ref.watch(trackerLinkProvider(media.id)).value ?? {};
     final trackingState = ref.watch(
       mediaTrackingProvider(TrackingQuery(tracker.type, media.id, media.type)),
     );
 
-    return _buildUI(
-      context,
-      ref,
-      theme,
-      tracker,
-      trackingState,
-      trackerLinksAsync,
-      uiRoundness,
-    );
-  }
+    final isAuthenticated = tracker.type.isAuthenticated(ref);
+    final isLinked =
+        links.containsKey(tracker.type) || tracker.type == TrackerType.local;
 
-  Widget _buildUI(
-    BuildContext context,
-    WidgetRef ref,
-    ThemeData theme,
-    TrackingService tracker,
-    AsyncValue<TrackedListItem?> trackingState,
-    AsyncValue<Map<TrackerType, TrackerMapping>> trackerLinksAsync,
-    double uiRoundness,
-  ) {
-    return trackingState.when(
-      loading: () => _buildButton(
-        theme,
-        label: 'Loading...',
-        icon: Icons.hourglass_empty,
-        isEnabled: false,
-        uiRoundness: uiRoundness,
-      ),
-      error: (err, stack) => _buildButton(
-        theme,
-        label: 'Sync Error',
-        icon: Icons.sync_problem,
-        onPressed: () => _openManager(context),
-        uiRoundness: uiRoundness,
-      ),
-      data: (listItem) {
-        final links = trackerLinksAsync.value ?? {};
-        final isTrackerLinked = links.containsKey(tracker.type);
-        final isAuthenticated = tracker.type.isAuthenticated(ref);
+    final IconData icon;
+    final String tooltip;
+    if (!isAuthenticated) {
+      icon = Icons.login;
+      tooltip = 'Log in to ${tracker.type.displayName}';
+    } else if (isLinked && trackingState.value != null) {
+      icon = Icons.bookmark_added;
+      tooltip =
+          'Ep ${trackingState.value!.progress.toInt()} • '
+          '${trackingState.value!.status.getLabelForMedia(media.type)}';
+    } else {
+      icon = Icons.bookmark_add_outlined;
+      tooltip = 'Add to ${tracker.type.displayName}';
+    }
 
-        String label = 'Add Tracker';
-        IconData icon = Icons.add;
-
-        if (!isAuthenticated) {
-          label = 'Login to ${tracker.type.displayName}';
-          icon = Icons.login;
-        } else if (isTrackerLinked || tracker.type == TrackerType.local) {
-          if (listItem != null) {
-            label =
-                'Ep ${listItem.progress.toInt()} • ${listItem.status.getLabelForMedia(media.type)}';
-            icon = Icons.bookmark_added;
-          } else {
-            label = 'Add to ${tracker.type.displayName}';
-            icon = Icons.add_to_photos;
-          }
-        } else if (links.isNotEmpty) {
-          label = 'Manage Trackers';
-          icon = Icons.bookmarks;
+    return _IconButton(
+      icon: icon,
+      tooltip: tooltip,
+      onPressed: () {
+        if (tracker is RemoteTracker && !isAuthenticated) {
+          ref.read(authTokensProvider.notifier).login(tracker);
+          return;
         }
-
-        return _buildButton(
-          theme,
-          label: label,
-          icon: icon,
-          onPressed: () {
-            if (tracker is RemoteTracker && !isAuthenticated) {
-              ref.read(authTokensProvider.notifier).login(tracker);
-              return;
-            }
-            _openManager(context);
-          },
-          onLongPress: (isTrackerLinked && listItem != null)
-              ? () => showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  useSafeArea: true,
-                  builder: (_) => EditTrackerSheet(
-                    media: media,
-                    initialItem: listItem,
-                    tracker: tracker,
-                  ),
-                )
-              : null,
-          uiRoundness: uiRoundness,
-        );
+        onOpenManager();
       },
-    );
-  }
-
-  Widget _buildButton(
-    ThemeData theme, {
-    required String label,
-    required IconData icon,
-    required double uiRoundness,
-    bool isEnabled = true,
-    VoidCallback? onPressed,
-    VoidCallback? onLongPress,
-  }) {
-    return TextButton.icon(
-      style: TextButton.styleFrom(
-        backgroundColor: theme.colorScheme.primary,
-        foregroundColor: theme.colorScheme.onPrimary,
-        visualDensity: VisualDensity.compact,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.horizontal(
-            left: Radius.circular(uiRoundness),
-          ),
-        ),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      onPressed: isEnabled ? onPressed : null,
-      onLongPress: isEnabled ? onLongPress : null,
-      icon: Icon(icon, size: 18, color: theme.colorScheme.onPrimary),
-      label: Text(
-        label,
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: theme.colorScheme.onPrimary,
-        ),
-      ),
-    );
-  }
-
-  void _openManager(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => TrackerManagerSheet(media: media),
     );
   }
 }
