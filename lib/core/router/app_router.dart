@@ -20,7 +20,6 @@ import 'package:shonenx/features/reader/domain/reader_mode.dart';
 import 'package:shonenx/features/reader/presentation/reader_screen.dart';
 import 'package:shonenx/features/settings/presentation/cache_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/home_settings_screen.dart';
-import 'package:shonenx/features/settings/presentation/permissions_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/player_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/reader_settings_screen.dart';
@@ -30,7 +29,6 @@ import 'package:shonenx/features/settings/presentation/ui_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/backup_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/import_preview_screen.dart';
 import 'package:shonenx/features/settings/presentation/debug_settings_screen.dart';
-import "package:shonenx/features/notifications/presentation/notifications_settings_screen.dart";
 import 'package:shonenx/features/settings/presentation/content_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/logs_screen.dart';
 import 'package:shonenx/features/settings/presentation/about_screen.dart';
@@ -246,14 +244,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
         routes: [
-          GoRoute(
-            path: 'permissions',
-            builder: (context, state) => const PermissionsSettingsScreen(),
-          ),
-          GoRoute(
-            path: 'notifications',
-            builder: (context, state) => const NotificationsSettingsScreen(),
-          ),
           GoRoute(
             path: 'tracking',
             builder: (context, state) => const TrackingSettingsScreen(),

@@ -13,14 +13,12 @@ import 'package:shonenx/core/caching/cache_manager.dart';
 import 'package:shonenx/core/caching/domain/cache_entry.dart';
 import 'package:shonenx/core/network/http_adapter.dart';
 import 'package:shonenx/core/network/http_client.dart';
-import 'package:shonenx/core/services/notification_service.dart';
 import 'package:shonenx/core/utils/app_logger.dart';
 import 'package:shonenx/features/discovery/domain/media_preference.dart';
 import 'package:shonenx/features/discovery/domain/media_source_preference.dart';
 import 'package:shonenx/features/history/domain/models/watch_history_entry.dart';
 import 'package:shonenx/features/history/domain/models/read_history_entry.dart';
 import 'package:shonenx/features/library/domain/models/library_entry.dart';
-import 'package:shonenx/features/notifications/domain/models/notification_subscription.dart';
 import 'package:shonenx/features/tracking/domain/isar_tracker_link.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -51,9 +49,6 @@ class AppInit {
 
     await _cleanupOldDslProviders();
     log.s('Old DSL providers cleaned up');
-
-    await _initNotifications();
-    log.s('Notifications initialized');
 
     log.section('DONE');
 
@@ -135,7 +130,6 @@ class AppInit {
           IsarTrackerLinkSchema,
           WatchHistoryEntrySchema,
           ReadHistoryEntrySchema,
-          NotificationSubscriptionSchema,
 
           // MSourceSchema,
           // SourcePreferenceSchema,
@@ -211,18 +205,6 @@ class AppInit {
       rethrow;
     } finally {
       isBridgeInitialized = true;
-    }
-  }
-
-  Future<void> _initNotifications() async {
-    final log = _log.child('_initNotifications');
-
-    try {
-      await NotificationService.instance.init();
-      log.s('Notification service initialized');
-    } catch (e, st) {
-      log.e('NOTIFICATION INIT FAILED', e, st);
-      rethrow;
     }
   }
 

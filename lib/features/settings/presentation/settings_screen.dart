@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -55,14 +53,6 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: 'Content filters, 18+ toggle',
                 onTap: () => context.push('/settings/content'),
               ),
-              if (Platform.isAndroid) ...[
-                SettingsNavTile(
-                  icon: Icons.security_outlined,
-                  title: 'Permissions',
-                  subtitle: 'Manage app permissions',
-                  onTap: () => context.push('/settings/permissions'),
-                ),
-              ],
             ],
           ),
 
@@ -102,19 +92,6 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
 
-          if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS)
-            SettingsSection(
-              title: 'Notifications',
-              children: [
-                SettingsNavTile(
-                  icon: Icons.notifications_active_outlined,
-                  title: 'Manage Notifications',
-                  subtitle: 'Manage your active subscriptions and reminders',
-                  onTap: () => context.push('/settings/notifications'),
-                ),
-              ],
-            ),
-
           SettingsSection(
             title: 'Misc',
             children: [
@@ -151,7 +128,7 @@ class SettingsScreen extends ConsumerWidget {
               SettingsNavTile(
                 icon: Icons.bug_report_outlined,
                 title: 'Debug',
-                subtitle: 'Test notifications and UI components',
+                subtitle: 'UI components and diagnostics',
                 onTap: () => context.push('/settings/debug'),
               ),
               SettingsNavTile(

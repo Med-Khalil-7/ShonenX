@@ -51,9 +51,6 @@ dependencies:
     git:
       url: https://github.com/roshancodespace/flutter_inappwebview.git
       path: flutter_inappwebview
-  flutter_local_notifications: ^20.1.0
-  timezone: ^0.10.1
-  flutter_timezone: ^5.1.0
   screenshot: ^3.0.0
   window_manager: ^0.5.1
   url_launcher: ^6.3.0

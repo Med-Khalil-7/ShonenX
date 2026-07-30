@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -8,9 +7,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:shonenx/core/utils/formatting.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/cards/media_card.dart';
-import 'package:shonenx/features/notifications/domain/models/notification_subscription.dart';
-import 'package:shonenx/features/notifications/presentation/widgets/notification_subscription_sheet.dart';
-import 'package:shonenx/features/notifications/providers/notification_subscriptions_provider.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/sheets/characters_sheet.dart';
 import 'package:shonenx/source_engine/source_engine_provider.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
@@ -787,22 +783,8 @@ class _AiringBanner extends ConsumerWidget {
     final episodeNum = nextEpisode is int ? nextEpisode : (1);
     final theme = Theme.of(context);
 
-    final subType = media.type == MediaType.MANGA
-        ? SubscriptionType.mangaChapter
-        : SubscriptionType.animeAiring;
-
-    final map = ref.watch(notificationSubscriptionsProvider);
-    final subscription = map['${subType.name}_${media.id}'];
-
-    final bool isMissed =
-        subscription != null &&
-        subscription.isEnabled &&
-        subscription.upcomingTime != null &&
-        subscription.upcomingTime!.isBefore(DateTime.now());
-
     final isManga = media.type == MediaType.MANGA;
     final itemText = isManga ? 'Chapter' : 'Episode';
-    final tabText = isManga ? 'Chapters' : 'Episodes';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -835,105 +817,23 @@ class _AiringBanner extends ConsumerWidget {
                     letterSpacing: 1.2,
                   ),
                 ),
-                if (isMissed) ...[
-                  Text(
-                    'You missed the notification for $itemText $episodeNum',
+                RichText(
+                  text: TextSpan(
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.error,
-                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  InkWell(
-                    onTap: () {
-                      if (onEpisodesTabRequested != null) {
-                        onEpisodesTabRequested!();
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Please check the $tabText tab for the latest release.',
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                    child: Text(
-                      'Open $tabText tab →',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.primary,
-                        decoration: TextDecoration.underline,
+                    children: [
+                      const TextSpan(text: 'Airing in '),
+                      TextSpan(
+                        text: formatCountdown(airingAt),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
-                    ),
+                    ],
                   ),
-                ] else ...[
-                  RichText(
-                    text: TextSpan(
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurface,
-                      ),
-                      children: [
-                        const TextSpan(text: 'Airing in '),
-                        TextSpan(
-                          text: formatCountdown(airingAt),
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ],
             ),
           ),
-          if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS)
-            InkWell(
-              customBorder: const CircleBorder(),
-              onTap: () async {
-                final notifier = ref.read(
-                  notificationSubscriptionsProvider.notifier,
-                );
-                await notifier.toggleSubscription(media);
-                final sub = notifier.getSubscription(subType, media.id);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).clearSnackBars();
-                  if (sub != null && sub.isEnabled) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Subscribed to ${itemText} $episodeNum. You will be notified when it drops.',
-                        ),
-                      ),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Notifications disabled.')),
-                    );
-                  }
-                }
-              },
-              onLongPress: () {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) =>
-                      NotificationSubscriptionSheet(media: media),
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Icon(
-                  subscription?.isEnabled == true
-                      ? (subscription!.mode == SubscriptionMode.entireSeason
-                            ? Icons.notifications_active
-                            : Icons.notifications)
-                      : Icons.notifications_outlined,
-                  color: subscription?.isEnabled == true
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
         ],
       ),
     );

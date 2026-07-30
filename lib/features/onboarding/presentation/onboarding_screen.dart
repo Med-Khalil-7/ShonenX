@@ -1,11 +1,8 @@
-import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart'; // FIXED: Added to access kIsWeb
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:collection/collection.dart';
 import 'package:shonenx/features/discovery/domain/models/home_section.dart';
 import 'package:shonenx/features/discovery/providers/discovery_prefs_provider.dart';
@@ -20,7 +17,6 @@ import 'package:shonenx/features/tracking/domain/models/tracker_type.dart';
 import 'package:shonenx/features/tracking/engine/remote_tracker.dart';
 import 'package:shonenx/features/tracking/providers/tracker_registry.dart';
 import 'package:shonenx/source_engine/providers/inbuilt_sources_provider.dart';
-import 'package:shonenx/shared/widgets/permission_sheet.dart';
 import 'package:shonenx/shared/widgets/svg_icon.dart';
 import 'package:anymex_extension_runtime_bridge/anymex_extension_runtime_bridge.dart'
     as bridge;
@@ -37,9 +33,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentIndex = 0;
 
-  // FIXED: Added kIsWeb check to prevent UnsupportedError on Web
-  bool get _isMobile => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
-  int get _totalPages => _isMobile ? 6 : 5;
+  static const int _totalPages = 5;
 
   void _nextPage() {
     // FIXED: Use actual PageController position instead of lagging _currentIndex state to prevent animation jitter on rapid taps
@@ -97,7 +91,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       _buildDiscoveryGuidePage(theme, cs),
                       _buildTrackersPage(theme, cs),
                       _buildExtensionsPage(theme, cs),
-                      if (_isMobile) _buildNotificationsPage(theme, cs),
                     ],
                   ),
                 ),
@@ -831,84 +824,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNotificationsPage(ThemeData theme, ColorScheme cs) {
-    return _buildPageLayout(
-      title: 'Stay Updated',
-      description:
-          'Never miss an episode. Allow notifications to receive background download progress and timely release reminders.',
-      icon: Icons.notifications_active_rounded,
-      theme: theme,
-      cs: cs,
-      customWidget: Padding(
-        padding: const EdgeInsets.only(top: 24),
-        child: FilledButton.icon(
-          onPressed: () async {
-            final notifGranted = await PermissionSheet.show(
-              context,
-              permission: Permission.notification,
-              title: 'Allow Notifications',
-              description:
-                  'ShonenX needs notification access to keep you updated.',
-              rationale:
-                  'This allows the app to show background download progress and notify you when new episodes of your tracked anime are released.',
-            );
-
-            bool alarmGranted = false;
-            if (Platform.isAndroid && mounted) {
-              alarmGranted = await PermissionSheet.show(
-                context,
-                permission: Permission.scheduleExactAlarm,
-                title: 'Exact Alarms',
-                description:
-                    'Allow ShonenX to schedule precise notifications for release reminders.',
-                rationale:
-                    'Android restricts background tasks. Exact alarm permission ensures you receive notifications at the exact minute an episode airs, rather than hours later.',
-              );
-            }
-
-            if (mounted) {
-              final String msg;
-              if (Platform.isAndroid) {
-                if (notifGranted && alarmGranted) {
-                  msg = 'Notifications & Exact Alarms Enabled!';
-                } else if (notifGranted) {
-                  msg = 'Notifications Enabled (Exact Alarms Denied)';
-                } else if (alarmGranted) {
-                  msg = 'Exact Alarms Enabled (Notifications Denied)';
-                } else {
-                  msg = 'Permissions Denied';
-                }
-              } else {
-                msg = notifGranted
-                    ? 'Notifications Enabled!'
-                    : 'Notifications Denied';
-              }
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(msg),
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              );
-            }
-          },
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-            shape: const StadiumBorder(),
-          ),
-          icon: const Icon(Icons.notifications_rounded),
-          label: const Text(
-            'Grant Permission',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
         ),
       ),
     );
