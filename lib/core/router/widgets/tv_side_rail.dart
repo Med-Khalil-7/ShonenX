@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
+import 'package:shonenx/core/tv/tv_focusable.dart';
 import 'package:shonenx/core/tv/tv_metrics.dart';
 
 class TvNavDestination {
   final IconData icon;
-  final IconData selectedIcon;
   final String label;
 
   /// Shell branch index, or null for a destination that pushes a route
-  /// outside the shell (Settings).
+  /// outside the shell.
   final int? branchIndex;
 
   /// Route to push when [branchIndex] is null.
@@ -16,52 +17,40 @@ class TvNavDestination {
 
   const TvNavDestination({
     required this.icon,
-    required this.selectedIcon,
     required this.label,
     this.branchIndex,
     this.route,
   });
 }
 
+/// Search leads: it is the thing a user reaches for most on a TV, where
+/// browsing is slow and typing is slower still.
+///
+/// Settings deliberately is not here -- it lives as a button in the top-right
+/// of Home.
 const tvDestinations = <TvNavDestination>[
   TvNavDestination(
-    icon: Icons.home_outlined,
-    selectedIcon: Icons.home_rounded,
-    label: 'Home',
-    branchIndex: 0,
-  ),
-  TvNavDestination(
-    icon: Icons.search_outlined,
-    selectedIcon: Icons.search_rounded,
+    icon: Icons.search_rounded,
     label: 'Search',
     branchIndex: 1,
   ),
+  TvNavDestination(icon: Icons.home_rounded, label: 'Home', branchIndex: 0),
   TvNavDestination(
-    icon: Icons.video_library_outlined,
-    selectedIcon: Icons.video_library_rounded,
+    icon: Icons.bolt_rounded,
     label: 'Library',
     branchIndex: 2,
   ),
-  // Settings lives outside the shell, but on a TV it needs to be reachable
-  // from the rail: previously the only way in was a header button on Home,
-  // which is an awkward first focus stop.
-  TvNavDestination(
-    icon: Icons.settings_outlined,
-    selectedIcon: Icons.settings_rounded,
-    label: 'Settings',
-    route: '/settings',
-  ),
 ];
 
-/// Google TV style navigation rail: a column of icons that expands to show
-/// labels while anything inside it holds focus.
+/// Icon-only navigation rail with the app mark at the top and a red bar at the
+/// screen's edge marking the active branch.
 ///
-/// It is drawn as an overlay on top of the content rather than taking part in
-/// a Row. Expanding a Row member would relayout every lazy list in the branch
-/// on each expansion, which a TV SoC cannot absorb smoothly.
-class TvSideRail extends StatefulWidget {
-  static const double collapsedWidth = 88;
-  static const double expandedWidth = 280;
+/// Drawn as an overlay rather than as a Row member. It used to expand on
+/// focus, which meant every lazy list in the branch relaid out on each
+/// expansion -- a cost a TV SoC cannot absorb smoothly. At a fixed width the
+/// content padding is constant and nothing below it ever reflows.
+class TvSideRail extends StatelessWidget {
+  static const double width = ShonenX.railWidth;
 
   final int currentIndex;
   final ValueChanged<TvNavDestination> onSelected;
@@ -79,26 +68,20 @@ class TvSideRail extends StatefulWidget {
     required this.scopeNode,
   });
 
-  @override
-  State<TvSideRail> createState() => _TvSideRailState();
-}
-
-class _TvSideRailState extends State<TvSideRail> {
-  bool _expanded = false;
+  int get _selectedItem =>
+      tvDestinations.indexWhere((d) => d.branchIndex == currentIndex);
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final verticalInset = TvMetrics.verticalOfSize(MediaQuery.sizeOf(context));
 
     return FocusScope(
-      node: widget.scopeNode,
+      node: scopeNode,
       child: Focus(
         // Reports descendant focus without becoming a focus stop itself.
         canRequestFocus: false,
         skipTraversal: true,
-        onFocusChange: (hasFocus) {
-          if (_expanded != hasFocus) setState(() => _expanded = hasFocus);
-        },
         onKeyEvent: (node, event) {
           if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
             return KeyEventResult.ignored;
@@ -107,7 +90,7 @@ class _TvSideRailState extends State<TvSideRail> {
           // but being explicit means it works from any item and never lands
           // somewhere surprising.
           if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-            widget.onEscapeRight();
+            onEscapeRight();
             return KeyEventResult.handled;
           }
           // Nothing is left of the rail; swallow so focus does not jump
@@ -117,55 +100,56 @@ class _TvSideRailState extends State<TvSideRail> {
           }
           return KeyEventResult.ignored;
         },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          width: _expanded
-              ? TvSideRail.expandedWidth
-              : TvSideRail.collapsedWidth,
-          decoration: BoxDecoration(
-            // Opaque, not blurred: BackdropFilter is the single most
-            // expensive thing you can put in a TV shell.
-            color: _expanded ? cs.surfaceContainerHigh : Colors.transparent,
-            // BorderSide.none rather than a transparent side: a side still
-            // occupies its width even when invisible, and at the collapsed
-            // width that 1px is exactly enough to overflow the item row.
-            border: Border(
-              right: _expanded
-                  ? BorderSide(
-                      color: cs.outlineVariant.withValues(alpha: 0.4),
-                    )
-                  : BorderSide.none,
-            ),
-          ),
-          child: SafeArea(
-            right: false,
-            minimum: const EdgeInsets.symmetric(vertical: 24),
-            child: FocusTraversalGroup(
-              policy: OrderedTraversalPolicy(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 8),
-                  for (var i = 0; i < tvDestinations.length; i++) ...[
-                    if (tvDestinations[i].route == '/settings') const Spacer(),
-                    FocusTraversalOrder(
-                      order: NumericFocusOrder(i.toDouble()),
-                      child: _RailItem(
-                        destination: tvDestinations[i],
-                        selected:
-                            tvDestinations[i].branchIndex ==
-                            widget.currentIndex,
-                        expanded: _expanded,
-                        onPressed: () =>
-                            widget.onSelected(tvDestinations[i]),
+        child: SizedBox(
+          width: TvSideRail.width,
+          child: Stack(
+            children: [
+              Padding(
+                padding: EdgeInsets.symmetric(vertical: verticalInset),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 24),
+                    // Brand mark, never a focus stop -- a remote should not
+                    // have to step over decoration to reach a destination.
+                    const ExcludeFocus(child: _RailLogo()),
+                    Expanded(
+                      child: FocusTraversalGroup(
+                        policy: OrderedTraversalPolicy(),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            for (var i = 0; i < tvDestinations.length; i++)
+                              FocusTraversalOrder(
+                                order: NumericFocusOrder(i.toDouble()),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                  ),
+                                  child: _RailItem(
+                                    destination: tvDestinations[i],
+                                    selected: i == _selectedItem,
+                                    onPressed: () =>
+                                        onSelected(tvDestinations[i]),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
                   ],
-                ],
+                ),
               ),
-            ),
+              // The indicator rides the screen edge rather than sitting inside
+              // the item, so it stays visible even when the rail is drawn over
+              // bright artwork.
+              if (_selectedItem >= 0)
+                _RailIndicator(
+                  selectedItem: _selectedItem,
+                  itemCount: tvDestinations.length,
+                  color: cs.primary,
+                ),
+            ],
           ),
         ),
       ),
@@ -173,101 +157,110 @@ class _TvSideRailState extends State<TvSideRail> {
   }
 }
 
-class _RailItem extends StatefulWidget {
+class _RailLogo extends StatelessWidget {
+  const _RailLogo();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: ShonenX.railLogoSize,
+      height: ShonenX.railLogoSize,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary,
+        borderRadius: BorderRadius.circular(ShonenX.railLogoRadius),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset(
+        'assets/images/app_icon.png',
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) =>
+            const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 32),
+      ),
+    );
+  }
+}
+
+/// Slides between items rather than cross-fading, which reads as one object
+/// moving instead of two blinking.
+class _RailIndicator extends StatelessWidget {
+  final int selectedItem;
+  final int itemCount;
+  final Color color;
+
+  const _RailIndicator({
+    required this.selectedItem,
+    required this.itemCount,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const itemPitch = ShonenX.railItemSize + 16; // item + vertical padding
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Items are centred as a group, so the first one starts half a stack
+        // above the midpoint.
+        final stackHeight = itemCount * itemPitch;
+        final firstTop = (constraints.maxHeight - stackHeight) / 2;
+        final top =
+            firstTop +
+            selectedItem * itemPitch +
+            (itemPitch - ShonenX.railIndicator.height) / 2;
+
+        return AnimatedPositioned(
+          duration: TvFocus.animation,
+          curve: TvFocus.curve,
+          left: 0,
+          top: top,
+          child: Container(
+            width: ShonenX.railIndicator.width,
+            height: ShonenX.railIndicator.height,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: const BorderRadius.horizontal(
+                right: Radius.circular(3),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RailItem extends StatelessWidget {
   final TvNavDestination destination;
   final bool selected;
-  final bool expanded;
   final VoidCallback onPressed;
 
   const _RailItem({
     required this.destination,
     required this.selected,
-    required this.expanded,
     required this.onPressed,
   });
 
   @override
-  State<_RailItem> createState() => _RailItemState();
-}
-
-class _RailItemState extends State<_RailItem> {
-  bool _focused = false;
-
-  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
 
-    final Color background;
-    final Color foreground;
-    if (_focused) {
-      background = cs.primary;
-      foreground = cs.onPrimary;
-    } else if (widget.selected) {
-      background = cs.surfaceContainerHighest;
-      foreground = cs.onSurface;
-    } else {
-      background = Colors.transparent;
-      foreground = cs.onSurfaceVariant;
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Focus(
-        onFocusChange: (v) => setState(() => _focused = v),
-        child: Builder(
-          builder: (context) {
-            return GestureDetector(
-              onTap: widget.onPressed,
-              child: Actions(
-                actions: {
-                  ActivateIntent: CallbackAction<ActivateIntent>(
-                    onInvoke: (_) {
-                      widget.onPressed();
-                      return null;
-                    },
-                  ),
-                },
-                child: AnimatedContainer(
-                  duration: TvFocus.animation,
-                  curve: TvFocus.curve,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: background,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: TvSideRail.collapsedWidth - 24,
-                        child: Icon(
-                          widget.selected
-                              ? widget.destination.selectedIcon
-                              : widget.destination.icon,
-                          size: 30,
-                          color: foreground,
-                        ),
-                      ),
-                      // Labels read horizontally. The old rail rotated them
-                      // 90 degrees, which is unreadable across a room.
-                      if (widget.expanded)
-                        Expanded(
-                          child: Text(
-                            widget.destination.label,
-                            overflow: TextOverflow.clip,
-                            softWrap: false,
-                            style: text.titleMedium?.copyWith(
-                              color: foreground,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
+    return TvFocusable(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(12),
+      scaleOnFocus: false,
+      // The rail is narrow; a ring would crowd the icon. Focus reads as a
+      // filled plate instead, and red stays reserved for the edge indicator.
+      ringColor: Colors.transparent,
+      filledWhenFocused: true,
+      focusFillColor: cs.surfaceContainer,
+      builder: (context, isFocused) => Container(
+        width: ShonenX.railItemSize,
+        height: ShonenX.railItemSize,
+        alignment: Alignment.center,
+        child: Icon(
+          destination.icon,
+          size: ShonenX.railIconSize,
+          color: isFocused || selected ? cs.onSurface : cs.onSurfaceVariant,
         ),
       ),
     );
@@ -313,9 +306,7 @@ class _TvShellBodyState extends State<TvShellBody> {
     return Stack(
       children: [
         Padding(
-          padding: const EdgeInsets.only(
-            left: TvSideRail.collapsedWidth,
-          ),
+          padding: const EdgeInsets.only(left: TvSideRail.width),
           child: FocusScope(
             node: _contentScope,
             child: Focus(
@@ -330,9 +321,8 @@ class _TvShellBodyState extends State<TvShellBody> {
                 // not move.
                 if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
                   final before = FocusManager.instance.primaryFocus;
-                  final moved = before?.focusInDirection(
-                        TraversalDirection.left,
-                      ) ??
+                  final moved =
+                      before?.focusInDirection(TraversalDirection.left) ??
                       false;
                   if (!moved) {
                     _focusRail();
@@ -356,8 +346,6 @@ class _TvShellBodyState extends State<TvShellBody> {
             onSelected: (d) {
               widget.onSelected(d);
               if (d.branchIndex != null) {
-                // Focus back into content; the rail collapses as a side
-                // effect of losing focus.
                 WidgetsBinding.instance.addPostFrameCallback(
                   (_) => _focusContent(),
                 );
