@@ -2,6 +2,7 @@ import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shonenx/shared/providers/theme_prefs_provider.dart';
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/core/theme/exclusive_schemes.dart';
 import 'package:shonenx/core/tv/tv_metrics.dart';
 
@@ -143,7 +144,27 @@ class AppTheme {
           );
 
     ThemeData result = baseTheme;
-    if (isDark && prefs.useAmoled) {
+    if (isDark && prefs.exclusiveScheme == ShonenX.schemeKey) {
+      // FlexColorScheme derives surfaces by blending the primary into a
+      // neutral. The TV design needs exact values, so pin them after the fact
+      // rather than hunting for a blend that happens to land on them.
+      result = result.copyWith(
+        scaffoldBackgroundColor: ShonenX.bg,
+        canvasColor: ShonenX.bg,
+        colorScheme: result.colorScheme.copyWith(
+          surface: ShonenX.bg,
+          surfaceContainerLowest: ShonenX.bg,
+          surfaceContainerLow: ShonenX.surface,
+          surfaceContainer: ShonenX.surfaceContainer,
+          surfaceContainerHigh: ShonenX.surfaceHigh,
+          surfaceContainerHighest: ShonenX.surfaceHigh,
+          outline: ShonenX.outline,
+          outlineVariant: ShonenX.outline,
+          onSurface: ShonenX.onSurface,
+          onSurfaceVariant: ShonenX.onSurfaceVariant,
+        ),
+      );
+    } else if (isDark && prefs.useAmoled) {
       result = result.copyWith(
         scaffoldBackgroundColor: const Color(0xFF000000),
         colorScheme: result.colorScheme.copyWith(

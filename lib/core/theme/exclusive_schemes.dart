@@ -1,5 +1,6 @@
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
 
 class ExclusiveSchemeData {
   final String name;
@@ -16,6 +17,29 @@ class ExclusiveSchemeData {
 }
 
 const Map<String, ExclusiveSchemeData> exclusiveSchemes = {
+  // The default. Every secondary/tertiary stays in the red family so no
+  // generic Material widget ever renders a stray blue against the replica.
+  'shonenx': ExclusiveSchemeData(
+    name: 'ShonenX',
+    description: 'Crimson on near-black',
+    light: FlexSchemeColor(
+      primary: Color(0xFFC42C23),
+      primaryContainer: Color(0xFFFFDAD5),
+      secondary: Color(0xFF9E3B33),
+      secondaryContainer: Color(0xFFFFE5E1),
+      tertiary: Color(0xFF7A5551),
+      tertiaryContainer: Color(0xFFFFDAD5),
+    ),
+    dark: FlexSchemeColor(
+      primary: ShonenX.red,
+      primaryContainer: Color(0xFF7A1610),
+      secondary: Color(0xFFFF8A80),
+      secondaryContainer: Color(0xFF5C120D),
+      tertiary: Color(0xFFFFB4A9),
+      tertiaryContainer: Color(0xFF4A0F0B),
+    ),
+  ),
+
   'midnight_tokyo': ExclusiveSchemeData(
     name: 'Midnight Tokyo',
     description: 'Neon-lit streets at night',
