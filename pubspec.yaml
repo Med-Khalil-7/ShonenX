@@ -130,6 +130,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    # The rail draws the app mark from here. Nothing declared these before, so
+    # every asset lookup silently fell back to its error builder.
+    - assets/images/
 
 inno_bundle:
   id: 17cd6e7b-cedc-43b7-86b1-4de6ab23dd4d

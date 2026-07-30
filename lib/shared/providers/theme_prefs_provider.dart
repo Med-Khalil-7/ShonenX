@@ -406,14 +406,17 @@ class ThemePrefsState {
     }
 
     return ThemePrefsState(
-      themeMode: ThemeMode.values[map['themeMode'] ?? ThemeMode.system.index],
+      themeMode: ThemeMode.values[map['themeMode'] ?? ThemeMode.dark.index],
       flexScheme:
           FlexScheme.values[map['flexScheme'] ?? FlexScheme.deepBlue.index],
       themeVariant: resolvedVariant,
       useAmoled: map['useAmoled'] ?? false,
       useDynamic: map['useDynamic'] ?? false,
-      exclusiveScheme: map['exclusiveScheme'],
-      blendLevel: map['blendLevel'] ?? 10,
+      // Absent means "never chose one", not "chose none" -- the picker always
+      // writes a value. Without this fallback an install that predates the
+      // default scheme keeps rendering the old blue forever.
+      exclusiveScheme: map['exclusiveScheme'] ?? ShonenX.schemeKey,
+      blendLevel: map['blendLevel'] ?? 0,
       useGradients: map['useGradients'] ?? false,
       gradientStyle:
           (map['gradientStyle'] is int &&

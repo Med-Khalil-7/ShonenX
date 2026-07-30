@@ -144,10 +144,16 @@ class TvSideRail extends StatelessWidget {
               // the item, so it stays visible even when the rail is drawn over
               // bright artwork.
               if (_selectedItem >= 0)
-                _RailIndicator(
-                  selectedItem: _selectedItem,
-                  itemCount: tvDestinations.length,
-                  color: cs.primary,
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: _RailIndicator(
+                      selectedItem: _selectedItem,
+                      itemCount: tvDestinations.length,
+                      topOffset: verticalInset + 24 + ShonenX.railLogoSize,
+                      bottomOffset: verticalInset,
+                      color: cs.primary,
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -182,47 +188,66 @@ class _RailLogo extends StatelessWidget {
 
 /// Slides between items rather than cross-fading, which reads as one object
 /// moving instead of two blinking.
+///
+/// Mirrors the item column's geometry rather than living inside it: the bar
+/// has to sit flush against the screen edge, and the items are inset from it.
 class _RailIndicator extends StatelessWidget {
   final int selectedItem;
   final int itemCount;
+
+  /// Space above and below the region the items are centred in.
+  final double topOffset;
+  final double bottomOffset;
+
   final Color color;
 
   const _RailIndicator({
     required this.selectedItem,
     required this.itemCount,
+    required this.topOffset,
+    required this.bottomOffset,
     required this.color,
   });
 
+  /// Item box plus the 8px padding above and below it.
+  static const _itemPitch = ShonenX.railItemSize + 16;
+
   @override
   Widget build(BuildContext context) {
-    const itemPitch = ShonenX.railItemSize + 16; // item + vertical padding
-
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Items are centred as a group, so the first one starts half a stack
-        // above the midpoint.
-        final stackHeight = itemCount * itemPitch;
-        final firstTop = (constraints.maxHeight - stackHeight) / 2;
+        final regionHeight = constraints.maxHeight - topOffset - bottomOffset;
+        // Items are centred as a group, so the first starts half a stack above
+        // the midpoint of that region.
+        final firstTop = (regionHeight - itemCount * _itemPitch) / 2;
         final top =
+            topOffset +
             firstTop +
-            selectedItem * itemPitch +
-            (itemPitch - ShonenX.railIndicator.height) / 2;
+            selectedItem * _itemPitch +
+            (_itemPitch - ShonenX.railIndicator.height) / 2;
 
-        return AnimatedPositioned(
-          duration: TvFocus.animation,
-          curve: TvFocus.curve,
-          left: 0,
-          top: top,
-          child: Container(
-            width: ShonenX.railIndicator.width,
-            height: ShonenX.railIndicator.height,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: const BorderRadius.horizontal(
-                right: Radius.circular(3),
+        // The AnimatedPositioned needs a Stack of its own: LayoutBuilder
+        // breaks the parent-child relationship a Stack requires, so placing it
+        // directly in the rail's Stack pinned it to the corner.
+        return Stack(
+          children: [
+            AnimatedPositioned(
+              duration: TvFocus.animation,
+              curve: TvFocus.curve,
+              left: 0,
+              top: top,
+              child: Container(
+                width: ShonenX.railIndicator.width,
+                height: ShonenX.railIndicator.height,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: const BorderRadius.horizontal(
+                    right: Radius.circular(3),
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         );
       },
     );

@@ -46,6 +46,10 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
   static const _maxItems = 10;
   static const _advanceInterval = Duration(seconds: 8);
 
+  /// Height reserved for the header buttons: their 48px box plus breathing
+  /// room above and below.
+  static const _headerBand = 80.0;
+
   late final FocusNode _node = FocusNode(
     debugLabel: 'spotlight',
     onKeyEvent: _handleKey,
@@ -168,19 +172,33 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
                 Positioned(
                   left: ShonenX.contentPadH,
                   right: ShonenX.contentPadH,
-                  top: insets.top + 24,
+                  // Leaves a band at the top for the header buttons, which are
+                  // drawn over this and would otherwise land on the poster.
+                  top: insets.top + _headerBand,
                   bottom: 24,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: _Title(media: media)),
-                      const SizedBox(width: 40),
-                      _Poster(
-                        media: media,
-                        focused: _focused,
-                        tagPrefix: widget.tagPrefix,
-                      ),
-                    ],
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Sized from the height available rather than a fixed
+                      // width: an AspectRatio under a squeezed height silently
+                      // gives up on its ratio, so the poster has to be told
+                      // both dimensions.
+                      final posterHeight = constraints.maxHeight.clamp(
+                        0.0,
+                        ShonenX.heroPosterWidth * 1.5,
+                      );
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: _Title(media: media)),
+                          const SizedBox(width: 40),
+                          _Poster(
+                            media: media,
+                            focused: _focused,
+                            height: posterHeight,
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
@@ -207,16 +225,21 @@ class _Backdrop extends StatelessWidget {
       children: [
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 400),
-          child: (url == null || url.isEmpty)
-              ? Container(key: const ValueKey('empty'), color: cs.surface)
-              : CachedNetworkImage(
-                  key: ValueKey(url),
-                  imageUrl: url,
-                  fit: BoxFit.cover,
-                  alignment: Alignment.topCenter,
-                  placeholder: (_, __) => Container(color: cs.surface),
-                  errorWidget: (_, __, ___) => Container(color: cs.surface),
-                ),
+          // SizedBox.expand is load-bearing: AnimatedSwitcher lays its children
+          // out in a loose Stack, so an image inside it sizes to the source
+          // bitmap and sits centred instead of covering the box.
+          child: SizedBox.expand(
+            key: ValueKey(url ?? 'empty'),
+            child: (url == null || url.isEmpty)
+                ? ColoredBox(color: cs.surface)
+                : CachedNetworkImage(
+                    imageUrl: url,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topCenter,
+                    placeholder: (_, __) => ColoredBox(color: cs.surface),
+                    errorWidget: (_, __, ___) => ColoredBox(color: cs.surface),
+                  ),
+          ),
         ),
         // Two scrims: one so the title stays legible over bright artwork, one
         // so the poster row below reads as part of the same surface rather
@@ -235,6 +258,8 @@ class _Backdrop extends StatelessWidget {
             ),
           ),
         ),
+        // Reaches full surface well before the hero's bottom edge, so the row
+        // underneath continues the same surface instead of meeting a seam.
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -242,9 +267,10 @@ class _Backdrop extends StatelessWidget {
               end: Alignment.topCenter,
               colors: [
                 cs.surface,
+                cs.surface,
                 cs.surface.withValues(alpha: 0.0),
               ],
-              stops: const [0.0, 0.45],
+              stops: const [0.0, 0.12, 0.6],
             ),
           ),
         ),
@@ -283,12 +309,12 @@ class _Title extends StatelessWidget {
 class _Poster extends StatelessWidget {
   final UnifiedMedia? media;
   final bool focused;
-  final String tagPrefix;
+  final double height;
 
   const _Poster({
     required this.media,
     required this.focused,
-    required this.tagPrefix,
+    required this.height,
   });
 
   @override
@@ -307,7 +333,8 @@ class _Poster extends StatelessWidget {
       child: AnimatedContainer(
         duration: TvFocus.animation,
         curve: TvFocus.curve,
-        width: ShonenX.heroPosterWidth,
+        width: height * (2 / 3),
+        height: height,
         decoration: BoxDecoration(
           borderRadius: radius,
           border: Border.all(
@@ -316,22 +343,21 @@ class _Poster extends StatelessWidget {
             strokeAlign: BorderSide.strokeAlignOutside,
           ),
         ),
-        child: AspectRatio(
-          aspectRatio: 2 / 3,
-          child: ClipRRect(
-            borderRadius: radius,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
+        child: ClipRRect(
+          borderRadius: radius,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: SizedBox.expand(
+              key: ValueKey(url ?? 'empty'),
               child: (url == null || url.isEmpty)
-                  ? Container(key: const ValueKey('empty'), color: cs.surfaceContainer)
+                  ? ColoredBox(color: cs.surfaceContainer)
                   : CachedNetworkImage(
-                      key: ValueKey(url),
                       imageUrl: url,
                       fit: BoxFit.cover,
                       placeholder: (_, __) =>
-                          Container(color: cs.surfaceContainer),
+                          ColoredBox(color: cs.surfaceContainer),
                       errorWidget: (_, __, ___) =>
-                          Container(color: cs.surfaceContainer),
+                          ColoredBox(color: cs.surfaceContainer),
                     ),
             ),
           ),

@@ -30,15 +30,11 @@ class SettingsScreen extends ConsumerWidget {
               SettingsNavTile(
                 icon: Icons.video_settings_outlined,
                 title: 'Player',
-                subtitle: 'Gestures, default quality, skips',
+                subtitle: 'Default quality, audio, skips',
                 onTap: () => context.push('/settings/player'),
               ),
-              SettingsNavTile(
-                icon: Icons.chrome_reader_mode_outlined,
-                title: 'Reader',
-                subtitle: 'Reading mode, background, scale',
-                onTap: () => context.push('/settings/reader'),
-              ),
+              // The Reader tile used to sit here. Its route was deleted with
+              // the manga reader, so tapping it hit the router's errorBuilder.
               SettingsNavTile(
                 icon: Icons.extension_outlined,
                 title: 'Extensions',
