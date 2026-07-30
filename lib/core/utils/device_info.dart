@@ -26,4 +26,21 @@ class DeviceInfo {
     final info = await _info();
     return info.version.sdkInt >= 30;
   }
+
+  /// True when running on Android TV / Google TV.
+  ///
+  /// `android.software.leanback` is declared by every Android TV device and by
+  /// essentially no phone, so it is the primary signal. The television
+  /// hardware feature corroborates it for set-top boxes.
+  static Future<bool> isTelevision() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      final features = (await _info()).systemFeatures;
+      return features.contains('android.software.leanback') ||
+          features.contains('android.software.leanback_only') ||
+          features.contains('android.hardware.type.television');
+    } catch (_) {
+      return false;
+    }
+  }
 }

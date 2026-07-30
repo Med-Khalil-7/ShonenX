@@ -10,6 +10,7 @@ import 'package:isar_community/isar.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shonenx/core/caching/cache_manager.dart';
+import 'package:shonenx/core/tv/tv_platform.dart';
 import 'package:shonenx/core/caching/domain/cache_entry.dart';
 import 'package:shonenx/core/network/http_adapter.dart';
 import 'package:shonenx/core/network/http_client.dart';
@@ -30,10 +31,15 @@ class AppInit {
   late final CacheManager cacheManager;
   late final Isar isar;
 
-  Future<AppInit> init() async {
+  Future<AppInit> init({List<String> args = const []}) async {
     final log = _log.child('init');
 
     log.section('START');
+
+    // Must run before runApp: ResponsiveData reads TvPlatform.isTv
+    // synchronously from inside build().
+    await TvPlatform.resolve(args: args);
+    log.s('TV mode resolved: ${TvPlatform.isTv}');
 
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       await _initWindowManager();

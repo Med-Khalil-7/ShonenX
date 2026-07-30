@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shonenx/core/remote_config/ui/remote_config_listener.dart';
 import 'package:shonenx/core/theme/app_theme.dart';
 import 'package:shonenx/core/utils/app_logger.dart';
+import 'package:shonenx/core/tv/tv_platform.dart';
 import 'package:shonenx/core/utils/responsive.dart';
 import 'package:shonenx/shared/widgets/global_background.dart';
 
@@ -27,7 +28,7 @@ void main(List<String> args) async {
     log.i('App starting');
     log.i('Args: $args');
 
-    final init = await AppInit().init();
+    final init = await AppInit().init(args: args);
     log.i('AppInit completed');
 
     final sharedPreference = await SharedPreferences.getInstance();
@@ -111,25 +112,30 @@ class ShonenXApp extends ConsumerWidget {
           themeMode: themePrefs.themeMode,
           theme: lightTheme,
           darkTheme: darkTheme,
-          scrollBehavior: const MaterialScrollBehavior().copyWith(
-            dragDevices: {
-              PointerDeviceKind.touch,
-              PointerDeviceKind.mouse,
-              PointerDeviceKind.trackpad,
-              PointerDeviceKind.stylus,
-              PointerDeviceKind.unknown,
-            },
-          ),
+          scrollBehavior: _AppScrollBehavior(isTv: TvPlatform.isTv),
           routerConfig: ref.watch(routerProvider),
           builder: (context, child) {
             if (child == null) return const SizedBox.shrink();
 
-            GlobalUI.uiScaleFactor = themePrefs.uiScaleFactor;
+            final isTv = TvPlatform.isTv;
+
+            // On TV both scale knobs stay at 1.0 and all 10-foot sizing is done
+            // in the theme. That also neutralises MediaCard's inverse-TextScaler
+            // normalisation, which would otherwise cancel any text growth.
+            GlobalUI.uiScaleFactor = isTv ? 1.0 : themePrefs.uiScaleFactor;
             GlobalUI.uiRoundness = themePrefs.uiRoundness;
 
-            final textScaledChild = MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                textScaler: TextScaler.linear(themePrefs.fontScaleFactor),
+            final mq = MediaQuery.of(context);
+            final scaledChild = MediaQuery(
+              data: mq.copyWith(
+                textScaler: isTv
+                    ? TextScaler.noScaling
+                    : TextScaler.linear(themePrefs.fontScaleFactor),
+                // Makes InkWell highlights follow focus rather than hover and
+                // stops Slider swallowing left/right, among other D-pad fixes.
+                navigationMode: isTv
+                    ? NavigationMode.directional
+                    : NavigationMode.traditional,
               ),
               child: child,
             );
@@ -141,7 +147,7 @@ class ShonenXApp extends ConsumerWidget {
             // with custom breakpoints; nested handlers shadow correctly.
             return ResponsiveHandler(
               builder: (context, r) => RemoteConfigListener(
-                child: GlobalBackground(child: textScaledChild),
+                child: GlobalBackground(child: scaledChild),
               ),
             );
           },
@@ -149,6 +155,30 @@ class ShonenXApp extends ConsumerWidget {
       },
     );
   }
+}
+
+/// Touch dragging is meaningless on a TV, and bouncing overscroll fights the
+/// programmatic `Scrollable.ensureVisible` calls that focus movement relies on.
+class _AppScrollBehavior extends MaterialScrollBehavior {
+  final bool isTv;
+
+  const _AppScrollBehavior({required this.isTv});
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => isTv
+      ? const {PointerDeviceKind.mouse, PointerDeviceKind.trackpad}
+      : const {
+          PointerDeviceKind.touch,
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.trackpad,
+          PointerDeviceKind.stylus,
+          PointerDeviceKind.unknown,
+        };
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) => isTv
+      ? const ClampingScrollPhysics()
+      : super.getScrollPhysics(context);
 }
 
 final class RiverpodLogger extends ProviderObserver {

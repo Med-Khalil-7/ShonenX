@@ -2,6 +2,7 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shonenx/core/tv/tv_platform.dart';
 import 'package:flutter/rendering.dart';
 
 enum WidthTier { compact, medium, expanded, large, ultraLarge }
@@ -152,6 +153,7 @@ class ResponsiveData {
   final Orientation orientation;
   final TargetPlatform platform;
   final bool isPhysicalKeyboardConnected;
+  final bool isTv;
   final WidthTier widthTier;
   final HeightTier heightTier;
   final ResponsiveBreakpoints breakpoints;
@@ -164,6 +166,7 @@ class ResponsiveData {
     required this.orientation,
     required this.platform,
     required this.isPhysicalKeyboardConnected,
+    required this.isTv,
     required this.widthTier,
     required this.heightTier,
     required this.breakpoints,
@@ -172,10 +175,16 @@ class ResponsiveData {
   factory ResponsiveData.from(
     BuildContext context, {
     ResponsiveBreakpoints breakpoints = ResponsiveBreakpoints.defaults,
+    bool? tvOverride,
   }) {
     final mq = MediaQuery.of(context);
     final size = mq.size;
     final platform = Theme.of(context).platform;
+    final isTv =
+        tvOverride ??
+        (TvPlatform.isTv ||
+            MediaQuery.maybeNavigationModeOf(context) ==
+                NavigationMode.directional);
 
     return ResponsiveData._(
       width: size.width,
@@ -184,7 +193,8 @@ class ResponsiveData {
       textScaleFactor: mq.textScaler.scale(1.0),
       orientation: mq.orientation,
       platform: platform,
-      isPhysicalKeyboardConnected: _hasPhysicalKeyboard(platform, mq),
+      isPhysicalKeyboardConnected: isTv || _hasPhysicalKeyboard(platform, mq),
+      isTv: isTv,
       widthTier: breakpoints.resolveWidth(size.width),
       heightTier: breakpoints.resolveHeight(size.height),
       breakpoints: breakpoints,
@@ -202,6 +212,13 @@ class ResponsiveData {
 
   bool get isPortrait => orientation == Orientation.portrait;
   bool get isLandscape => orientation == Orientation.landscape;
+
+  /// A D-pad is a directional input device, so TV counts as "has a keyboard"
+  /// for every branch that gates on physical input.
+  bool get isTenFoot => isTv;
+
+  /// Blur is expensive on typical TV SoCs; prefer opaque surfaces there.
+  bool get prefersOpaqueSurfaces => isTv;
 
   bool get isPhone => widthTier == WidthTier.compact;
   bool get isTablet =>
@@ -291,7 +308,8 @@ class _ResponsiveInherited extends InheritedWidget {
       data.height != old.data.height ||
       data.orientation != old.data.orientation ||
       data.platform != old.data.platform ||
-      data.textScaleFactor != old.data.textScaleFactor;
+      data.textScaleFactor != old.data.textScaleFactor ||
+      data.isTv != old.data.isTv;
 }
 
 class ResponsiveHandler extends StatelessWidget {
