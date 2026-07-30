@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/core/tv/tv_focusable.dart';
+import 'package:shonenx/core/tv/tv_metrics.dart';
 
 /// D-pad driven keyboard.
 ///
@@ -21,6 +22,9 @@ class TvOnScreenKeyboard extends StatelessWidget {
     '567890',
   ];
 
+  /// Rows of letters plus the space/backspace row above them.
+  static final int rowCount = _rows.length + 1;
+
   final ValueChanged<String> onChar;
   final VoidCallback onBackspace;
   final VoidCallback onSpace;
@@ -29,12 +33,18 @@ class TvOnScreenKeyboard extends StatelessWidget {
   /// letter rather than nowhere.
   final FocusNode? firstKeyFocus;
 
+  /// Driven by the caller from the height it actually has. Devices report wildly
+  /// different logical viewports for the same 1080p panel -- the emulator says
+  /// 960x540 -- so a fixed key height overflows on some of them.
+  final double keyHeight;
+
   const TvOnScreenKeyboard({
     super.key,
     required this.onChar,
     required this.onBackspace,
     required this.onSpace,
     this.firstKeyFocus,
+    this.keyHeight = ShonenX.keyHeight,
   });
 
   @override
@@ -62,6 +72,7 @@ class TvOnScreenKeyboard extends StatelessWidget {
                 Expanded(
                   child: _Key(
                     icon: Icons.space_bar_rounded,
+                    height: keyHeight,
                     onTap: onSpace,
                     semanticLabel: 'Space',
                   ),
@@ -69,6 +80,7 @@ class TvOnScreenKeyboard extends StatelessWidget {
                 Expanded(
                   child: _Key(
                     icon: Icons.backspace_outlined,
+                    height: keyHeight,
                     onTap: onBackspace,
                     semanticLabel: 'Backspace',
                   ),
@@ -83,6 +95,7 @@ class TvOnScreenKeyboard extends StatelessWidget {
                     Expanded(
                       child: _Key(
                         label: char,
+                        height: keyHeight,
                         onTap: () => onChar(char),
                         // Arrive on a letter, not on the space bar that
                         // happens to come first in traversal order.
@@ -108,11 +121,13 @@ class _Key extends StatelessWidget {
   final FocusNode? focusNode;
   final String? semanticLabel;
   final bool autofocus;
+  final double height;
 
   const _Key({
     this.label,
     this.icon,
     required this.onTap,
+    required this.height,
     this.focusNode,
     this.semanticLabel,
     this.autofocus = false,
@@ -132,14 +147,17 @@ class _Key extends StatelessWidget {
       scaleOnFocus: false,
       filledWhenFocused: true,
       focusFillColor: cs.surfaceContainerHigh,
+      // The focus ring is a Border, and a Border occupies its width even when
+      // it is transparent -- so every key was silently 6px taller than asked
+      // for, and seven rows of that overflowed the column.
       builder: (context, isFocused) => Container(
-        height: ShonenX.keyHeight,
+        height: height - TvFocus.ringWidth * 2,
         alignment: Alignment.center,
         color: isFocused ? Colors.transparent : cs.surface,
         child: icon != null
             ? Icon(
                 icon,
-                size: 26,
+                size: height * 0.42,
                 color: cs.onSurface,
                 semanticLabel: semanticLabel,
               )
@@ -148,6 +166,9 @@ class _Key extends StatelessWidget {
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: cs.onSurface,
                   fontWeight: FontWeight.w500,
+                  // Scales with the cell so a shrunken keyboard does not end
+                  // up with glyphs bigger than the keys holding them.
+                  fontSize: height * 0.42,
                 ),
               ),
       ),

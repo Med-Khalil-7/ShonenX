@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -122,22 +123,45 @@ class _SearchDiscoverScreenState extends ConsumerState<SearchDiscoverScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
-              width: ShonenX.searchColumnWidth,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SearchQueryField(text: _text),
-                  const SizedBox(height: 24),
-                  TvOnScreenKeyboard(
-                    firstKeyFocus: _firstKeyFocus,
-                    onChar: (c) => _setText(_text + c),
-                    onSpace: () => _setText('$_text '),
-                    onBackspace: () {
-                      if (_text.isEmpty) return;
-                      _setText(_text.substring(0, _text.length - 1));
-                    },
-                  ),
-                ],
+              // Never more than 40% of the width: the results column has to
+              // stay wide enough for a title plus its badges.
+              width: math.min(
+                ShonenX.searchColumnWidth,
+                MediaQuery.sizeOf(context).width * 0.4,
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const gap = 24.0;
+                  final fieldHeight = math.min(
+                    ShonenX.searchFieldHeight,
+                    constraints.maxHeight * 0.12,
+                  );
+                  // Devices disagree wildly about the logical viewport for the
+                  // same panel, so derive the key height from what is actually
+                  // available rather than trusting a constant to fit.
+                  final keyHeight =
+                      ((constraints.maxHeight - fieldHeight - gap - 8) /
+                              TvOnScreenKeyboard.rowCount)
+                          .clamp(28.0, ShonenX.keyHeight);
+
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SearchQueryField(text: _text, height: fieldHeight),
+                      const SizedBox(height: gap),
+                      TvOnScreenKeyboard(
+                        firstKeyFocus: _firstKeyFocus,
+                        keyHeight: keyHeight,
+                        onChar: (c) => _setText(_text + c),
+                        onSpace: () => _setText('$_text '),
+                        onBackspace: () {
+                          if (_text.isEmpty) return;
+                          _setText(_text.substring(0, _text.length - 1));
+                        },
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
             SizedBox(width: gutter),

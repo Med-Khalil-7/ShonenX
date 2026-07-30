@@ -9,11 +9,13 @@ import 'package:shonenx/core/theme/shonenx_tokens.dart';
 class SearchQueryField extends StatefulWidget {
   final String text;
   final String hint;
+  final double height;
 
   const SearchQueryField({
     super.key,
     required this.text,
     this.hint = 'Search',
+    this.height = ShonenX.searchFieldHeight,
   });
 
   @override
@@ -40,7 +42,7 @@ class _SearchQueryFieldState extends State<SearchQueryField>
     final isEmpty = widget.text.isEmpty;
 
     return Container(
-      height: ShonenX.searchFieldHeight,
+      height: widget.height,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(ShonenX.searchFieldRadius),
@@ -55,6 +57,7 @@ class _SearchQueryFieldState extends State<SearchQueryField>
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.titleLarge?.copyWith(
                 color: isEmpty ? cs.onSurfaceVariant : cs.onSurface,
+                fontSize: widget.height * 0.42,
               ),
             ),
           ),
@@ -62,7 +65,11 @@ class _SearchQueryFieldState extends State<SearchQueryField>
             const SizedBox(width: 2),
             FadeTransition(
               opacity: _blink,
-              child: Container(width: 2, height: 28, color: cs.onSurface),
+              child: Container(
+                width: 2,
+                height: widget.height * 0.5,
+                color: cs.onSurface,
+              ),
             ),
           ],
         ],
