@@ -10,7 +10,8 @@ typedef ThemeModifier =
 class AppTheme {
   AppTheme._();
 
-  static const _buttonMinSize = Size(64, 48);
+  /// Minimum hit target for a D-pad-driven UI.
+  static const _tvButtonMinSize = Size(120, 60);
 
   static ThemeData light(ThemePrefsState prefs, ColorScheme? colorScheme) {
     return _buildTheme(
@@ -162,7 +163,11 @@ class AppTheme {
     );
   }
 
-  static final List<ThemeModifier> _themeModifiers = [_widgets, _shadows];
+  static final List<ThemeModifier> _themeModifiers = [
+    _widgets,
+    _shadows,
+    _tvSizing,
+  ];
 
   static ThemeData _widgets(ThemeData theme, ThemePrefsState prefs) {
     final cs = theme.colorScheme;
@@ -222,13 +227,134 @@ class AppTheme {
     return theme.copyWith(shadowColor: Colors.transparent);
   }
 
+  static const double _tvTextScale = 1.2;
+
+  /// Material 3 default sizes, used as the base when a slot leaves `fontSize`
+  /// null. GoogleFonts text themes do exactly that for several slots, and
+  /// `TextTheme.apply(fontSizeFactor:)` asserts on a null fontSize -- so the
+  /// scaling has to be done per slot rather than with `apply`.
+  static const Map<String, double> _m3TextSizes = {
+    'displayLarge': 57,
+    'displayMedium': 45,
+    'displaySmall': 36,
+    'headlineLarge': 32,
+    'headlineMedium': 28,
+    'headlineSmall': 24,
+    'titleLarge': 22,
+    'titleMedium': 16,
+    'titleSmall': 14,
+    'bodyLarge': 16,
+    'bodyMedium': 14,
+    'bodySmall': 12,
+    'labelLarge': 14,
+    'labelMedium': 12,
+    'labelSmall': 11,
+  };
+
+  static TextStyle? _scale(TextStyle? style, String slot) {
+    final base = style?.fontSize ?? _m3TextSizes[slot]!;
+    return (style ?? const TextStyle()).copyWith(
+      fontSize: base * _tvTextScale,
+    );
+  }
+
+  static TextTheme _scaleTextTheme(TextTheme t) => TextTheme(
+    displayLarge: _scale(t.displayLarge, 'displayLarge'),
+    displayMedium: _scale(t.displayMedium, 'displayMedium'),
+    displaySmall: _scale(t.displaySmall, 'displaySmall'),
+    headlineLarge: _scale(t.headlineLarge, 'headlineLarge'),
+    headlineMedium: _scale(t.headlineMedium, 'headlineMedium'),
+    headlineSmall: _scale(t.headlineSmall, 'headlineSmall'),
+    titleLarge: _scale(t.titleLarge, 'titleLarge'),
+    titleMedium: _scale(t.titleMedium, 'titleMedium'),
+    titleSmall: _scale(t.titleSmall, 'titleSmall'),
+    bodyLarge: _scale(t.bodyLarge, 'bodyLarge'),
+    bodyMedium: _scale(t.bodyMedium, 'bodyMedium'),
+    bodySmall: _scale(t.bodySmall, 'bodySmall'),
+    labelLarge: _scale(t.labelLarge, 'labelLarge'),
+    labelMedium: _scale(t.labelMedium, 'labelMedium'),
+    labelSmall: _scale(t.labelSmall, 'labelSmall'),
+  );
+
+  /// 10-foot sizing.
+  ///
+  /// All TV typography and hit-target growth happens here rather than through
+  /// `GlobalUI.uiScaleFactor` or a global `TextScaler`. Both of those are
+  /// pinned to 1.0 in main.dart precisely so this is the single place that
+  /// decides size -- MediaCard cancels an outer TextScaler against its own
+  /// layout scale, so scaling from the outside would silently do nothing to
+  /// card text.
+  static ThemeData _tvSizing(ThemeData theme, ThemePrefsState prefs) {
+    final cs = theme.colorScheme;
+
+    return theme.copyWith(
+      // FlexColorScheme picks `compact` on desktop-class platforms; a TV
+      // wants room to breathe.
+      visualDensity: VisualDensity.comfortable,
+      textTheme: _scaleTextTheme(theme.textTheme),
+      primaryTextTheme: _scaleTextTheme(theme.primaryTextTheme),
+      iconTheme: theme.iconTheme.copyWith(size: 30),
+      focusColor: cs.primary,
+      listTileTheme: theme.listTileTheme.copyWith(
+        minTileHeight: 72,
+        minVerticalPadding: 14,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 24,
+          vertical: 8,
+        ),
+      ),
+      // Merge rather than replace: _widgets already set the rounded shape.
+      iconButtonTheme: IconButtonThemeData(
+        style: (theme.iconButtonTheme.style ?? const ButtonStyle()).copyWith(
+          minimumSize: const WidgetStatePropertyAll(Size(56, 56)),
+          iconSize: const WidgetStatePropertyAll(28),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          minimumSize: _tvButtonMinSize,
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: _tvButtonMinSize,
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          minimumSize: _tvButtonMinSize,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          minimumSize: _tvButtonMinSize,
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+        ),
+      ),
+      chipTheme: theme.chipTheme.copyWith(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      ),
+      tabBarTheme: theme.tabBarTheme.copyWith(
+        labelPadding: const EdgeInsets.symmetric(horizontal: 24),
+      ),
+      // Tooltips need a hover or a long-press; a remote can do neither.
+      tooltipTheme: const TooltipThemeData(
+        waitDuration: Duration(days: 1),
+        triggerMode: TooltipTriggerMode.manual,
+      ),
+    );
+  }
+
   static FlexSubThemesData _subThemesData(ThemePrefsState prefs) {
     return FlexSubThemesData(
       blendOnLevel: prefs.blendLevel,
       defaultRadius: prefs.uiRoundness,
       blendOnColors: true,
       useMaterial3Typography: true,
-      buttonMinSize: _buttonMinSize,
+      buttonMinSize: _tvButtonMinSize,
       fabUseShape: true,
       fabAlwaysCircular: false,
       interactionEffects: true,
@@ -240,11 +366,7 @@ class AppTheme {
   }
 
   static const _pageTransitionsTheme = PageTransitionsTheme(
-    builders: {
-      TargetPlatform.android: AppPageTransition(),
-      TargetPlatform.linux: AppPageTransition(),
-      TargetPlatform.windows: AppPageTransition(),
-    },
+    builders: {TargetPlatform.android: AppPageTransition()},
   );
 }
 

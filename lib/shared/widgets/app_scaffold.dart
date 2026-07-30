@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shonenx/core/tv/tv_metrics.dart';
+import 'package:shonenx/core/utils/responsive.dart';
 import 'package:shonenx/shared/providers/theme_prefs_provider.dart';
 
 class AppScaffold extends ConsumerWidget {
@@ -17,6 +19,10 @@ class AppScaffold extends ConsumerWidget {
   final bool centerTitle;
   final bool showBackButton;
 
+  /// Set for surfaces that intentionally reach the panel edge, e.g. the video
+  /// player. Everything else keeps the TV overscan inset.
+  final bool fullBleed;
+
   const AppScaffold({
     super.key,
     this.title,
@@ -31,6 +37,7 @@ class AppScaffold extends ConsumerWidget {
     this.bottomNavigationBar,
     this.centerTitle = false,
     this.showBackButton = true,
+    this.fullBleed = false,
   });
 
   @override
@@ -92,7 +99,15 @@ class AppScaffold extends ConsumerWidget {
                   : null,
               actions: actions,
             ),
-      body: SafeArea(child: body),
+      // TVs overscan: a border strip of the framebuffer may never reach the
+      // panel. SafeArea.minimum is exactly the right hook, and applying it
+      // here covers every screen that uses AppScaffold.
+      body: SafeArea(
+        minimum: fullBleed
+            ? EdgeInsets.zero
+            : TvMetrics.of(context.responsive),
+        child: body,
+      ),
       floatingActionButton: floatingActionButton,
       floatingActionButtonLocation: floatingActionButtonLocation,
       bottomNavigationBar: bottomNavigationBar,
