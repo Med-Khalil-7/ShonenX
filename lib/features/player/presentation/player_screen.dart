@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,17 +10,18 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_list_panel.dart';
 import 'package:shonenx/features/player/domain/player_mode.dart';
 import 'package:shonenx/features/player/engine/video_engine.dart';
-import 'package:shonenx/features/player/presentation/widgets/bottom_controls.dart';
-import 'package:shonenx/features/player/presentation/widgets/center_controls.dart';
 import 'package:shonenx/features/player/presentation/widgets/custom_subtitle_overlay.dart';
-import 'package:shonenx/features/player/presentation/widgets/keyboard_shortcuts_sheet.dart';
 import 'package:shonenx/features/player/presentation/widgets/player_keyboard_listener.dart';
-import 'package:shonenx/features/player/presentation/widgets/top_controls.dart';
+import 'package:shonenx/features/player/presentation/widgets/tv/player_center_indicator.dart';
+import 'package:shonenx/features/player/presentation/widgets/tv/player_settings_panel.dart';
+import 'package:shonenx/features/player/presentation/widgets/tv/player_top_bar.dart';
+import 'package:shonenx/features/player/presentation/widgets/tv/player_transport_bar.dart';
 import 'package:shonenx/features/player/providers/aniskip_provider.dart';
 import 'package:shonenx/features/player/providers/player_controller.dart';
-import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
 import 'package:shonenx/features/player/providers/video_engine_provider.dart';
-import 'package:shonenx/shared/widgets/app_bottom_sheet.dart';
+import 'package:shonenx/shared/widgets/tv/tv_button.dart';
+import 'package:shonenx/shared/widgets/tv/tv_confirm_dialog.dart';
+import 'package:shonenx/shared/widgets/tv/tv_side_sheet.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   final PlayerMode mode;
@@ -33,33 +33,33 @@ class PlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
+  /// Retained for `captureExitThumbnail`, which is what puts artwork on the
+  /// continue-watching row. The manual screenshot button is gone; this is not.
   final ScreenshotController _screenshotController = ScreenshotController();
 
+  /// Long enough to cross the overlay with a D-pad. Three seconds was tuned
+  /// for a mouse and expires mid-traversal on a remote.
+  static const _autoHide = Duration(seconds: 5);
+
+  final FocusNode _playPauseFocus = FocusNode(debugLabel: 'playPause');
+
   bool _showControls = false;
-  bool _lockControls = false;
   Timer? _controlsTimer;
+  bool _panelOpen = false;
+  bool _exitPromptOpen = false;
 
-  bool _isEpisodePanelOpen = false;
+  String get _mediaTitle => switch (widget.mode) {
+    PlayerModeOnline(:final media) => media.title.availableTitle,
+    PlayerModeOffline(:final title) => title ?? 'Local Media',
+  };
 
-  static const _controlsAutoHideDuration = Duration(seconds: 3);
-
-  String get _mediaTitle {
-    if (widget.mode is PlayerModeOnline) {
-      return (widget.mode as PlayerModeOnline).media.title.availableTitle;
-    }
-    return (widget.mode as PlayerModeOffline).title ?? 'Local Media';
-  }
-
-  AniSkipArgs? _getAniSkipArgs(VideoEngine engine) {
-    if (widget.mode is PlayerModeOnline) {
-      final onlineMode = widget.mode as PlayerModeOnline;
-      final idMalStr = onlineMode.media.idMal;
-      if (idMalStr == null || idMalStr.isEmpty) return null;
-      final malId = int.tryParse(idMalStr);
+  AniSkipArgs? _aniSkipArgs(VideoEngine engine) {
+    if (widget.mode case PlayerModeOnline(:final media, :final episode)) {
+      final malId = int.tryParse(media.idMal ?? '');
       if (malId == null) return null;
       return AniSkipArgs(
         idMal: malId,
-        episodeNumber: onlineMode.episode.number,
+        episodeNumber: episode.number,
         episodeLength: engine.currentDuration.inSeconds,
       );
     }
@@ -72,20 +72,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     try {
       WakelockPlus.enable();
     } catch (_) {}
-    _initSystemUI();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(playerControllerProvider.notifier)
-          .initialize(widget.mode, screenshot: _screenshotController);
-      _showControlsTemporarily();
-      if (ref.read(playerPrefsProvider).showShortcutsSheetOnStart && mounted) {
-        KeyboardShortcutsSheet.show(context);
-      }
-    });
-  }
-
-  void _initSystemUI() {
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.immersiveSticky,
       overlays: [],
@@ -94,6 +80,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref
+          .read(playerControllerProvider.notifier)
+          .initialize(widget.mode, screenshot: _screenshotController);
+      _wake();
+    });
   }
 
   @override
@@ -102,16 +95,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       WakelockPlus.disable();
     } catch (_) {}
     _controlsTimer?.cancel();
-    _disposeSystemUI();
-
-    try {
-      ref.read(videoEngineProvider).dispose();
-    } catch (_) {}
-
-    super.dispose();
-  }
-
-  void _disposeSystemUI() {
+    _playPauseFocus.dispose();
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.edgeToEdge,
       overlays: SystemUiOverlay.values,
@@ -121,310 +105,281 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
+
+    try {
+      ref.read(videoEngineProvider).dispose();
+    } catch (_) {}
+
+    super.dispose();
   }
 
-  void _showControlsTemporarily() {
+  /// Show the controls, put focus on play/pause, and restart the countdown.
+  void _wake({bool focusTransport = true}) {
     _controlsTimer?.cancel();
-    if (!_showControls) setState(() => _showControls = true);
-    _controlsTimer = Timer(_controlsAutoHideDuration, () {
-      if (mounted) setState(() => _showControls = false);
-    });
-  }
-
-
-
-  void _hideControls() {
-    if (_showControls) {
-      _controlsTimer?.cancel();
-      if (mounted) setState(() => _showControls = false);
+    if (!_showControls) {
+      setState(() => _showControls = true);
+      if (focusTransport) {
+        // Post-frame: the transport bar is not mounted until this build lands,
+        // so its node cannot take focus any earlier.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _showControls) _playPauseFocus.requestFocus();
+        });
+      }
     }
+    _controlsTimer = Timer(_autoHide, _hide);
   }
 
+  /// Keeps the controls up without stealing focus from whatever holds it.
+  void _keepAwake() {
+    if (!_showControls) return;
+    _controlsTimer?.cancel();
+    _controlsTimer = Timer(_autoHide, _hide);
+  }
 
+  void _hide() {
+    if (!mounted || !_showControls) return;
+    // A panel or the exit prompt means the user is mid-decision; hiding the
+    // controls under them would drop focus into nothing on dismissal.
+    if (_panelOpen || _exitPromptOpen) return;
+    setState(() => _showControls = false);
+  }
 
   void _toggleEpisodePanel() {
     if (widget.mode is! PlayerModeOnline) return;
-    if (_isEpisodePanelOpen) {
+    if (_panelOpen) {
       Navigator.of(context).pop();
       return;
     }
-    _isEpisodePanelOpen = true;
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Episodes',
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) => Align(
-        alignment: Alignment.centerRight,
-        child: SizedBox(
-          width: MediaQuery.of(context).size.width * 0.38,
-          height: double.infinity,
-          child: Material(
-            color: Theme.of(context).colorScheme.surface,
-            child: Column(
-              children: [
-                Expanded(
-                  child: Consumer(
-                    builder: (context, ref, child) {
-                      final currentEpisode = ref.watch(
-                        playerControllerProvider.select((s) => s.activeEpisode),
-                      );
-                      if (currentEpisode == null) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      return EpisodeListPanel(
-                        media: (widget.mode as PlayerModeOnline).media,
-                        currentEpisodeNumber: currentEpisode.number,
-                        onEpisodeTap: (episode, sourceInfo) {
-                          Navigator.of(context).pop();
-                          ref
-                              .read(playerControllerProvider.notifier)
-                              .loadEpisode(episode);
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+    _openPanel(
+      label: 'Episodes',
+      builder: (sheetContext) => Consumer(
+        builder: (context, ref, _) {
+          final current = ref.watch(
+            playerControllerProvider.select((s) => s.activeEpisode),
+          );
+          if (current == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return EpisodeListPanel(
+            media: (widget.mode as PlayerModeOnline).media,
+            currentEpisodeNumber: current.number,
+            onEpisodeTap: (episode, _) {
+              Navigator.of(sheetContext).pop();
+              ref.read(playerControllerProvider.notifier).loadEpisode(episode);
+            },
+          );
+        },
       ),
-      transitionBuilder: (_, anim, __, child) => SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(1, 0),
-          end: Offset.zero,
-        ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
-        child: child,
+    );
+  }
+
+  void _openSettingsPanel() {
+    _openPanel(
+      label: 'Settings',
+      builder: (_) => PlayerSettingsPanel(
+        engine: ref.read(videoEngineProvider),
+        controller: ref.read(playerControllerProvider.notifier),
       ),
-    ).then((_) {
-      if (mounted) setState(() => _isEpisodePanelOpen = false);
+    );
+  }
+
+  void _openPanel({required String label, required WidgetBuilder builder}) {
+    setState(() => _panelOpen = true);
+    _controlsTimer?.cancel();
+    TvSideSheet.show(context: context, label: label, builder: builder).then((_) {
+      if (!mounted) return;
+      setState(() => _panelOpen = false);
+      // Do not grab focus: it belongs to whichever control opened the panel.
+      _wake(focusTransport: false);
     });
   }
 
-  void _handlePop(
-    bool didPop,
-    VideoEngine engine,
-    PlayerController controller,
-  ) {
-    if (!didPop) {
-      try {
-        engine.pause();
-      } catch (_) {}
-      controller.captureExitThumbnail();
-      context.pop();
+  /// BACK unwinds one layer at a time -- open panel, then the overlay, then
+  /// the screen. Leaving always asks first: a mis-press on a remote is cheap,
+  /// and losing your place is not.
+  Future<void> _handleBack() async {
+    if (_panelOpen) {
+      Navigator.of(context).pop();
+      return;
     }
-  }
+    if (_showControls) {
+      _controlsTimer?.cancel();
+      setState(() => _showControls = false);
+      return;
+    }
+    if (_exitPromptOpen) return;
 
-  Widget _buildVideoLayer(VideoEngine engine, PlayerState playerState) {
-    return Center(
-      child: Offstage(
-        offstage: playerState.isLoading,
-        child: Screenshot(
-          controller: _screenshotController,
-          child: engine.buildVideoView(),
-        ),
-      ),
+    setState(() => _exitPromptOpen = true);
+    final engine = ref.read(videoEngineProvider);
+    final wasPlaying = ref.read(videoEngineStateProvider).isPlaying;
+    try {
+      engine.pause();
+    } catch (_) {}
+
+    final confirmed = await TvConfirmDialog.show(
+      context: context,
+      message: 'Do you want to close the player?',
     );
-  }
+    if (!mounted) return;
+    setState(() => _exitPromptOpen = false);
 
-  Widget _buildLockedOverlay() {
-    return Center(
-      child: IconButton.filled(
-        padding: const EdgeInsets.all(15),
-        icon: const Icon(
-          Icons.lock_open_rounded,
-          color: Colors.white,
-          size: 50,
-        ),
-        onPressed: () => setState(() => _lockControls = false),
-      ),
-    );
-  }
-
-  List<Widget> _buildControlsLayer({
-    required ThemeData theme,
-    required VideoEngine engine,
-    required PlayerState playerState,
-    required PlayerController controller,
-    required AniSkipArgs? aniSkipArgs,
-  }) {
-    return [
-      TopControls(
-        showControls: _showControls,
-        engine: engine,
-        mode: widget.mode,
-        playerState: playerState,
-        controller: controller,
-        onBack: context.pop,
-      ),
-      CenterControls(
-        showControls: _showControls,
-        playerState: playerState,
-        controller: controller,
-        mediaTitle: _mediaTitle,
-        engine: engine,
-      ),
-      BottomControls(
-        aniskipArgs: aniSkipArgs,
-        showControls: _showControls,
-        engine: engine,
-        playerState: playerState,
-        controller: controller,
-        theme: theme,
-        mode: widget.mode,
-        onShowEpisodePanel: _toggleEpisodePanel,
-        onToggleLockControls: () =>
-            setState(() => _lockControls = !_lockControls),
-      ),
-    ];
+    if (confirmed == true) {
+      ref.read(playerControllerProvider.notifier).captureExitThumbnail();
+      if (mounted) context.pop();
+    } else if (wasPlaying) {
+      try {
+        engine.play();
+      } catch (_) {}
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final playerState = ref.watch(playerControllerProvider);
     final controller = ref.read(playerControllerProvider.notifier);
     final engine = ref.watch(videoEngineProvider);
-    final aniSkipArgs = _getAniSkipArgs(engine);
+    final activeEpisode = ref.watch(
+      playerControllerProvider.select((s) => s.activeEpisode),
+    );
 
     ref.listen(playerControllerProvider.select((s) => s.error), (prev, next) {
-      if (next != null && next != prev && mounted) {
-        AppBottomSheet.show(
-          context: context,
-          title: 'Playback Error',
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.error_outline_rounded,
-                      color: Colors.redAccent,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Failed to load media stream',
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.black26,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: Text(
-                  next,
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'We recommend selecting a different video server, changing the extension source, or trying another episode.',
-                style: TextStyle(color: Colors.white54, fontSize: 13),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.white24),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: const Text(
-                        'Dismiss',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                  if (widget.mode is PlayerModeOnline) ...[
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: FilledButton.icon(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          _toggleEpisodePanel();
-                        },
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        icon: const Icon(Icons.playlist_play_rounded),
-                        label: const Text('Change Source / Episode'),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        );
-      }
+      if (next != null && next != prev && mounted) _showPlaybackError(next);
     });
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, _) =>
-          _handlePop(didPop, engine, controller),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
       child: Scaffold(
         backgroundColor: Colors.black,
         body: PlayerKeyboardListener(
           engine: engine,
           controller: controller,
-          // Was an empty closure, so nothing the keyboard did ever surfaced
-          // the controls. On a remote that is the only way to reach them.
-          onUserInteraction: _showControlsTemporarily,
           controlsVisible: _showControls,
+          onWake: _wake,
+          onUserInteraction: _keepAwake,
           onToggleEpisodePanel: _toggleEpisodePanel,
-          onShowShortcutsGuide: () => KeyboardShortcutsSheet.show(context),
-          onExit: () {
-            // BACK unwinds one layer at a time rather than dumping the user
-            // straight out of playback.
-            if (_isEpisodePanelOpen) {
-              Navigator.of(context).pop();
-            } else if (_showControls) {
-              _hideControls();
-            } else {
-              context.pop();
-            }
-          },
+          onBack: _handleBack,
           child: Stack(
             children: [
-              _buildVideoLayer(engine, playerState),
+              Center(
+                child: Offstage(
+                  offstage: playerState.isLoading,
+                  child: Screenshot(
+                    controller: _screenshotController,
+                    child: engine.buildVideoView(),
+                  ),
+                ),
+              ),
               if (playerState.activeSubtitle != null)
                 const CustomSubtitleOverlay(),
-              if (_lockControls)
-                _buildLockedOverlay()
-              else
-                ..._buildControlsLayer(
-                  theme: theme,
-                  engine: engine,
-                  playerState: playerState,
-                  controller: controller,
-                  aniSkipArgs: aniSkipArgs,
-                ),
+              const PlayerCenterIndicator(),
+              PlayerTopBar(
+                visible: _showControls,
+                title: _mediaTitle,
+                subtitle: _episodeLabel(activeEpisode),
+                onBack: _handleBack,
+                onEpisodes: _toggleEpisodePanel,
+                onSubtitles: _openSettingsPanel,
+                onSettings: _openSettingsPanel,
+              ),
+              PlayerTransportBar(
+                visible: _showControls,
+                engine: engine,
+                controller: controller,
+                aniskipArgs: _aniSkipArgs(engine),
+                playPauseFocus: _playPauseFocus,
+                onInteraction: _keepAwake,
+              ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// `E01 "Cruelty"`, or just `E01` when the source gives no episode title.
+  static String? _episodeLabel(dynamic episode) {
+    if (episode == null) return null;
+    final number = episode.number as double;
+    final asText = number == number.roundToDouble()
+        ? number.toInt().toString()
+        : number.toString();
+    final label = 'E${asText.padLeft(2, '0')}';
+    final title = episode.title as String?;
+    return (title == null || title.isEmpty) ? label : '$label "$title"';
+  }
+
+  void _showPlaybackError(String message) {
+    final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Center(
+        child: Material(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 760,
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.error_outline_rounded, color: cs.error),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Failed to load media stream',
+                        style: textTheme.titleLarge,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    message,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Try a different server, source or episode.',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  Row(
+                    children: [
+                      TvButton(
+                        label: 'Change server',
+                        icon: Icons.playlist_play_rounded,
+                        autofocus: true,
+                        height: 56,
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          _openSettingsPanel();
+                        },
+                      ),
+                      const SizedBox(width: 16),
+                      TvButton(
+                        label: 'Dismiss',
+                        height: 56,
+                        variant: TvButtonVariant.filledSurface,
+                        onPressed: () => Navigator.of(ctx).pop(),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
