@@ -53,7 +53,15 @@ class TvHdBadge extends StatelessWidget {
 class TvMetaRow extends StatelessWidget {
   final UnifiedMedia media;
 
-  const TvMetaRow({super.key, required this.media});
+  /// Show the genre list in place of the year. The hero uses this because it
+  /// has no room for a separate "Genres:" line under the synopsis.
+  final bool showGenres;
+
+  const TvMetaRow({
+    super.key,
+    required this.media,
+    this.showGenres = false,
+  });
 
   /// `season` is a free-form string across trackers -- `'2003'` from AniList,
   /// `'SPRING 2003'` from Kitsu -- so pull the year out rather than trusting
@@ -84,8 +92,10 @@ class TvMetaRow extends StatelessWidget {
       child: Text('·', style: style),
     );
 
+    final genres = media.genres ?? const <String>[];
+
     return Row(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize: showGenres ? MainAxisSize.max : MainAxisSize.min,
       children: [
         TvBadge.rating(media),
         SizedBox(width: m.meta * 0.5),
@@ -101,7 +111,22 @@ class TvMetaRow extends StatelessWidget {
             style: style?.copyWith(color: cs.onSurface),
           ),
         ],
-        if (year != null) ...[dot(), Text(year, style: style)],
+        if (showGenres) ...[
+          if (genres.isNotEmpty) ...[
+            dot(),
+            Flexible(
+              child: Text(
+                genres.join(', '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: style,
+              ),
+            ),
+          ],
+        ] else if (year != null) ...[
+          dot(),
+          Text(year, style: style),
+        ],
       ],
     );
   }

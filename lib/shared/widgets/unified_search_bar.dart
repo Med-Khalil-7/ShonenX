@@ -180,6 +180,7 @@ class _UnifiedSearchBarState extends State<UnifiedSearchBar> {
           child: Align(
             alignment: Alignment.centerLeft,
             child: TextField(
+                     keyboardType: TextInputType.none, // TV: never raise the system IME
               controller: widget.controller,
               focusNode: _effectiveFocusNode,
               autofocus: widget.autofocus,

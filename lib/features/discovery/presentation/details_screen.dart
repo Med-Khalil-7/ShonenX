@@ -369,87 +369,59 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
         ),
         SizedBox(height: m.body * 2.6),
         FocusTraversalGroup(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              // Measured, not estimated. Deriving this from the parent's width
-              // minus everything else left it a pixel short, and the pair
-              // wrapped onto separate lines.
-              final buttonWidth = math.min(
-                m.buttonWidth,
-                (constraints.maxWidth - m.label * 1.6) / 2,
-              );
-              return Wrap(
-                spacing: m.label * 1.3,
-                runSpacing: m.label,
-                children: [
-                  TvButton(
-                    label: 'Play now',
-                    icon: Icons.play_arrow_rounded,
-                    width: buttonWidth,
-                    loading: _resolving,
-                    ensureVisible: false,
-                    // The reason the screen exists. Land here on arrival so
-                    // watching something is a single press.
-                    autofocus: true,
-                    onPressed: () => _play(media),
-                  ),
-                  TvButton(
-                    label: 'More episodes',
-                    icon: Icons.layers_outlined,
-                    width: buttonWidth,
-                    variant: TvButtonVariant.filledWhite,
-                    ensureVisible: false,
-                    onPressed: () => _openEpisodes(media),
-                  ),
-                  SizedBox(
-                    width: buttonWidth,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: TvButton(
-                        label: 'Watch',
-                        emphasis: 'Dubbed',
-                        icon: Icons.mic_none_rounded,
-                        height: 52,
-                        variant: TvButtonVariant.bare,
-                        ensureVisible: false,
-                        onPressed: () =>
-                            _play(media, serverType: ServerType.dub),
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: buttonWidth,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: TvButton(
-                        label: 'Add to watch list',
-                        icon: Icons.add_circle_outline,
-                        height: 52,
-                        variant: TvButtonVariant.bare,
-                        ensureVisible: false,
-                        onPressed: () => _addToWatchList(media),
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: buttonWidth,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: TvButton(
-                        label: 'Watch',
-                        emphasis: 'Subbed',
-                        icon: Icons.closed_caption_off_rounded,
-                        height: 52,
-                        variant: TvButtonVariant.bare,
-                        ensureVisible: false,
-                        onPressed: () =>
-                            _play(media, serverType: ServerType.sub),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
+          // Every button sizes to its own label. A shared fixed width computed
+          // from the remaining column was always a little short of the longest
+          // one, so "More episodes" and "Add to watch list" came out clipped.
+          child: Wrap(
+            spacing: m.label * 1.3,
+            runSpacing: m.label,
+            children: [
+              TvButton(
+                label: 'Play now',
+                icon: Icons.play_arrow_rounded,
+                height: m.buttonHeight,
+                loading: _resolving,
+                ensureVisible: false,
+                // The reason the screen exists. Land here on arrival so
+                // watching something is a single press.
+                autofocus: true,
+                onPressed: () => _play(media),
+              ),
+              TvButton(
+                label: 'More episodes',
+                icon: Icons.layers_outlined,
+                height: m.buttonHeight,
+                variant: TvButtonVariant.filledWhite,
+                ensureVisible: false,
+                onPressed: () => _openEpisodes(media),
+              ),
+              TvButton(
+                label: 'Watch',
+                emphasis: 'Dubbed',
+                icon: Icons.mic_none_rounded,
+                height: m.buttonHeight * 0.9,
+                variant: TvButtonVariant.bare,
+                ensureVisible: false,
+                onPressed: () => _play(media, serverType: ServerType.dub),
+              ),
+              TvButton(
+                label: 'Add to watch list',
+                icon: Icons.add_circle_outline,
+                height: m.buttonHeight * 0.9,
+                variant: TvButtonVariant.bare,
+                ensureVisible: false,
+                onPressed: () => _addToWatchList(media),
+              ),
+              TvButton(
+                label: 'Watch',
+                emphasis: 'Subbed',
+                icon: Icons.closed_caption_off_rounded,
+                height: m.buttonHeight * 0.9,
+                variant: TvButtonVariant.bare,
+                ensureVisible: false,
+                onPressed: () => _play(media, serverType: ServerType.sub),
+              ),
+            ],
           ),
         ),
       ],
@@ -487,7 +459,7 @@ class _Backdrop extends StatelessWidget {
           // Heavy enough that white body text stays legible over any artwork.
           DecoratedBox(
             decoration: BoxDecoration(
-              color: cs.surface.withValues(alpha: 0.88),
+              color: cs.surface.withValues(alpha: 0.94),
             ),
           ),
         ],

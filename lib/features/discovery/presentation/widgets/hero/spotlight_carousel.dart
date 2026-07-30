@@ -7,18 +7,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/core/tv/tv_metrics.dart';
-import 'package:shonenx/features/discovery/domain/media_actions.dart';
+import 'package:shonenx/core/tv/tv_focusable.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
 import 'package:shonenx/shared/widgets/tv/tv_badge.dart';
-import 'package:shonenx/shared/widgets/tv/tv_button.dart';
 
 /// Full-bleed spotlight at the top of Home.
 ///
-/// The two action buttons are the focus stops. Paging happens by pressing past
-/// them: left from the first button steps back a slide, right from the last
-/// steps forward, and in between the presses move between the buttons. That
-/// keeps the buttons genuinely usable while still letting the whole hero be
-/// driven with nothing but a D-pad.
+/// The strip of artwork thumbnails along the bottom is both the page indicator
+/// and the control: each is a focus stop, moving along it previews that title
+/// in the panel above, and OK opens it.
 class SpotlightCarousel extends ConsumerStatefulWidget {
   final AsyncValue<List<UnifiedMedia>> data;
 
@@ -53,8 +50,9 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
   /// Height reserved for the header buttons, as a fraction of the hero.
   static const _headerBandFraction = 0.16;
 
-  final FocusNode _playFocus = FocusNode(debugLabel: 'heroPlay');
-  final FocusNode _listFocus = FocusNode(debugLabel: 'heroList');
+  /// One per slide. The thumbnail strip is both the indicator and the
+  /// control: moving along it previews each title above, and OK opens it.
+  final List<FocusNode> _thumbFocus = [];
 
   int _index = 0;
   bool _focused = false;
@@ -63,19 +61,36 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
   @override
   void initState() {
     super.initState();
-    _playFocus.addListener(_onFocusChanged);
-    _listFocus.addListener(_onFocusChanged);
     _restartTimer();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    _playFocus.removeListener(_onFocusChanged);
-    _listFocus.removeListener(_onFocusChanged);
-    _playFocus.dispose();
-    _listFocus.dispose();
+    for (final node in _thumbFocus) {
+      node.dispose();
+    }
     super.dispose();
+  }
+
+  /// Grown lazily: the slide count is not known until the feed resolves.
+  FocusNode _focusFor(int index) {
+    while (_thumbFocus.length <= index) {
+      final node = FocusNode(debugLabel: 'heroThumb${_thumbFocus.length}');
+      final i = _thumbFocus.length;
+      node.addListener(() {
+        if (!mounted) return;
+        if (node.hasFocus) _select(i);
+        _onFocusChanged();
+      });
+      _thumbFocus.add(node);
+    }
+    return _thumbFocus[index];
+  }
+
+  void _select(int index) {
+    if (_index == index) return;
+    setState(() => _index = index);
   }
 
   List<UnifiedMedia> get _items {
@@ -89,7 +104,7 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
   }
 
   void _onFocusChanged() {
-    final hasFocus = _playFocus.hasFocus || _listFocus.hasFocus;
+    final hasFocus = _thumbFocus.any((n) => n.hasFocus);
     if (_focused == hasFocus) return;
     setState(() => _focused = hasFocus);
     // Auto-advance while the user is reading a slide would move the target out
@@ -109,52 +124,22 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
     });
   }
 
-  void _step(int delta) {
-    final items = _items;
-    if (items.isEmpty) return;
-    setState(() => _index = (_index + delta) % items.length);
-  }
-
-  /// Claims left/right only at the ends of the button row, so traversal still
-  /// moves between the two buttons in the middle.
+  /// The strip traverses normally; only the escape upward needs handling,
+  /// because the header buttons are drawn over the hero and are therefore
+  /// invisible to geometric traversal.
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
-
-    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      if (widget.onEscapeUp == null) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
+        widget.onEscapeUp != null) {
       widget.onEscapeUp!();
-      return KeyEventResult.handled;
-    }
-
-    final onFirst = _playFocus.hasFocus;
-    final onLast = _listFocus.hasFocus;
-
-    if (event.logicalKey == LogicalKeyboardKey.arrowRight && onLast) {
-      _step(1);
-      return KeyEventResult.handled;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.arrowLeft && onFirst) {
-      // At the first slide, fall through so the shell's handler opens the
-      // navigation rail -- which is what a left press at the left edge of the
-      // screen should do.
-      if (_index == 0) return KeyEventResult.ignored;
-      _step(-1);
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
   }
 
-  Future<void> _play() async {
-    final media = _current;
-    if (media == null) return;
-    await MediaActions.play(context, ref, media);
-  }
-
-  void _openDetails() {
-    final media = _current;
-    if (media == null) return;
+  void _openDetails(UnifiedMedia media) {
     context.push(
       '/details/${media.type.id}?tag=${widget.tagPrefix}-${media.id}',
       extra: media,
@@ -202,13 +187,11 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
                         child: _Details(
                           media: media,
                           metrics: m,
-                          slideCount: items.length,
+                          items: items,
                           index: _index,
-                          playFocus: _playFocus,
-                          listFocus: _listFocus,
+                          focusFor: _focusFor,
                           autofocus: widget.autofocus,
-                          onPlay: _play,
-                          onMoreInfo: _openDetails,
+                          onOpen: _openDetails,
                         ),
                       ),
                       SizedBox(width: m.shellGutter(size) * 2),
@@ -230,28 +213,24 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
   }
 }
 
-/// The left column: metadata, title, synopsis, actions and the page indicator.
+/// The left column: metadata, title, synopsis and the slide strip.
 class _Details extends StatelessWidget {
   final UnifiedMedia? media;
   final ShonenXMetrics metrics;
-  final int slideCount;
+  final List<UnifiedMedia> items;
   final int index;
-  final FocusNode playFocus;
-  final FocusNode listFocus;
+  final FocusNode Function(int) focusFor;
   final bool autofocus;
-  final VoidCallback onPlay;
-  final VoidCallback onMoreInfo;
+  final ValueChanged<UnifiedMedia> onOpen;
 
   const _Details({
     required this.media,
     required this.metrics,
-    required this.slideCount,
+    required this.items,
     required this.index,
-    required this.playFocus,
-    required this.listFocus,
+    required this.focusFor,
     required this.autofocus,
-    required this.onPlay,
-    required this.onMoreInfo,
+    required this.onOpen,
   });
 
   @override
@@ -264,9 +243,10 @@ class _Details extends StatelessWidget {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.start,
       children: [
-        TvMetaRow(media: media!),
+        // Genres ride in the metadata row rather than getting a line of their
+        // own, which is what keeps the strip below on screen.
+        TvMetaRow(media: media!, showGenres: true),
         SizedBox(height: m.body * 0.8),
         Text(
           media!.title.availableTitle,
@@ -283,7 +263,7 @@ class _Details extends StatelessWidget {
           SizedBox(height: m.body),
           Text(
             plainSynopsis(media!.description!),
-            maxLines: 2,
+            maxLines: 3,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodyLarge?.copyWith(
               fontSize: m.body,
@@ -292,37 +272,16 @@ class _Details extends StatelessWidget {
             ),
           ),
         ],
-        SizedBox(height: m.body * 1.4),
-        Row(
-          children: [
-            TvButton(
-              label: 'Play now',
-              icon: Icons.play_arrow_rounded,
-              // No fixed width: these sit next to each other under a long
-              // title and read better sized to their own labels.
-              height: m.buttonHeight,
-              focusNode: playFocus,
-              autofocus: autofocus,
-              // The hero is at the top of the page; centring it on focus would
-              // scroll the header buttons out of sight.
-              ensureVisible: false,
-              onPressed: onPlay,
-            ),
-            SizedBox(width: m.label),
-            TvButton(
-              label: 'More info',
-              icon: Icons.info_outline_rounded,
-              height: m.buttonHeight,
-              variant: TvButtonVariant.filledWhite,
-              focusNode: listFocus,
-              ensureVisible: false,
-              onPressed: onMoreInfo,
-            ),
-          ],
-        ),
         const Spacer(),
-        if (slideCount > 1)
-          _PageDots(count: slideCount, index: index, metrics: m),
+        if (items.isNotEmpty)
+          _SlideStrip(
+            items: items,
+            index: index,
+            metrics: m,
+            focusFor: focusFor,
+            autofocus: autofocus,
+            onOpen: onOpen,
+          ),
       ],
     );
   }
@@ -335,42 +294,111 @@ class _Details extends StatelessWidget {
       .trim();
 }
 
-/// Which slide of how many. The active dot stretches into a bar rather than
-/// just brightening -- at 10 feet a change of shape reads where a change of
-/// opacity does not.
-class _PageDots extends StatelessWidget {
-  final int count;
+/// Artwork thumbnails for every slide: the page indicator and the control in
+/// one. Moving along it previews each title above; OK opens the one shown.
+///
+/// This replaces a dot indicator plus a pair of action buttons. Dots say which
+/// slide you are on but not what is on it, and the buttons duplicated what the
+/// detail screen already does one press later.
+class _SlideStrip extends StatelessWidget {
+  final List<UnifiedMedia> items;
   final int index;
   final ShonenXMetrics metrics;
+  final FocusNode Function(int) focusFor;
+  final bool autofocus;
+  final ValueChanged<UnifiedMedia> onOpen;
 
-  const _PageDots({
-    required this.count,
+  const _SlideStrip({
+    required this.items,
     required this.index,
     required this.metrics,
+    required this.focusFor,
+    required this.autofocus,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final m = metrics;
+    return SizedBox(
+      height: m.heroThumb / ShonenX.thumbAspect + TvFocus.ringWidth * 2,
+      child: FocusTraversalGroup(
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          clipBehavior: Clip.none,
+          // Directional traversal only reaches nodes that have been built.
+          cacheExtent: 1600,
+          itemCount: items.length,
+          separatorBuilder: (_, __) => SizedBox(width: m.heroThumb * 0.22),
+          itemBuilder: (context, i) => _Thumb(
+            media: items[i],
+            metrics: m,
+            selected: i == index,
+            focusNode: focusFor(i),
+            autofocus: autofocus && i == 0,
+            onTap: () => onOpen(items[i]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Thumb extends StatelessWidget {
+  final UnifiedMedia media;
+  final ShonenXMetrics metrics;
+  final bool selected;
+  final FocusNode focusNode;
+  final bool autofocus;
+  final VoidCallback onTap;
+
+  const _Thumb({
+    required this.media,
+    required this.metrics,
+    required this.selected,
+    required this.focusNode,
+    required this.autofocus,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final size = metrics.heroDot;
+    final m = metrics;
+    final radius = BorderRadius.circular(m.heroThumb * 0.12);
+    final url = media.banner ?? media.cover;
 
-    return Row(
-      children: [
-        for (var i = 0; i < count; i++)
-          AnimatedContainer(
-            duration: TvFocus.animation,
-            curve: TvFocus.curve,
-            margin: EdgeInsets.only(right: size * 0.8),
-            width: i == index ? metrics.heroDotActive : size,
-            height: size,
-            decoration: BoxDecoration(
-              color: i == index
-                  ? cs.onSurface
-                  : cs.onSurface.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(size),
-            ),
+    return TvFocusable(
+      onTap: onTap,
+      focusNode: focusNode,
+      autofocus: autofocus,
+      borderRadius: radius,
+      scaleOnFocus: false,
+      // The ring already marks the selection; a second highlight would be
+      // saying the same thing twice.
+      ringColor: cs.onSurface,
+      builder: (context, isFocused) => AnimatedOpacity(
+        duration: TvFocus.animation,
+        // Unselected slides sit back so the current one reads first.
+        opacity: selected ? 1.0 : 0.45,
+        child: SizedBox(
+          width: m.heroThumb,
+          height: m.heroThumb / ShonenX.thumbAspect,
+          child: ClipRRect(
+            borderRadius: radius,
+            child: (url == null || url.isEmpty)
+                ? ColoredBox(color: cs.surfaceContainer)
+                : CachedNetworkImage(
+                    imageUrl: url,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) =>
+                        ColoredBox(color: cs.surfaceContainer),
+                    errorWidget: (_, __, ___) =>
+                        ColoredBox(color: cs.surfaceContainer),
+                  ),
           ),
-      ],
+        ),
+      ),
     );
   }
 }

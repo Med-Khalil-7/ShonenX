@@ -53,6 +53,9 @@ abstract final class ShonenX {
   /// two can never drift apart.
   static const posterAspect = 2 / 3;
 
+  /// Slide-strip thumbnails are slightly taller than wide.
+  static const thumbAspect = 0.85;
+
   /// The hero carries metadata, a synopsis, two buttons and a page indicator,
   /// so it needs most of the screen; the first row still peeks in below.
   static const heroHeightFraction = 0.72;
@@ -143,6 +146,6 @@ class ShonenXMetrics {
 
   // --- Hero ---------------------------------------------------------------
 
-  double get heroDot => w * 0.006;
-  double get heroDotActive => w * 0.020;
+  /// Width of one artwork thumbnail in the slide strip.
+  double get heroThumb => w * 0.048;
 }

@@ -69,6 +69,7 @@ class _DiscoveryModeSheetState extends ConsumerState<DiscoveryModeSheet> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 16.0),
                 child: TextField(
+                         keyboardType: TextInputType.none, // TV: never raise the system IME
                   controller: _searchController,
                   decoration: InputDecoration(
                     hintText: 'Search sources...',
