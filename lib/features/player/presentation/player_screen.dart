@@ -12,12 +12,16 @@ import 'package:shonenx/features/player/engine/video_engine.dart';
 import 'package:shonenx/features/player/presentation/widgets/custom_subtitle_overlay.dart';
 import 'package:shonenx/features/player/presentation/widgets/player_keyboard_listener.dart';
 import 'package:shonenx/features/player/presentation/widgets/tv/player_center_indicator.dart';
+import 'package:shonenx/features/player/presentation/widgets/tv/player_audio_panel.dart';
 import 'package:shonenx/features/player/presentation/widgets/tv/player_settings_panel.dart';
 import 'package:shonenx/features/player/presentation/widgets/tv/player_top_bar.dart';
 import 'package:shonenx/features/player/presentation/widgets/tv/player_transport_bar.dart';
 import 'package:shonenx/features/player/providers/aniskip_provider.dart';
 import 'package:shonenx/features/player/providers/player_controller.dart';
+import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
 import 'package:shonenx/features/player/providers/video_engine_provider.dart';
+import 'package:shonenx/shared/models/video_stream.dart';
+import 'package:shonenx/core/utils/extensions.dart';
 import 'package:shonenx/shared/widgets/tv/tv_button.dart';
 import 'package:shonenx/shared/widgets/tv/tv_confirm_dialog.dart';
 import 'package:shonenx/shared/widgets/tv/tv_side_sheet.dart';
@@ -42,6 +46,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   Timer? _controlsTimer;
   bool _panelOpen = false;
   bool _exitPromptOpen = false;
+
+  /// Remembered so the subtitle toggle can restore what was switched off.
+  SubtitleTrack? _lastSubtitle;
 
   String get _mediaTitle => switch (widget.mode) {
     PlayerModeOnline(:final media) => media.title.availableTitle,
@@ -174,8 +181,50 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       builder: (_) => PlayerSettingsPanel(
         engine: ref.read(videoEngineProvider),
         controller: ref.read(playerControllerProvider.notifier),
+        onEpisodes: widget.mode is PlayerModeOnline
+            ? _toggleEpisodePanel
+            : null,
       ),
     );
+  }
+
+  void _openAudioPanel() {
+    _openPanel(
+      label: 'Audio',
+      builder: (_) => PlayerAudioPanel(
+        controller: ref.read(playerControllerProvider.notifier),
+      ),
+    );
+  }
+
+  /// Flips subtitles without opening anything.
+  ///
+  /// Turning them back on returns to the last track that was actually chosen,
+  /// falling back to the preferred language and then to whatever the source
+  /// offers first -- so the toggle is symmetrical rather than "off, then go
+  /// hunting in a menu".
+  void _toggleSubtitles() {
+    final controller = ref.read(playerControllerProvider.notifier);
+    final state = ref.read(playerControllerProvider);
+    final active = state.activeSubtitle;
+
+    if (active != null && active.url.isNotEmpty) {
+      _lastSubtitle = active;
+      controller.changeSubtitle(SubtitleTrack.none);
+      return;
+    }
+
+    final tracks = state.subtitles.where((s) => s.url.isNotEmpty).toList();
+    if (tracks.isEmpty) return;
+
+    final preferred = ref.read(playerPrefsProvider).defaultSubtitleLang;
+    final restored =
+        _lastSubtitle ??
+        tracks.firstWhereOrNull(
+          (s) => s.language.toLowerCase().contains(preferred.toLowerCase()),
+        ) ??
+        tracks.first;
+    controller.changeSubtitle(restored);
   }
 
   void _openPanel({required String label, required WidgetBuilder builder}) {
@@ -272,9 +321,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 title: _mediaTitle,
                 subtitle: _episodeLabel(activeEpisode),
                 onBack: _handleBack,
-                onEpisodes: _toggleEpisodePanel,
-                onSubtitles: _openSettingsPanel,
+                onAudio: _openAudioPanel,
+                onToggleSubtitles: _toggleSubtitles,
                 onSettings: _openSettingsPanel,
+                subtitlesOn:
+                    playerState.activeSubtitle != null &&
+                    playerState.activeSubtitle!.url.isNotEmpty,
               ),
               PlayerTransportBar(
                 visible: _showControls,

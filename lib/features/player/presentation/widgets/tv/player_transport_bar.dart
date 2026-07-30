@@ -9,6 +9,7 @@ import 'package:shonenx/core/tv/tv_metrics.dart';
 import 'package:shonenx/features/player/domain/aniskip_prefs.dart';
 import 'package:shonenx/features/player/engine/video_engine.dart';
 import 'package:shonenx/features/player/presentation/widgets/progress_bar.dart';
+import 'package:shonenx/features/player/presentation/widgets/tv/seek_preview_card.dart';
 import 'package:shonenx/features/player/providers/aniskip_prefs_provider.dart';
 import 'package:shonenx/features/player/providers/aniskip_provider.dart';
 import 'package:shonenx/features/player/providers/player_controller.dart';
@@ -151,8 +152,13 @@ class _SeekRow extends ConsumerStatefulWidget {
 }
 
 class _SeekRowState extends ConsumerState<_SeekRow> {
-  static const _step = Duration(seconds: 10);
   static const _commitAfter = Duration(milliseconds: 400);
+
+  /// How long to sit still before asking for a frame.
+  ///
+  /// Shorter than the seek commit: the preview should keep up with a moving
+  /// thumb, while the real seek waits until the user has actually stopped.
+  static const _previewAfter = Duration(milliseconds: 250);
 
   late final FocusNode _node = FocusNode(
     debugLabel: 'seekBar',
@@ -160,7 +166,13 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
   );
 
   Duration? _pending;
+
+  /// The target the preview is allowed to ask for. Trails [_pending] by
+  /// [_previewAfter] so a fast scrub does not queue a decode per keypress.
+  Duration? _previewTarget;
+
   Timer? _commitTimer;
+  Timer? _previewTimer;
   bool _focused = false;
 
   @override
@@ -176,17 +188,25 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
   @override
   void dispose() {
     _commitTimer?.cancel();
+    _previewTimer?.cancel();
     _node.dispose();
     super.dispose();
   }
+
+  /// Rounded to whole seconds so tiny thumb movements do not invalidate the
+  /// provider family key and re-request a frame we already have.
+  static Duration _round(Duration d) => Duration(seconds: d.inSeconds);
 
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
+    final step = Duration(
+      seconds: ref.read(playerPrefsProvider).seekStepSeconds,
+    );
     final delta = switch (event.logicalKey) {
-      LogicalKeyboardKey.arrowRight => _step,
-      LogicalKeyboardKey.arrowLeft => -_step,
+      LogicalKeyboardKey.arrowRight => step,
+      LogicalKeyboardKey.arrowLeft => -step,
       _ => null,
     };
     if (delta == null) return KeyEventResult.ignored;
@@ -202,12 +222,23 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
           : (next > duration ? duration : next);
     });
 
+    _previewTimer?.cancel();
+    _previewTimer = Timer(_previewAfter, () {
+      if (!mounted || _pending == null) return;
+      setState(() => _previewTarget = _round(_pending!));
+    });
+
     _commitTimer?.cancel();
     _commitTimer = Timer(_commitAfter, () async {
       final target = _pending;
       if (target == null) return;
       await widget.engine.seekTo(target);
-      if (mounted) setState(() => _pending = null);
+      if (mounted) {
+        setState(() {
+          _pending = null;
+          _previewTarget = null;
+        });
+      }
     });
 
     return KeyEventResult.handled;
@@ -233,48 +264,74 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
       fontFeatures: const [FontFeature.tabularFigures()],
     );
 
-    return Row(
+    final scrubbing = _focused && _pending != null;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          width: m.meta * 4.5,
-          child: Text(formatPlaybackTime(shown), style: timeStyle),
-        ),
-        Expanded(
-          child: Focus(
-            focusNode: _node,
-            child: SizedBox(
-              height: m.transportIcon,
-              child: CustomPaint(
-                size: Size(double.infinity, m.transportIcon),
-                painter: ProgressBarPainter(
-                  skipStamps: widget.aniSkips,
-                  totalDuration: duration.inMilliseconds / 1000.0,
-                  progress: shown.inMilliseconds / 1000.0,
-                  buffer: buffer.inMilliseconds / 1000.0,
-                  barHeight: _focused ? m.seekTrack * 1.6 : m.seekTrack,
-                  thumbWidth: _focused ? m.seekThumb * 2.6 : m.seekThumb * 2,
-                  thumbHeight: _focused ? m.seekThumb * 2.6 : m.seekThumb * 2,
-                  thumbRadius: Radius.circular(
-                    _focused ? m.seekThumb * 1.3 : m.seekThumb,
+        if (scrubbing)
+          Padding(
+            // Line the card's track up with the bar itself, which is inset by
+            // the two time readouts either side of it.
+            padding: EdgeInsets.symmetric(horizontal: m.meta * 4.5),
+            child: SeekPreviewCard(
+              target: _previewTarget ?? _round(shown),
+              label: formatPlaybackTime(shown),
+              fraction: duration.inMilliseconds == 0
+                  ? 0
+                  : shown.inMilliseconds / duration.inMilliseconds,
+              enabled: widget.engine.supportsFramePreview,
+            ),
+          ),
+        Row(
+          children: [
+            SizedBox(
+              width: m.meta * 4.5,
+              child: Text(formatPlaybackTime(shown), style: timeStyle),
+            ),
+            Expanded(
+              child: Focus(
+                focusNode: _node,
+                child: SizedBox(
+                  height: m.transportIcon,
+                  child: CustomPaint(
+                    size: Size(double.infinity, m.transportIcon),
+                    painter: ProgressBarPainter(
+                      skipStamps: widget.aniSkips,
+                      totalDuration: duration.inMilliseconds / 1000.0,
+                      progress: shown.inMilliseconds / 1000.0,
+                      buffer: buffer.inMilliseconds / 1000.0,
+                      barHeight: _focused ? m.seekTrack * 1.6 : m.seekTrack,
+                      thumbWidth: _focused
+                          ? m.seekThumb * 2.6
+                          : m.seekThumb * 2,
+                      thumbHeight: _focused
+                          ? m.seekThumb * 2.6
+                          : m.seekThumb * 2,
+                      thumbRadius: Radius.circular(
+                        _focused ? m.seekThumb * 1.3 : m.seekThumb,
+                      ),
+                      // Red while scrubbing so it is obvious the bar has focus
+                      // and that the position shown is not where playback is
+                      // yet.
+                      thumbColor: _focused ? cs.primary : Colors.white,
+                      progressColor: Colors.white,
+                      bufferColor: Colors.white38,
+                      baseColor: Colors.white24,
+                    ),
                   ),
-                  // Red while scrubbing so it is obvious the bar has focus and
-                  // that the position shown is not where playback is yet.
-                  thumbColor: _focused ? cs.primary : Colors.white,
-                  progressColor: Colors.white,
-                  bufferColor: Colors.white38,
-                  baseColor: Colors.white24,
                 ),
               ),
             ),
-          ),
-        ),
-        SizedBox(
-          width: m.meta * 4.5,
-          child: Text(
-            formatPlaybackTime(duration),
-            style: timeStyle,
-            textAlign: TextAlign.right,
-          ),
+            SizedBox(
+              width: m.meta * 4.5,
+              child: Text(
+                formatPlaybackTime(duration),
+                style: timeStyle,
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ],
         ),
       ],
     );

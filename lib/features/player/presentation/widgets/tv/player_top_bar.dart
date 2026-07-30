@@ -3,16 +3,24 @@ import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/core/tv/tv_focusable.dart';
 import 'package:shonenx/core/tv/tv_metrics.dart';
 
-/// Back arrow, title and episode on the left; episodes, subtitles and settings
-/// on the right.
+/// Back arrow, title and episode on the left; audio, subtitles and settings on
+/// the right.
+///
+/// Three destinations, three behaviours: audio opens a panel, subtitles is a
+/// straight toggle with no panel at all, settings opens the settings panel.
+/// The episode list moved into settings when audio took this slot.
 class PlayerTopBar extends StatelessWidget {
   final bool visible;
   final String title;
   final String? subtitle;
   final VoidCallback onBack;
-  final VoidCallback onEpisodes;
-  final VoidCallback onSubtitles;
+  final VoidCallback onAudio;
+  final VoidCallback onToggleSubtitles;
   final VoidCallback onSettings;
+
+  /// Drives the subtitles icon, so the control shows its own state instead of
+  /// making the user open something to find out.
+  final bool subtitlesOn;
 
   const PlayerTopBar({
     super.key,
@@ -20,9 +28,10 @@ class PlayerTopBar extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onBack,
-    required this.onEpisodes,
-    required this.onSubtitles,
+    required this.onAudio,
+    required this.onToggleSubtitles,
     required this.onSettings,
+    required this.subtitlesOn,
   });
 
   @override
@@ -98,15 +107,18 @@ class PlayerTopBar extends StatelessWidget {
                 ),
                 SizedBox(width: m.playerIconGap * 0.6),
                 _PlayerIconButton(
-                  icon: Icons.layers_outlined,
-                  tooltip: 'Episodes',
-                  onPressed: onEpisodes,
+                  icon: Icons.multitrack_audio_rounded,
+                  tooltip: 'Audio',
+                  onPressed: onAudio,
                 ),
                 SizedBox(width: m.playerIconGap),
                 _PlayerIconButton(
-                  icon: Icons.subtitles_outlined,
-                  tooltip: 'Subtitles',
-                  onPressed: onSubtitles,
+                  icon: subtitlesOn
+                      ? Icons.subtitles
+                      : Icons.subtitles_off_outlined,
+                  tooltip: subtitlesOn ? 'Subtitles on' : 'Subtitles off',
+                  onPressed: onToggleSubtitles,
+                  dimmed: !subtitlesOn,
                 ),
                 SizedBox(width: m.playerIconGap),
                 _PlayerIconButton(
@@ -128,10 +140,14 @@ class _PlayerIconButton extends StatelessWidget {
   final String tooltip;
   final VoidCallback onPressed;
 
+  /// Renders the icon as off. Used by the subtitle toggle.
+  final bool dimmed;
+
   const _PlayerIconButton({
     required this.icon,
     required this.tooltip,
     required this.onPressed,
+    this.dimmed = false,
   });
 
   @override
@@ -152,7 +168,9 @@ class _PlayerIconButton extends StatelessWidget {
           icon,
           size: m.playerIcon,
           semanticLabel: tooltip,
-          color: isFocused ? Theme.of(context).colorScheme.primary : Colors.white,
+          color: isFocused
+              ? Theme.of(context).colorScheme.primary
+              : (dimmed ? Colors.white38 : Colors.white),
         ),
       ),
     );

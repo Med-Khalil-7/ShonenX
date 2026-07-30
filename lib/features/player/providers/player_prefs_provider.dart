@@ -21,7 +21,6 @@ enum PlayerType {
 
 class PlayerPrefsState {
   final PlayerType playerType;
-  final bool showShortcutsSheetOnStart;
   final String defaultQuality;
   final String defaultAudioLang;
   final String defaultSubtitleLang;
@@ -31,9 +30,23 @@ class PlayerPrefsState {
   final bool showSkipButton;
   final int skipDuration;
 
+  /// How long the Skip Opening/Ending button stays up before hiding itself.
+  final int skipButtonHoldSeconds;
+
+  /// Give the skip button focus the moment it appears, so it is one press.
+  final bool focusSkipButton;
+
+  /// Draw the auto-next countdown as a ring on the Next Episode button.
+  final bool showAutoNextCountdown;
+
+  /// How far one left/right press moves the scrub target.
+  final int seekStepSeconds;
+
+  /// How long the overlay stays up with no input.
+  final int controlsTimeoutSeconds;
+
   const PlayerPrefsState({
     this.playerType = PlayerType.mediakit,
-    this.showShortcutsSheetOnStart = true,
     this.defaultQuality = '1080p',
     this.defaultAudioLang = 'eng',
     this.defaultSubtitleLang = 'eng',
@@ -42,12 +55,16 @@ class PlayerPrefsState {
     this.nextEpisodeThreshold = 85,
     this.showSkipButton = true,
     this.skipDuration = 85,
+    this.skipButtonHoldSeconds = 8,
+    this.focusSkipButton = true,
+    this.showAutoNextCountdown = true,
+    this.seekStepSeconds = 10,
+    this.controlsTimeoutSeconds = 5,
   });
 
   PlayerPrefsState copyWith({
     AniSkipPrefs? aniSkipPrefs,
     PlayerType? playerType,
-    bool? showShortcutsSheetOnStart,
     String? defaultQuality,
     String? defaultAudioLang,
     String? defaultSubtitleLang,
@@ -56,11 +73,14 @@ class PlayerPrefsState {
     int? nextEpisodeThreshold,
     bool? showSkipButton,
     int? skipDuration,
+    int? skipButtonHoldSeconds,
+    bool? focusSkipButton,
+    bool? showAutoNextCountdown,
+    int? seekStepSeconds,
+    int? controlsTimeoutSeconds,
   }) {
     return PlayerPrefsState(
       playerType: playerType ?? this.playerType,
-      showShortcutsSheetOnStart:
-          showShortcutsSheetOnStart ?? this.showShortcutsSheetOnStart,
       defaultQuality: defaultQuality ?? this.defaultQuality,
       defaultAudioLang: defaultAudioLang ?? this.defaultAudioLang,
       defaultSubtitleLang: defaultSubtitleLang ?? this.defaultSubtitleLang,
@@ -69,13 +89,20 @@ class PlayerPrefsState {
       nextEpisodeThreshold: nextEpisodeThreshold ?? this.nextEpisodeThreshold,
       showSkipButton: showSkipButton ?? this.showSkipButton,
       skipDuration: skipDuration ?? this.skipDuration,
+      skipButtonHoldSeconds:
+          skipButtonHoldSeconds ?? this.skipButtonHoldSeconds,
+      focusSkipButton: focusSkipButton ?? this.focusSkipButton,
+      showAutoNextCountdown:
+          showAutoNextCountdown ?? this.showAutoNextCountdown,
+      seekStepSeconds: seekStepSeconds ?? this.seekStepSeconds,
+      controlsTimeoutSeconds:
+          controlsTimeoutSeconds ?? this.controlsTimeoutSeconds,
     );
   }
 
   factory PlayerPrefsState.fromMap(Map<String, dynamic> map) {
     return PlayerPrefsState(
       playerType: PlayerType.fromString(map['playerType']),
-      showShortcutsSheetOnStart: map['showShortcutsSheetOnStart'] ?? true,
       defaultQuality: map['defaultQuality'] ?? '1080p',
       defaultAudioLang: map['defaultAudioLang'] ?? 'eng',
       defaultSubtitleLang: map['defaultSubtitleLang'] ?? 'eng',
@@ -89,13 +116,17 @@ class PlayerPrefsState {
       nextEpisodeThreshold: map['nextEpisodeThreshold'] ?? 85,
       showSkipButton: map['showSkipButton'] ?? true,
       skipDuration: map['skipDuration'] ?? 85,
+      skipButtonHoldSeconds: map['skipButtonHoldSeconds'] ?? 8,
+      focusSkipButton: map['focusSkipButton'] ?? true,
+      showAutoNextCountdown: map['showAutoNextCountdown'] ?? true,
+      seekStepSeconds: map['seekStepSeconds'] ?? 10,
+      controlsTimeoutSeconds: map['controlsTimeoutSeconds'] ?? 5,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
       'playerType': playerType.name,
-      'showShortcutsSheetOnStart': showShortcutsSheetOnStart,
       'defaultQuality': defaultQuality,
       'defaultAudioLang': defaultAudioLang,
       'defaultSubtitleLang': defaultSubtitleLang,
@@ -104,6 +135,11 @@ class PlayerPrefsState {
       'nextEpisodeThreshold': nextEpisodeThreshold,
       'showSkipButton': showSkipButton,
       'skipDuration': skipDuration,
+      'skipButtonHoldSeconds': skipButtonHoldSeconds,
+      'focusSkipButton': focusSkipButton,
+      'showAutoNextCountdown': showAutoNextCountdown,
+      'seekStepSeconds': seekStepSeconds,
+      'controlsTimeoutSeconds': controlsTimeoutSeconds,
     };
   }
 
@@ -139,11 +175,6 @@ class PlayerPrefsNotifier extends Notifier<PlayerPrefsState> {
 
 
 
-  void toggleShowShortcutsSheetOnStart(bool value) {
-    state = state.copyWith(showShortcutsSheetOnStart: value);
-    _saveDb();
-  }
-
   void setDefaultQuality(String quality) {
     state = state.copyWith(defaultQuality: quality);
     _saveDb();
@@ -176,6 +207,31 @@ class PlayerPrefsNotifier extends Notifier<PlayerPrefsState> {
 
   void setShowSkipButton(bool value) {
     state = state.copyWith(showSkipButton: value);
+    _saveDb();
+  }
+
+  void setSkipButtonHoldSeconds(int seconds) {
+    state = state.copyWith(skipButtonHoldSeconds: seconds);
+    _saveDb();
+  }
+
+  void setFocusSkipButton(bool value) {
+    state = state.copyWith(focusSkipButton: value);
+    _saveDb();
+  }
+
+  void setShowAutoNextCountdown(bool value) {
+    state = state.copyWith(showAutoNextCountdown: value);
+    _saveDb();
+  }
+
+  void setSeekStepSeconds(int seconds) {
+    state = state.copyWith(seekStepSeconds: seconds);
+    _saveDb();
+  }
+
+  void setControlsTimeoutSeconds(int seconds) {
+    state = state.copyWith(controlsTimeoutSeconds: seconds);
     _saveDb();
   }
 

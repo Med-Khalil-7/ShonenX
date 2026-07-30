@@ -9,7 +9,7 @@ import 'package:shonenx/shared/models/video_server.dart';
 import 'package:shonenx/shared/models/video_stream.dart';
 
 /// Everything that used to be scattered across the top and bottom bars:
-/// quality, server, mirror, sub/dub, audio track, speed and aspect fit.
+/// episodes, quality, server, mirror, audio track, subtitles, speed and fit.
 ///
 /// They were nine separate targets crowded along two edges, most of them
 /// 22px icons. Collapsed into one panel they become a list of full-width rows,
@@ -18,10 +18,17 @@ class PlayerSettingsPanel extends ConsumerStatefulWidget {
   final VideoEngine engine;
   final PlayerController controller;
 
+  /// Opens the episode list. Null for local playback, which has no list.
+  ///
+  /// Episodes live here because the top bar's third slot went to audio, which
+  /// is changed far more often mid-episode than the list is.
+  final VoidCallback? onEpisodes;
+
   const PlayerSettingsPanel({
     super.key,
     required this.engine,
     required this.controller,
+    this.onEpisodes,
   });
 
   @override
@@ -57,23 +64,31 @@ class _PlayerSettingsPanelState extends ConsumerState<PlayerSettingsPanel> {
   }
 
   Widget _buildRoot(PlayerState state, EngineState engineState) {
-    final hasBothTypes = _hasBothServerTypes(state);
-
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
+        if (widget.onEpisodes != null)
+          _NavRow(
+            label: 'Episodes',
+            value: '',
+            autofocus: true,
+            onTap: () {
+              Navigator.of(context).pop();
+              widget.onEpisodes!();
+            },
+          ),
         if (state.qualities.isNotEmpty)
           _NavRow(
             label: 'Quality',
             value: state.activeQuality?.quality ?? 'Auto',
-            autofocus: true,
+            autofocus: widget.onEpisodes == null,
             onTap: () => setState(() => _section = _Section.quality),
           ),
         if (state.servers.isNotEmpty)
           _NavRow(
             label: 'Server',
             value: state.activeServer?.name ?? '-',
-            autofocus: state.qualities.isEmpty,
+            autofocus: widget.onEpisodes == null && state.qualities.isEmpty,
             onTap: () => setState(() => _section = _Section.server),
           ),
         if (state.streams.length > 1)
@@ -81,15 +96,6 @@ class _PlayerSettingsPanelState extends ConsumerState<PlayerSettingsPanel> {
             label: 'Mirror',
             value: state.activeStream?.quality ?? '-',
             onTap: () => setState(() => _section = _Section.stream),
-          ),
-        if (hasBothTypes)
-          _NavRow(
-            label: 'Audio',
-            value: (state.activeServer?.type ?? ServerType.sub).displayName,
-            onTap: () async {
-              await widget.controller.changeServerType();
-              await widget.controller.changeStreamType();
-            },
           ),
         if (engineState.audioTracks
             .where((t) => t.id != 'auto' && t.id != 'no')
@@ -190,8 +196,10 @@ class _PlayerSettingsPanelState extends ConsumerState<PlayerSettingsPanel> {
         );
       case _Section.subtitle:
         return _OptionList<SubtitleTrack?>(
-          options: [null, ...state.subtitles],
-          labelOf: (s) => s?.language ?? 'Off',
+          // state.subtitles already begins with SubtitleTrack.none, so
+          // prepending null as well listed "Off" twice.
+          options: state.subtitles,
+          labelOf: (s) => (s == null || s.url.isEmpty) ? 'Off' : s.language,
           isSelected: (s) => s == state.activeSubtitle,
           onSelected: (s) {
             widget.controller.changeSubtitle(s);

@@ -142,6 +142,9 @@ class ShonenXMetrics {
   double get seekTrack => w * 0.003;
   double get seekThumb => w * 0.005;
   double get centerIndicator => w * 0.090;
+
+  /// Width of the scrub preview card. 16:9, so its height follows.
+  double get seekPreview => w * 0.22;
   double get dialogWidth => w * 0.400;
 
   // --- Hero ---------------------------------------------------------------
