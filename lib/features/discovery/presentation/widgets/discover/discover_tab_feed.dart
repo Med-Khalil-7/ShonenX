@@ -7,6 +7,7 @@ import 'package:shonenx/shared/models/unified_media.dart';
 import 'dynamic_genre_feed.dart';
 import 'dynamic_source_feed.dart';
 import 'paginated_media_grid.dart';
+import 'paginated_media_list.dart';
 
 class DiscoverTabFeed extends ConsumerStatefulWidget {
   final MediaType type;
@@ -17,6 +18,10 @@ class DiscoverTabFeed extends ConsumerStatefulWidget {
   final ValueChanged<String>? onGenreSelect;
   final ValueChanged<String>? onSourceSelect;
 
+  /// Render hits as full-width rows instead of a grid. The search screen sets
+  /// this because the keyboard already claims half the width.
+  final bool listMode;
+
   const DiscoverTabFeed({
     super.key,
     required this.type,
@@ -26,6 +31,7 @@ class DiscoverTabFeed extends ConsumerStatefulWidget {
     this.source,
     this.onGenreSelect,
     this.onSourceSelect,
+    this.listMode = false,
   });
 
   @override
@@ -115,6 +121,15 @@ class _DiscoverTabFeedState extends ConsumerState<DiscoverTabFeed> {
     }
 
     final state = ref.watch(searchProvider(_args));
+
+    if (widget.listMode) {
+      return PaginatedMediaList(
+        state: state,
+        scrollController: _scrollController,
+        isLoadingMore: _isLoadingMore,
+        onAutoLoad: _loadNextPage,
+      );
+    }
 
     return PaginatedMediaGrid(
       state: state,
