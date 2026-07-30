@@ -1,11 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:screenshot/screenshot.dart';
-import 'package:share_plus/share_plus.dart';
 
 import 'package:shonenx/core/network/http_client.dart';
 import 'package:shonenx/core/utils/extensions.dart';
@@ -96,7 +92,6 @@ class PlayerController extends Notifier<PlayerState> {
   UnifiedMedia? _media;
   UnifiedMedia? get media => _media;
   AnimeSource? _source;
-  late ScreenshotController _screenshot;
 
   // Thumbnail caching
   String? _cachedThumbnail;
@@ -187,11 +182,7 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
-  Future<void> initialize(
-    PlayerMode mode, {
-    required ScreenshotController screenshot,
-  }) async {
-    _screenshot = screenshot;
+  Future<void> initialize(PlayerMode mode) async {
 
     if (mode is PlayerModeOnline) {
       _source = ref.read(animeSourceProvider(mode.sourceInfo));
@@ -709,38 +700,20 @@ class PlayerController extends Notifier<PlayerState> {
     );
   }
 
+  /// Grabs the frame for the continue-watching row.
+  ///
+  /// Asks the engine rather than screenshotting the Flutter tree: on Android
+  /// the video is a platform texture, so a RepaintBoundary capture of it comes
+  /// back black.
   Future<String?> _captureThumbnail() async {
     try {
-      final image = await _screenshot.capture(pixelRatio: 0.5);
+      final image = await ref.read(videoEngineProvider).grabCurrentFrame();
       if (image != null) {
         _cachedThumbnail = base64Encode(image);
         _lastThumbnailTime = DateTime.now();
       }
     } catch (_) {}
     return _cachedThumbnail;
-  }
-
-  Future<({bool success, String message})> takeAndShareScreenshot() async {
-    try {
-      ref.read(videoEngineProvider).pause();
-      final image = await _screenshot.capture(pixelRatio: 1.5);
-      if (image == null) {
-        return (success: false, message: 'Failed to capture screenshot.');
-      }
-
-      final tempDir = await getTemporaryDirectory();
-      final file = File(
-        '${tempDir.path}/screenshot_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
-      await file.writeAsBytes(image);
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: 'Screenshot from ${_media?.title.availableTitle ?? "ShonenX"}',
-      );
-      return (success: true, message: 'Screenshot captured');
-    } catch (e) {
-      return (success: false, message: 'Screenshot error: $e');
-    }
   }
 
   bool get _shouldCaptureThumbnail {

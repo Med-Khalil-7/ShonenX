@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shonenx/core/network/http_client.dart';
@@ -186,4 +187,15 @@ class VideoPlayerEngine implements VideoEngine {
 
   @override
   Duration get currentDuration => _controller?.value.duration ?? Duration.zero;
+
+  // ExoPlayer gives no way to read a decoded frame back, at any position. The
+  // scrub preview falls back to a bare time readout on this engine.
+  @override
+  bool get supportsFramePreview => false;
+
+  @override
+  Future<Uint8List?> grabFrameAt(Duration position) async => null;
+
+  @override
+  Future<Uint8List?> grabCurrentFrame() async => null;
 }

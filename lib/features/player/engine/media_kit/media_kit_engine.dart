@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:shonenx/features/player/domain/media_kit_prefs.dart';
 import 'package:shonenx/features/player/domain/subtitle_prefs.dart';
+import 'package:shonenx/features/player/engine/media_kit/frame_preview_player.dart';
 import 'package:shonenx/features/player/engine/video_engine.dart';
 import 'package:shonenx/features/player/presentation/widgets/media_kit/media_kit_settings.dart';
 import 'package:shonenx/shared/models/video_stream.dart' as stream;
@@ -24,6 +26,12 @@ class MediaKitEngine implements VideoEngine {
   bool _disposed = false;
 
   StreamSubscription<Duration>? _positionSubscription;
+
+  /// The stream currently open, kept so the preview player can be pointed at
+  /// the same URL. The engine did not previously retain this.
+  stream.VideoStream? _current;
+
+  FramePreviewPlayer? _preview;
 
   Future<void> updatePrefs(MediaKitPrefs newPrefs) async {
     if (_disposed) return;
@@ -174,6 +182,9 @@ class MediaKitEngine implements VideoEngine {
     stream.SubtitleTrack? subtitle,
     Duration? startAt,
   }) async {
+    _current = stream;
+    // Frames cached from the previous stream are of the wrong video.
+    unawaited(_disposePreview());
     final media = Media(stream.url, httpHeaders: stream.headers);
 
     await _player.open(media, play: true);
@@ -237,6 +248,8 @@ class MediaKitEngine implements VideoEngine {
 
   @override
   Future<void> changeQuality(stream.VideoStream newStream) async {
+    _current = newStream;
+    unawaited(_disposePreview());
     final currentPos = _player.state.position;
 
     await _player.open(Media(newStream.url, httpHeaders: newStream.headers));
@@ -244,6 +257,42 @@ class MediaKitEngine implements VideoEngine {
       await _player.seek(currentPos);
       await _player.play();
     });
+  }
+
+  @override
+  bool get supportsFramePreview => true;
+
+  @override
+  Future<Uint8List?> grabFrameAt(Duration position) async {
+    if (_disposed) return null;
+    final current = _current;
+    if (current == null) return null;
+
+    final preview = _preview ??= FramePreviewPlayer(
+      url: current.url,
+      headers: current.headers,
+    );
+    return preview.frameAt(position);
+  }
+
+  @override
+  Future<Uint8List?> grabCurrentFrame() async {
+    if (_disposed) return null;
+    try {
+      return await _player.safeScreenshot(format: 'image/jpeg');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Tears the hidden decoder down. Called when scrubbing stops, when the
+  /// stream changes, and on dispose -- it must never outlive the scrub.
+  Future<void> releaseFramePreview() => _disposePreview();
+
+  Future<void> _disposePreview() async {
+    final preview = _preview;
+    _preview = null;
+    await preview?.dispose();
   }
 
   @override
@@ -309,6 +358,7 @@ class MediaKitEngine implements VideoEngine {
     for (final sub in _subscriptions) {
       await sub.cancel();
     }
+    await _disposePreview();
     await _player.dispose();
   }
 

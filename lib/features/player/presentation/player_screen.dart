@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:screenshot/screenshot.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_list_panel.dart';
@@ -33,10 +32,6 @@ class PlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
-  /// Retained for `captureExitThumbnail`, which is what puts artwork on the
-  /// continue-watching row. The manual screenshot button is gone; this is not.
-  final ScreenshotController _screenshotController = ScreenshotController();
-
   /// Long enough to cross the overlay with a D-pad. Three seconds was tuned
   /// for a mouse and expires mid-traversal on a remote.
   static const _autoHide = Duration(seconds: 5);
@@ -84,7 +79,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref
           .read(playerControllerProvider.notifier)
-          .initialize(widget.mode, screenshot: _screenshotController);
+          .initialize(widget.mode);
       _wake();
     });
   }
@@ -266,10 +261,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               Center(
                 child: Offstage(
                   offstage: playerState.isLoading,
-                  child: Screenshot(
-                    controller: _screenshotController,
-                    child: engine.buildVideoView(),
-                  ),
+                  child: engine.buildVideoView(),
                 ),
               ),
               if (playerState.activeSubtitle != null)
