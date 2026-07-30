@@ -21,6 +21,18 @@ class TvMetrics {
   static double horizontalOf(ResponsiveData r) => r.width * overscanFraction;
 
   static double verticalOf(ResponsiveData r) => r.height * overscanFraction;
+
+  /// Same insets from a raw [Size], for widgets that sit outside the
+  /// `ResponsiveHandler` (the player runs on its own route) or that only need
+  /// one edge and would rather not pull in the whole responsive model.
+  static EdgeInsets ofSize(Size size) => EdgeInsets.symmetric(
+    horizontal: size.width * overscanFraction,
+    vertical: size.height * overscanFraction,
+  );
+
+  static double horizontalOfSize(Size size) => size.width * overscanFraction;
+
+  static double verticalOfSize(Size size) => size.height * overscanFraction;
 }
 
 /// Focus treatment shared by every focusable surface, so cards, rail items,

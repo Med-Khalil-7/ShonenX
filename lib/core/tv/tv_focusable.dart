@@ -13,7 +13,8 @@ import 'package:shonenx/core/utils/focus_hover_detector.dart';
 /// `CardConfig.isActive`. This is for everything else: rail items, list tiles,
 /// chips, player controls, onboarding buttons.
 class TvFocusable extends StatelessWidget {
-  final Widget child;
+  /// Static content. Omit when supplying a [builder].
+  final Widget? child;
 
   /// Built instead of [child] when focus state should change the content
   /// itself rather than just the frame.
@@ -36,13 +37,26 @@ class TvFocusable extends StatelessWidget {
   /// for anything already carrying its own strong colour.
   final bool filledWhenFocused;
 
+  /// Colour of the focus ring. Defaults to white: the accent red reads as
+  /// *selected* elsewhere in the UI, so using it for focus too would make the
+  /// two states indistinguishable. Pass [Colors.transparent] when the child
+  /// signals focus some other way (the player tints its icons instead).
+  final Color? ringColor;
+
+  /// Fill colour when [filledWhenFocused]. Defaults to the scheme primary.
+  final Color? focusFillColor;
+
   final bool scaleOnFocus;
+
+  /// Scale applied on focus. Defaults to [TvFocus.scale]; drop to 1.0 inside
+  /// tight grids, where a scaled cell clips against its neighbours.
+  final double? focusScale;
 
   final EdgeInsetsGeometry? padding;
 
   const TvFocusable({
     super.key,
-    required this.child,
+    this.child,
     this.builder,
     this.onTap,
     this.onLongPress,
@@ -54,9 +68,15 @@ class TvFocusable extends StatelessWidget {
     this.alignment = 0.5,
     this.borderRadius,
     this.filledWhenFocused = false,
+    this.ringColor,
+    this.focusFillColor,
     this.scaleOnFocus = true,
+    this.focusScale,
     this.padding,
-  });
+  }) : assert(
+         child != null || builder != null,
+         'TvFocusable needs either a child or a builder',
+       );
 
   @override
   Widget build(BuildContext context) {
@@ -73,38 +93,62 @@ class TvFocusable extends StatelessWidget {
       alignment: alignment,
       onTap: onTap,
       onLongPress: onLongPress,
+      // Without these the widget is unreachable by remote: GestureDetector
+      // only fires on pointer taps, and DPAD_CENTER arrives as an
+      // ActivateIntent that needs an Action to catch it.
+      actions: onTap == null
+          ? null
+          : <Type, Action<Intent>>{
+              ActivateIntent: CallbackAction<ActivateIntent>(
+                onInvoke: (_) {
+                  onTap!();
+                  return null;
+                },
+              ),
+              ButtonActivateIntent: CallbackAction<ButtonActivateIntent>(
+                onInvoke: (_) {
+                  onTap!();
+                  return null;
+                },
+              ),
+            },
       builder: (context, isFocused, isHovered) {
         final active = isFocused || isHovered;
+        final ring = ringColor ?? cs.onSurface;
+        final fill = focusFillColor ?? cs.primary;
 
-        Widget content = builder?.call(context, active) ?? child;
+        Widget content = builder?.call(context, active) ?? child!;
         if (padding != null) {
           content = Padding(padding: padding!, child: content);
         }
 
+        final onFill = ThemeData.estimateBrightnessForColor(fill) ==
+                Brightness.dark
+            ? Colors.white
+            : Colors.black;
+
         return AnimatedScale(
-          scale: active && scaleOnFocus ? TvFocus.scale : 1.0,
+          scale: active && scaleOnFocus ? (focusScale ?? TvFocus.scale) : 1.0,
           duration: TvFocus.animation,
           curve: TvFocus.curve,
           child: AnimatedContainer(
             duration: TvFocus.animation,
             curve: TvFocus.curve,
             decoration: BoxDecoration(
-              color: active && filledWhenFocused
-                  ? cs.primary
-                  : Colors.transparent,
+              color: active && filledWhenFocused ? fill : Colors.transparent,
               borderRadius: radius,
               border: Border.all(
-                color: active ? cs.primary : Colors.transparent,
+                color: active ? ring : Colors.transparent,
                 width: TvFocus.ringWidth,
               ),
             ),
             child: DefaultTextStyle.merge(
               style: TextStyle(
-                color: active && filledWhenFocused ? cs.onPrimary : null,
+                color: active && filledWhenFocused ? onFill : null,
               ),
               child: IconTheme.merge(
                 data: IconThemeData(
-                  color: active && filledWhenFocused ? cs.onPrimary : null,
+                  color: active && filledWhenFocused ? onFill : null,
                 ),
                 child: content,
               ),
