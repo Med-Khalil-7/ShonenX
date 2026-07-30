@@ -94,7 +94,7 @@ class HomeSection {
       parsedMediaType ??= MediaType.ANIME;
     } else if (typeString == 'continueReading') {
       parsedType = HomeSectionType.continueMedia;
-      parsedMediaType ??= MediaType.MANGA;
+      parsedMediaType ??= MediaType.ANIME;
     } else if (typeString == 'cloudLibraryStatus' ||
         typeString == 'localLibraryStatus') {
       parsedType = HomeSectionType.libraryStatus;

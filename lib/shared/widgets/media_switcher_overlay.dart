@@ -12,7 +12,7 @@ class MediaSwitcherOverlay extends StatelessWidget {
     required this.controller,
     this.onSearchTap,
     this.isSearchActive = false,
-    this.supportedTypes = const [MediaType.ANIME, MediaType.MANGA],
+    this.supportedTypes = const [MediaType.ANIME],
   });
 
   @override
@@ -62,14 +62,6 @@ class MediaSwitcherOverlay extends StatelessWidget {
                             case MediaType.ANIME:
                               label = 'Anime';
                               icon = Icons.movie_outlined;
-                              break;
-                            case MediaType.MANGA:
-                              label = 'Manga';
-                              icon = Icons.menu_book_outlined;
-                              break;
-                            case MediaType.NOVEL:
-                              label = 'Novel';
-                              icon = Icons.menu_book_rounded;
                               break;
                             case MediaType.TV:
                               label = 'TV';

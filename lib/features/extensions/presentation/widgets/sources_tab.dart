@@ -664,12 +664,8 @@ class _SourcesTabState extends ConsumerState<SourcesTab> {
           final animeSources = widget.type == MediaType.ANIME
               ? sources
               : <SourceInfo>[];
-          final mangaSources = widget.type == MediaType.MANGA
-              ? sources
-              : <SourceInfo>[];
-          final novelSources = widget.type == MediaType.NOVEL
-              ? sources
-              : <SourceInfo>[];
+          const mangaSources = <SourceInfo>[];
+          const novelSources = <SourceInfo>[];
           final enabledManagers = ref.watch(enabledExtensionManagersProvider);
 
           final unified = ExtensionsService.getFilteredSources(
@@ -868,11 +864,7 @@ class _SourcesTabState extends ConsumerState<SourcesTab> {
       );
     }
 
-    final prefKey = widget.type == MediaType.ANIME
-        ? 'source_order_ANIME'
-        : (widget.type == MediaType.MANGA
-              ? 'source_order_MANGA'
-              : 'source_order_NOVEL');
+    const prefKey = 'source_order_ANIME';
     final prefs = ref.watch(sharedPreferencesProvider);
     final order = prefs.getStringList(prefKey) ?? [];
 

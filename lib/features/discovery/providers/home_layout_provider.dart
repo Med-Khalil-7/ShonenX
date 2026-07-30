@@ -46,23 +46,10 @@ class UserHomeLayoutNotifier extends Notifier<List<HomeSection>> {
           trackerCategory: TrackerCategory.trending,
         ),
         HomeSection(
-          id: '2',
-          title: 'Trending Manga',
-          type: HomeSectionType.discovery,
-          targetMediaType: MediaType.MANGA,
-          trackerCategory: TrackerCategory.trending,
-        ),
-        HomeSection(
           id: '3',
           title: 'Continue Watching',
           type: HomeSectionType.continueMedia,
           targetMediaType: MediaType.ANIME,
-        ),
-        HomeSection(
-          id: '4',
-          title: 'Continue Reading',
-          type: HomeSectionType.continueMedia,
-          targetMediaType: MediaType.MANGA,
         ),
       ];
     } else {
@@ -84,9 +71,7 @@ class UserHomeLayoutNotifier extends Notifier<List<HomeSection>> {
       for (final media in tracker.supportedMediaTypes) {
         sections.add(HomeSection(
           id: (idCounter++).toString(),
-          title: (media == MediaType.MANGA || media == MediaType.NOVEL)
-              ? 'Continue Reading'
-              : 'Continue Watching',
+          title: 'Continue Watching',
           type: HomeSectionType.continueMedia,
           targetMediaType: media,
         ));
@@ -132,23 +117,6 @@ class UserHomeLayoutNotifier extends Notifier<List<HomeSection>> {
 
   void setSections(List<HomeSection> sections) {
     state = sections;
-    _saveDb();
-  }
-
-  void setupHomeLayoutForContentPreference({
-    required bool includeAnime,
-    required bool includeManga,
-  }) {
-    // Generate default layout based on current tracker, then filter by user preferences
-    _storage.remove(_dataKey);
-    final defaults = build();
-    
-    state = defaults.where((s) {
-      if (!includeAnime && s.targetMediaType == MediaType.ANIME) return false;
-      if (!includeManga && s.targetMediaType == MediaType.MANGA) return false;
-      return true;
-    }).toList();
-    
     _saveDb();
   }
 

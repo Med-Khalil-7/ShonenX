@@ -1166,10 +1166,6 @@ class _ExtensionTesterScreenState extends ConsumerState<ExtensionTesterScreen> {
                           value: MediaType.ANIME,
                           label: Text('Anime Extensions'),
                         ),
-                        ButtonSegment(
-                          value: MediaType.MANGA,
-                          label: Text('Manga Extensions'),
-                        ),
                       ],
                       selected: {_selectedMediaType},
                       onSelectionChanged: _isTesting

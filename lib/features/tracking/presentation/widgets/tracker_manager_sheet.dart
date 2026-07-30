@@ -454,7 +454,7 @@ class _LinkedTrackerRow extends ConsumerWidget {
           subtitle: Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(
-              '${media.type == MediaType.MANGA ? "Ch" : "Ep"} ${listItem.progress.toInt()} • ${listItem.status.getLabelForMedia(media.type)}',
+              'Ep ${listItem.progress.toInt()} • ${listItem.status.getLabelForMedia(media.type)}',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: cs.onSurfaceVariant.withValues(alpha: 0.78),
               ),

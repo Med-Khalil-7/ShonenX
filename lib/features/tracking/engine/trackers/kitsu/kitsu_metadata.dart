@@ -552,9 +552,8 @@ mixin KitsuMetadata on BaseTracker implements RemoteTracker {
             final destNode = includedMap['$destTypeStr:$destId'];
             if (destNode == null) continue;
 
-            final destMediaType = destTypeStr == 'manga'
-                ? MediaType.MANGA
-                : MediaType.ANIME;
+            if (destTypeStr == 'manga') continue;
+            const destMediaType = MediaType.ANIME;
             relationsList.add(
               _mapToUnified(
                 destNode,

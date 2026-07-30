@@ -368,11 +368,7 @@ mixin MalMetadata on BaseTracker implements RemoteTracker {
             final relTypeFormatted =
                 e['relation_type_formatted']?.toString() ??
                 e['relation_type']?.toString();
-            final nodeType =
-                (e['relation_type'] == 'related_manga' ||
-                    relatedManga?.contains(e) == true)
-                ? MediaType.MANGA
-                : MediaType.ANIME;
+            const nodeType = MediaType.ANIME;
             return _mapToUnified(
               node,
               nodeType,

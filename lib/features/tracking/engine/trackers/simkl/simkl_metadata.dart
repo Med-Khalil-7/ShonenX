@@ -75,9 +75,6 @@ mixin SimklMetadata on BaseTracker implements RemoteTracker {
         return 'movies';
       case MediaType.TV:
         return 'tv';
-      case MediaType.MANGA:
-      case MediaType.NOVEL:
-        throw SimklException('Unsupported media type for Simkl: $type');
     }
   }
 

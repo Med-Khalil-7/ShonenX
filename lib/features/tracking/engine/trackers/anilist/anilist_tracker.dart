@@ -436,8 +436,6 @@ class AnilistTracker extends BaseTracker
     switch (type) {
       case MediaType.ANIME:
         return 'ANIME';
-      case MediaType.MANGA:
-        return 'MANGA';
       default:
         throw AnilistException('Unsupported media type: $type');
     }

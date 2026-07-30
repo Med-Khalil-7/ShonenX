@@ -783,8 +783,7 @@ class _AiringBanner extends ConsumerWidget {
     final episodeNum = nextEpisode is int ? nextEpisode : (1);
     final theme = Theme.of(context);
 
-    final isManga = media.type == MediaType.MANGA;
-    final itemText = isManga ? 'Chapter' : 'Episode';
+    const itemText = 'Episode';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),

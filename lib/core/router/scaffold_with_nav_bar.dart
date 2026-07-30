@@ -92,7 +92,6 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
         final id = pathSegments[1];
         MediaType? mediaType;
         if (mediaTypeStr == 'anime') mediaType = MediaType.ANIME;
-        if (mediaTypeStr == 'manga') mediaType = MediaType.MANGA;
 
         if (mediaType != null) {
           String providerId = 'anilist';

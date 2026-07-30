@@ -383,9 +383,7 @@ class _NoExtensionsPlaceholder extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              mediaType == MediaType.MANGA
-                  ? 'Install an extension to start reading chapters.'
-                  : 'Install an extension to start streaming episodes.',
+              'Install an extension to start streaming episodes.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: cs.onSurfaceVariant.withValues(alpha: 0.75),

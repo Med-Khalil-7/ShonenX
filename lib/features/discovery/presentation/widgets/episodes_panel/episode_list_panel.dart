@@ -209,9 +209,7 @@ class _EpisodeListPanelState extends ConsumerState<EpisodeListPanel> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    widget.media.type == MediaType.MANGA
-                        ? 'No chapters found for this source.'
-                        : 'No episodes found for this source.',
+                    'No episodes found for this source.',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -468,7 +466,7 @@ class _EpisodeListPanelState extends ConsumerState<EpisodeListPanel> {
                               const SizedBox(width: 8),
                             ],
                             Text(
-                              '${finalEpisodes.length} ${widget.media.type == MediaType.MANGA ? 'ch' : 'ep'}',
+                              '${finalEpisodes.length} ep',
                               style: Theme.of(context).textTheme.labelLarge
                                   ?.copyWith(color: cs.onSurfaceVariant),
                             ),
