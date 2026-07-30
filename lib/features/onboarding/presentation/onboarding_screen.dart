@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:collection/collection.dart';
@@ -31,9 +32,36 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final PageController _pageController = PageController();
+  final FocusNode _primaryButtonFocus = FocusNode(debugLabel: 'onboardingNext');
   int _currentIndex = 0;
 
   static const int _totalPages = 5;
+
+  @override
+  void dispose() {
+    _primaryButtonFocus.dispose();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  /// Every page must leave focus somewhere reachable, otherwise the first
+  /// remote press goes nowhere.
+  void _focusPrimaryButton() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _primaryButtonFocus.requestFocus();
+    });
+  }
+
+  void _previousPage() {
+    if (!_pageController.hasClients) return;
+    final target = (_pageController.page?.round() ?? _currentIndex) - 1;
+    if (target < 0) return;
+    _pageController.animateToPage(
+      target,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.fastOutSlowIn,
+    );
+  }
 
   void _nextPage() {
     // FIXED: Use actual PageController position instead of lagging _currentIndex state to prevent animation jitter on rapid taps
@@ -67,7 +95,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final cs = theme.colorScheme;
 
     return Scaffold(
-      body: Stack(
+      body: CallbackShortcuts(
+        bindings: <ShortcutActivator, VoidCallback>{
+          // Media keys and Back are unambiguous; plain arrows are left to
+          // focus traversal so the option rows inside a page still work.
+          const SingleActivator(LogicalKeyboardKey.mediaTrackNext): _nextPage,
+          const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious):
+              _previousPage,
+        },
+        child: Stack(
         children: [
           Positioned.fill(
             child: AnimatedContainer(
@@ -83,8 +119,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     controller: _pageController,
                     onPageChanged: (index) {
                       setState(() => _currentIndex = index);
+                      _focusPrimaryButton();
                     },
-                    physics: const BouncingScrollPhysics(),
+                    // There is no touch on a TV; paging is driven by the
+                    // Back/Next buttons and the shortcuts below.
+                    physics: const NeverScrollableScrollPhysics(),
                     children: [
                       _buildWelcomePage(theme, cs),
                       _buildThemePage(theme, cs),
@@ -99,62 +138,59 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
 
   Widget _buildBottomControls(ThemeData theme, ColorScheme cs) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: List.generate(_totalPages, (index) {
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    margin: const EdgeInsets.only(right: 8),
-                    height: 8,
-                    width: _currentIndex == index ? 32 : 8,
-                    decoration: BoxDecoration(
-                      color: _currentIndex == index
-                          ? cs.primary
-                          : cs.onSurface.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  );
-                }),
-              ),
-              FilledButton(
-                onPressed: _nextPage,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 16,
-                  ),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+    final isLast = _currentIndex == _totalPages - 1;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 48.0, vertical: 20.0),
+      child: Row(
+        children: [
+          Row(
+            children: List.generate(_totalPages, (index) {
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.only(right: 8),
+                height: 8,
+                width: _currentIndex == index ? 40 : 10,
+                decoration: BoxDecoration(
+                  color: _currentIndex == index
+                      ? cs.primary
+                      : cs.onSurface.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  child: Text(
-                    _currentIndex == _totalPages - 1 ? 'Get Started' : 'Next',
-                    key: ValueKey(_currentIndex == _totalPages - 1),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+              );
+            }),
           ),
-        ),
+          const Spacer(),
+          if (_currentIndex > 0) ...[
+            OutlinedButton(
+              onPressed: _previousPage,
+              child: const Text(
+                'Back',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(width: 16),
+          ],
+          FilledButton(
+            focusNode: _primaryButtonFocus,
+            autofocus: true,
+            onPressed: _nextPage,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: Text(
+                isLast ? 'Get Started' : 'Next',
+                key: ValueKey(isLast),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -838,22 +874,26 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     required ColorScheme cs,
     Widget? customWidget,
   }) {
+    // 600px was a phone column on a 1920px panel: it forced content to stack
+    // and overflow vertically, and with no touch a remote could not scroll it,
+    // so anything below the fold became unreachable. Wider, shorter, and the
+    // scroll view keeps a viewport-sized minimum so content stays centred
+    // rather than clipped.
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600),
+        constraints: const BoxConstraints(maxWidth: 1180),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 12.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(
-                height: 140,
+                height: 104,
                 alignment: Alignment.center,
-                child: customIcon ?? Icon(icon, size: 84, color: cs.primary),
+                child: customIcon ?? Icon(icon, size: 68, color: cs.primary),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 20),
               Text(
                 title,
                 style: theme.textTheme.headlineMedium?.copyWith(
@@ -862,13 +902,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Text(
                 description,
                 style: theme.textTheme.bodyLarge?.copyWith(
                   color: cs.onSurfaceVariant,
-                  height: 1.5,
-                  fontSize: 15,
+                  height: 1.4,
                 ),
                 textAlign: TextAlign.center,
               ),

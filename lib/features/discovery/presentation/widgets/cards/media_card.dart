@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shonenx/core/theme/app_theme.dart';
 import 'package:shonenx/core/utils/focus_hover_detector.dart';
 import 'package:shonenx/shared/providers/theme_prefs_provider.dart';
 import 'package:shonenx/shared/providers/ui_prefs_provider.dart';
@@ -86,11 +87,20 @@ class MediaCard extends ConsumerWidget {
 
         final currentTextScale = MediaQuery.of(context).textScaler.scale(1.0);
         final scaleFactor = layout.width / baseLayout.width;
+        final theme = Theme.of(context);
         final normalizedChild = MediaQuery(
           data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(currentTextScale / scaleFactor),
           ),
-          child: child,
+          // Cards are laid out against fixed pixel dimensions and then scaled
+          // by the FittedBox below, so the global 10-foot type scale would
+          // overflow them rather than enlarge them.
+          child: Theme(
+            data: theme.copyWith(
+              textTheme: AppTheme.cardTextTheme(theme.textTheme),
+            ),
+            child: child,
+          ),
         );
 
         return SizedBox(

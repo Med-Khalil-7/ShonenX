@@ -230,6 +230,35 @@ class AppTheme {
 
   static const double _tvTextScale = 1.2;
 
+  /// Undoes [_tvSizing]'s type scale for a subtree.
+  ///
+  /// Media cards lay themselves out against fixed pixel dimensions and then
+  /// scale the whole card with a FittedBox, so their internal typography is
+  /// already sized for the design. Letting the global 10-foot scale through
+  /// makes the title overflow the card by a few pixels instead of making it
+  /// bigger.
+  static TextTheme cardTextTheme(TextTheme scaled) => TextTheme(
+    displayLarge: _descale(scaled.displayLarge),
+    displayMedium: _descale(scaled.displayMedium),
+    displaySmall: _descale(scaled.displaySmall),
+    headlineLarge: _descale(scaled.headlineLarge),
+    headlineMedium: _descale(scaled.headlineMedium),
+    headlineSmall: _descale(scaled.headlineSmall),
+    titleLarge: _descale(scaled.titleLarge),
+    titleMedium: _descale(scaled.titleMedium),
+    titleSmall: _descale(scaled.titleSmall),
+    bodyLarge: _descale(scaled.bodyLarge),
+    bodyMedium: _descale(scaled.bodyMedium),
+    bodySmall: _descale(scaled.bodySmall),
+    labelLarge: _descale(scaled.labelLarge),
+    labelMedium: _descale(scaled.labelMedium),
+    labelSmall: _descale(scaled.labelSmall),
+  );
+
+  static TextStyle? _descale(TextStyle? s) => s?.fontSize == null
+      ? s
+      : s!.copyWith(fontSize: s.fontSize! / _tvTextScale);
+
   /// Material's stock focus treatment is a ~20%-alpha wash, which measures as
   /// a real repaint but is invisible from a sofa. Every Material button gets a
   /// hard outline instead, so focus is unmistakable without wrapping each call
