@@ -29,9 +29,10 @@
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
     <application
-        android:label="ShonenX"
+        android:label="ShonenX TV"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:banner="@drawable/tv_banner">
         
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"

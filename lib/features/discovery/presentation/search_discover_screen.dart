@@ -387,6 +387,8 @@ class _SearchDiscoverScreenState extends ConsumerState<SearchDiscoverScreen>
                     child: UnifiedSearchBar(
                       controller: _searchController,
                       focusNode: _searchFocusNode,
+                      // TODO(tv): gate on !isTv once TvPlatform lands (Phase 2)
+                      autofocus: true,
                       onBackPressed: _cancelSearch,
                       onClearPressed: () => _searchController.clear(),
                       onSubmitted: _submitSearch,

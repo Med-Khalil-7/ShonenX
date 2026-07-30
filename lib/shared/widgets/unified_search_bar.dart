@@ -30,7 +30,10 @@ class UnifiedSearchBar extends StatefulWidget {
     this.onChanged,
     this.hasFilters = false,
     this.hintText = 'Search anime or manga...',
-    this.autofocus = true,
+    // Defaults to false: an autofocusing TextField summons the leanback IME on
+    // Android TV, which takes over the screen and returns focus unpredictably.
+    // Call sites that want it opt in explicitly.
+    this.autofocus = false,
     this.leading,
     this.focusNode,
     this.height = 48,

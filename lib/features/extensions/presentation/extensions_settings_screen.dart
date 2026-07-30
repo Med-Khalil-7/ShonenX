@@ -545,6 +545,8 @@ class _ExtensionsSettingsScreenState
           height: 52,
           controller: _searchController,
           hintText: 'Search extensions...',
+          // TODO(tv): gate on !isTv once TvPlatform lands (Phase 2)
+          autofocus: true,
           onExpand: () => setState(() => _isSearching = true),
           onBackPressed: () => setState(() {
             _isSearching = false;

@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shonenx/core/remote_config/ui/remote_config_listener.dart';
 import 'package:shonenx/core/theme/app_theme.dart';
 import 'package:shonenx/core/utils/app_logger.dart';
+import 'package:shonenx/core/utils/responsive.dart';
 import 'package:shonenx/shared/widgets/global_background.dart';
 
 final _log = AppLogger.scope('Main');
@@ -133,8 +134,15 @@ class ShonenXApp extends ConsumerWidget {
               child: child,
             );
 
-            return RemoteConfigListener(
-              child: GlobalBackground(child: textScaledChild),
+            // ResponsiveHandler is hoisted to the app root so `context.responsive`
+            // resolves everywhere. It previously existed only inside
+            // ScaffoldWithNavBar, so any lookup from /details, /player or the
+            // /settings subtree threw. The nav shell still nests its own handler
+            // with custom breakpoints; nested handlers shadow correctly.
+            return ResponsiveHandler(
+              builder: (context, r) => RemoteConfigListener(
+                child: GlobalBackground(child: textScaledChild),
+              ),
             );
           },
         );

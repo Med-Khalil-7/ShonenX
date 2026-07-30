@@ -249,21 +249,21 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
 
   @override
   Widget build(BuildContext context) {
-    return KeyboardListener(
-      focusNode: FocusNode(),
-      autofocus: true,
-      onKeyEvent: (event) {
-        if (event is! KeyDownEvent) return;
-        switch (event.logicalKey) {
-          case LogicalKeyboardKey.digit1:
-            widget.navigationShell.goBranch(0);
-          case LogicalKeyboardKey.digit2:
-            widget.navigationShell.goBranch(1);
-          case LogicalKeyboardKey.digit3:
-            widget.navigationShell.goBranch(2);
-          case LogicalKeyboardKey.digit4:
-            context.push('/downloads');
-        }
+    // NOTE: this used to be a KeyboardListener with an inline `FocusNode()`
+    // built in `build()` (never disposed) and `autofocus: true`. That leaked a
+    // node on every rebuild and, worse, made the shell steal focus from screen
+    // content -- which breaks D-pad navigation. CallbackShortcuts needs no node
+    // and no autofocus: it handles keys bubbling up from the focused descendant.
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.digit1): () =>
+            widget.navigationShell.goBranch(0),
+        const SingleActivator(LogicalKeyboardKey.digit2): () =>
+            widget.navigationShell.goBranch(1),
+        const SingleActivator(LogicalKeyboardKey.digit3): () =>
+            widget.navigationShell.goBranch(2),
+        const SingleActivator(LogicalKeyboardKey.digit4): () =>
+            context.push('/downloads'),
       },
       child: ResponsiveHandler(
         breakpoints: _navBreakpoints,
