@@ -7,6 +7,7 @@ import 'package:shonenx/features/onboarding/providers/onboarding_provider.dart';
 import 'package:shonenx/features/splash/presentation/splash_quotes.dart';
 import 'package:shonenx/shared/widgets/app_scaffold.dart';
 import 'package:shonenx/shared/widgets/svg_icon.dart';
+import 'package:shonenx/source_engine/utils/source_invalidation.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -80,54 +81,48 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _initializeApp() async {
-    final stopwatch = Stopwatch()..start();
-    final requiredReadingTime = _calculateReadingTime(_currentQuote.quote);
+    // The extension bridge is warmed in the background rather than gating
+    // startup on it. Nothing the first screen shows needs it: tracker-mode
+    // feeds come from AniList metadata, and everything that does need sources
+    // already guards on AppInit.isBridgeInitialized. Previously this awaited
+    // the whole bridge -- which itself polls for up to five seconds waiting
+    // for extension managers to register -- and then additionally slept until
+    // a quote had been on screen for its "reading time" of 2.8 to 7 seconds.
+    unawaited(_warmBridgeInBackground());
 
+    // Just enough for the logo animation to land.
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (!mounted) return;
+
+    setState(() => _status = 'Ready');
+    _goToFirstScreen();
+  }
+
+  Future<void> _warmBridgeInBackground() async {
     try {
       await AppInit.setupBridge(ref);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to initialize bridge: $e'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      stopwatch.stop();
-      final elapsedMs = stopwatch.elapsedMilliseconds;
-      final remainingMs = requiredReadingTime - elapsedMs;
+      // Failing to load extensions must not break browsing; the extensions
+      // screen surfaces the real state.
+      debugPrint('Extension bridge init failed: $e');
+      return;
+    }
+    if (!mounted) return;
+    // Source lists were resolved while the bridge was still down, so refresh
+    // them now that extensions are available.
+    ref.invalidateAllSources();
+  }
 
-      if (remainingMs > 0) {
-        await Future.delayed(Duration(milliseconds: remainingMs));
-      }
+  void _goToFirstScreen() {
+    final onboardingComplete = ref.read(onboardingProvider);
+    final pendingLink = AppInit.pendingDeepLink;
 
-      if (mounted) {
-        setState(() {
-          _status = 'Ready';
-        });
+    context.go(onboardingComplete ? '/home' : '/onboarding');
 
-        final pendingLink = AppInit.pendingDeepLink;
-        if (pendingLink != null) {
-          AppInit.pendingDeepLink = null;
-          final onboardingComplete = ref.read(onboardingProvider);
-          if (onboardingComplete) {
-            context.go('/home');
-          } else {
-            context.go('/onboarding');
-          }
-          context.push('/settings');
-          context.push(pendingLink);
-        } else {
-          final onboardingComplete = ref.read(onboardingProvider);
-          if (onboardingComplete) {
-            context.go('/home');
-          } else {
-            context.go('/onboarding');
-          }
-        }
-      }
+    if (pendingLink != null) {
+      AppInit.pendingDeepLink = null;
+      context.push('/settings');
+      context.push(pendingLink);
     }
   }
 

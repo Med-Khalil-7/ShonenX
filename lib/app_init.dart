@@ -135,17 +135,23 @@ class AppInit {
 
       await AnymeXRuntimeBridge.checkAndInitialize();
 
+      // Give the managers a moment to register, but do not sit here for a
+      // full five seconds: this runs in the background now, and a caller that
+      // needs sources reads them through providers that are invalidated once
+      // the bridge reports ready.
       final extManager = Get.find<ExtensionManager>();
-
-      int retryCount = 0;
-      while (extManager.managers.isEmpty && retryCount < 100) {
-        await Future.delayed(const Duration(milliseconds: 50));
-        retryCount++;
+      const pollInterval = Duration(milliseconds: 50);
+      const maxWait = Duration(seconds: 2);
+      var waited = Duration.zero;
+      while (extManager.managers.isEmpty && waited < maxWait) {
+        await Future.delayed(pollInterval);
+        waited += pollInterval;
       }
 
-      // await extManager.onRuntimeBridgeInitialization();
-
-      log.s('Extension bridge ready');
+      log.s(
+        'Extension bridge ready '
+        '(managers=${extManager.managers.length}, waited=${waited.inMilliseconds}ms)',
+      );
     } catch (e, st) {
       log.e('BRIDGE INIT FAILED', e, st);
       rethrow;
