@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shonenx/core/tv/tv_metrics.dart';
-import 'package:shonenx/core/utils/responsive.dart';
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
 class HorizontalSection<T> extends StatelessWidget {
@@ -30,10 +29,10 @@ class HorizontalSection<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Overscan lives on the list's own padding rather than an outer Padding,
+    // The gutter lives on the list's own padding rather than an outer Padding,
     // so items scroll under the safe edge instead of having their focus ring
     // clipped at the first and last position.
-    final edge = TvMetrics.horizontalOf(context.responsive);
+    final edge = ShonenX.gutter(MediaQuery.sizeOf(context));
 
     // Each row is its own traversal group: left/right stay inside the row and
     // up/down move between rows, instead of the geometric policy wandering
@@ -47,20 +46,16 @@ class HorizontalSection<T> extends StatelessWidget {
               left: edge,
               right: edge,
               top: 8,
-              bottom: 8,
+              bottom: 12,
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.titleLarge),
-                if (onMoreTap != null) ...[
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.arrow_forward_ios),
-                    onPressed: onMoreTap,
-                  ),
-                ],
-              ],
+            // No "see all" affordance: it is an extra focus stop between the
+            // heading and the row it labels, and everything it leads to is
+            // reachable by scrolling the row itself.
+            child: Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
           SizedBox(

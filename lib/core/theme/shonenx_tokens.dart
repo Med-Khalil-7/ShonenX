@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/widgets.dart';
+import 'package:shonenx/core/tv/tv_metrics.dart';
 
 /// Design tokens for the 10-foot UI.
 ///
@@ -51,6 +54,14 @@ abstract final class ShonenX {
 
   /// Gutter between the rail and the content column.
   static const contentPadH = 56.0;
+
+  /// The gutter every screen aligns its left edge to.
+  ///
+  /// Never smaller than the overscan inset: at 1080p the design gutter is the
+  /// larger of the two, but on a 4K panel overscan wins and content would
+  /// otherwise start inside the strip the TV may never draw.
+  static double gutter(Size size) =>
+      math.max(contentPadH, TvMetrics.horizontalOfSize(size));
 
   static const posterRadius = 8.0;
 

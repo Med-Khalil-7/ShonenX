@@ -148,7 +148,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             navigatorKey: _homeNavigatorKey,
             routes: [
-              GoRoute(path: '/home', builder: (context, state) => HomeScreen()),
+              GoRoute(
+                path: '/home',
+                builder: (context, state) => const HomeScreen(),
+              ),
             ],
           ),
           StatefulShellBranch(
