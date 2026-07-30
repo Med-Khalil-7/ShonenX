@@ -11,7 +11,6 @@ class PlayerKeyboardListener extends ConsumerStatefulWidget {
   final VideoEngine engine;
   final PlayerController controller;
   final VoidCallback onUserInteraction;
-  final VoidCallback onToggleFullScreen;
   final VoidCallback onToggleEpisodePanel;
   final VoidCallback onShowShortcutsGuide;
   final VoidCallback? onExit;
@@ -22,7 +21,6 @@ class PlayerKeyboardListener extends ConsumerStatefulWidget {
     required this.engine,
     required this.controller,
     required this.onUserInteraction,
-    required this.onToggleFullScreen,
     required this.onToggleEpisodePanel,
     required this.onShowShortcutsGuide,
     this.onExit,
@@ -76,14 +74,6 @@ class _PlayerKeyboardListenerState
     } else if (key == LogicalKeyboardKey.arrowDown) {
       _adjustVolume(-0.05);
       widget.onUserInteraction();
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.keyF ||
-        key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.numpadEnter) {
-      if (event is KeyDownEvent) {
-        widget.onToggleFullScreen();
-        widget.onUserInteraction();
-      }
       return KeyEventResult.handled;
     } else if (key == LogicalKeyboardKey.keyN ||
         key == LogicalKeyboardKey.pageDown) {

@@ -1,5 +1,4 @@
 import 'dart:developer';
-import 'dart:io';
 
 import 'package:shonenx/core/network/http_client.dart';
 import 'package:shonenx/core/utils/env.dart';
@@ -25,9 +24,7 @@ mixin SimklMetadata on BaseTracker implements RemoteTracker {
 
   static const String _baseUrl = 'https://api.simkl.com';
 
-  static String get defaultClientId => Platform.isWindows || Platform.isLinux
-      ? Env.SIMKL_CLIENT_ID_LIST.last
-      : Env.SIMKL_CLIENT_ID_LIST.first;
+  static String get defaultClientId => Env.SIMKL_CLIENT_ID_LIST.first;
 
   String get clientId => customCredentials?.clientId ?? defaultClientId;
 

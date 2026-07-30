@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:anymex_extension_runtime_bridge/Settings/KvStore.dart';
 import 'package:anymex_extension_runtime_bridge/anymex_extension_runtime_bridge.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:get/get.dart';
 import 'package:path/path.dart' as p;
@@ -10,7 +9,6 @@ import 'package:isar_community/isar.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shonenx/core/caching/cache_manager.dart';
-import 'package:shonenx/core/tv/tv_platform.dart';
 import 'package:shonenx/core/caching/domain/cache_entry.dart';
 import 'package:shonenx/core/network/http_adapter.dart';
 import 'package:shonenx/core/network/http_client.dart';
@@ -20,7 +18,6 @@ import 'package:shonenx/features/discovery/domain/media_source_preference.dart';
 import 'package:shonenx/features/history/domain/models/watch_history_entry.dart';
 import 'package:shonenx/features/library/domain/models/library_entry.dart';
 import 'package:shonenx/features/tracking/domain/isar_tracker_link.dart';
-import 'package:window_manager/window_manager.dart';
 
 class AppInit {
   static bool isBridgeInitialized = false;
@@ -31,20 +28,10 @@ class AppInit {
   late final CacheManager cacheManager;
   late final Isar isar;
 
-  Future<AppInit> init({List<String> args = const []}) async {
+  Future<AppInit> init() async {
     final log = _log.child('init');
 
     log.section('START');
-
-    // Must run before runApp: ResponsiveData reads TvPlatform.isTv
-    // synchronously from inside build().
-    await TvPlatform.resolve(args: args);
-    log.s('TV mode resolved: ${TvPlatform.isTv}');
-
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      await _initWindowManager();
-      log.s('Window manager initialized');
-    }
 
     await _initVideoEngines();
     log.s('Video engines initialized');
@@ -64,9 +51,7 @@ class AppInit {
     final log = _log.child('_cleanupOldDslProviders');
     try {
       final dir = await getApplicationDocumentsDirectory();
-      final dslDir = Platform.isAndroid || Platform.isIOS || Platform.isMacOS
-          ? Directory(p.join(dir.path, 'dsl_providers'))
-          : Directory(p.join(dir.path, 'ShonenX', 'dsl_providers'));
+      final dslDir = Directory(p.join(dir.path, 'dsl_providers'));
 
       if (await dslDir.exists()) {
         await dslDir.delete(recursive: true);
@@ -74,49 +59,6 @@ class AppInit {
       }
     } catch (e) {
       log.w('Failed to delete dsl_providers: $e');
-    }
-  }
-
-  Future<void> _initWindowManager() async {
-    final log = _log.child('_initWindowManager');
-
-    try {
-      await windowManager.ensureInitialized();
-
-      bool isTilingWm = false;
-
-      if (Platform.isLinux) {
-        final env = Platform.environment;
-        final desktop = env['XDG_CURRENT_DESKTOP']?.toLowerCase() ?? '';
-        final session = env['DESKTOP_SESSION']?.toLowerCase() ?? '';
-
-        isTilingWm =
-            desktop.contains('hyprland') ||
-            session.contains('hyprland') ||
-            env.containsKey('HYPRLAND_INSTANCE_SIGNATURE') ||
-            desktop.contains('niri') ||
-            session.contains('niri');
-      }
-
-      final windowOptions = WindowOptions(
-        center: true,
-
-        backgroundColor: Platform.isWindows
-            ? const Color(0xFF000000)
-            : Colors.transparent,
-
-        titleBarStyle: isTilingWm ? TitleBarStyle.hidden : null,
-
-        windowButtonVisibility: Platform.isLinux && !isTilingWm,
-      );
-
-      await windowManager.waitUntilReadyToShow(windowOptions, () async {
-        await windowManager.show();
-        await windowManager.focus();
-      });
-    } catch (e, st) {
-      log.e('WINDOWMANAGER INIT FAILED', e, st);
-      rethrow;
     }
   }
 
@@ -213,14 +155,7 @@ class AppInit {
   }
 
   static Future<Directory> getDatabaseDirectory(String dirName) async {
-    final dir = await getApplicationDocumentsDirectory();
-    if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
-      return dir;
-    } else {
-      String dbDir = p.join(dir.path, dirName, 'databases');
-      await Directory(dbDir).create(recursive: true);
-      return Directory(dbDir);
-    }
+    return getApplicationDocumentsDirectory();
   }
 
   static Future<void> _initVideoEngines() async {

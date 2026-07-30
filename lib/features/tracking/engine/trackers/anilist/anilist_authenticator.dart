@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:shonenx/core/network/auth/authenticator.dart';
@@ -14,28 +13,20 @@ class AnilistAuthenticator implements Authenticator {
   AnilistAuthenticator({this.customCredentials});
 
   static final HTTP _http = HTTP();
-  static final _isDesktop = Platform.isWindows || Platform.isLinux;
 
   String get _clientId =>
       customCredentials?.clientId ??
-      (_isDesktop
-          ? Env.ANILIST_CLIENT_ID_LIST.last
-          : Env.ANILIST_CLIENT_ID_LIST.first);
+      Env.ANILIST_CLIENT_ID_LIST.first;
 
   String get _clientSecret =>
       customCredentials?.clientSecret ??
-      (_isDesktop
-          ? Env.ANILIST_CLIENT_SECRET_LIST.last
-          : Env.ANILIST_CLIENT_SECRET_LIST.first);
+      Env.ANILIST_CLIENT_SECRET_LIST.first;
 
   @override
-  String get redirectUri => _isDesktop
-      ? 'http://localhost:43824/success?code=1337'
-      : 'shonenx://callback';
+  String get redirectUri => 'shonenx://callback';
 
   @override
-  String get callbackScheme =>
-      _isDesktop ? 'http://localhost:43824' : 'shonenx';
+  String get callbackScheme => 'shonenx';
 
   @override
   String get providerName => TrackerType.anilist.name;
@@ -54,7 +45,7 @@ class AnilistAuthenticator implements Authenticator {
     final result = await FlutterWebAuth2.authenticate(
       url: url.toString(),
       callbackUrlScheme: callbackScheme,
-      options: FlutterWebAuth2Options(useWebview: !_isDesktop),
+      options: const FlutterWebAuth2Options(useWebview: true),
     );
 
     final code = Uri.parse(result).queryParameters['code'];

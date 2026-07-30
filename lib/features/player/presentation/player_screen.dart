@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -8,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:window_manager/window_manager.dart';
 
 import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_list_panel.dart';
 import 'package:shonenx/features/player/domain/player_mode.dart';
@@ -42,7 +40,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   bool _lockControls = false;
   Timer? _controlsTimer;
 
-  bool _isFullScreen = false;
   bool _isEpisodePanelOpen = false;
   Offset? _lastHoverPosition;
 
@@ -78,7 +75,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       WakelockPlus.enable();
     } catch (_) {}
     _initSystemUI();
-    _initDesktopWindowState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref
@@ -100,14 +96,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-  }
-
-  void _initDesktopWindowState() {
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      windowManager.isFullScreen().then((isFull) {
-        if (mounted) setState(() => _isFullScreen = isFull);
-      });
-    }
   }
 
   @override
@@ -135,17 +123,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      windowManager.isFullScreen().then((isFull) async {
-        if (isFull) {
-          await windowManager.setFullScreen(false);
-          if (Platform.isWindows) {
-            await windowManager.setTitleBarStyle(TitleBarStyle.normal);
-          }
-        }
-      });
-    }
   }
 
   void _showControlsTemporarily() {
@@ -169,25 +146,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     if (_showControls) {
       _controlsTimer?.cancel();
       if (mounted) setState(() => _showControls = false);
-    }
-  }
-
-  Future<void> _toggleFullScreen() async {
-    if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) return;
-
-    final isFull = await windowManager.isFullScreen();
-    if (isFull) {
-      await windowManager.setFullScreen(false);
-      if (Platform.isWindows) {
-        await windowManager.setTitleBarStyle(TitleBarStyle.normal);
-      }
-      if (mounted) setState(() => _isFullScreen = false);
-    } else {
-      if (Platform.isWindows) {
-        await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-      }
-      await windowManager.setFullScreen(true);
-      if (mounted) setState(() => _isFullScreen = true);
     }
   }
 
@@ -330,8 +288,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         controller: controller,
         theme: theme,
         mode: widget.mode,
-        isFullScreen: _isFullScreen,
-        onToggleFullScreen: _toggleFullScreen,
         onShowEpisodePanel: _toggleEpisodePanel,
         onToggleLockControls: () =>
             setState(() => _lockControls = !_lockControls),
@@ -451,14 +407,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           engine: engine,
           controller: controller,
           onUserInteraction: () {},
-          onToggleFullScreen: _toggleFullScreen,
           onToggleEpisodePanel: _toggleEpisodePanel,
           onShowShortcutsGuide: () => KeyboardShortcutsSheet.show(context),
           onExit: () {
             if (_isEpisodePanelOpen) {
               Navigator.of(context).pop();
-            } else if (_isFullScreen) {
-              _toggleFullScreen();
             } else {
               context.pop();
             }

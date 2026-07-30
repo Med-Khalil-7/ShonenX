@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter/services.dart';
 
@@ -6,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shonenx/core/utils/formatting.dart';
 import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
-import 'package:window_manager/window_manager.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_list_panel.dart';
 import 'package:shonenx/features/player/domain/aniskip_prefs.dart';
 import 'package:shonenx/features/player/engine/video_engine.dart';
@@ -30,8 +28,6 @@ class BottomControls extends ConsumerStatefulWidget {
   final ThemeData theme;
   final AniSkipArgs? aniskipArgs;
   final PlayerMode mode;
-  final bool? isFullScreen;
-  final VoidCallback? onToggleFullScreen;
   final VoidCallback? onShowEpisodePanel;
 
   const BottomControls({
@@ -44,8 +40,6 @@ class BottomControls extends ConsumerStatefulWidget {
     required this.theme,
     this.aniskipArgs,
     required this.mode,
-    this.isFullScreen,
-    this.onToggleFullScreen,
     this.onShowEpisodePanel,
   });
 
@@ -55,8 +49,6 @@ class BottomControls extends ConsumerStatefulWidget {
 
 class _BottomControlsState extends ConsumerState<BottomControls> {
   double? _dragingValue;
-  bool _isFullScreen = false;
-  bool _isPortrait = false;
   bool _hasTriggeredAutoNext = false;
 
   @override
@@ -68,47 +60,7 @@ class _BottomControlsState extends ConsumerState<BottomControls> {
     }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      windowManager.isFullScreen().then((val) {
-        if (mounted) setState(() => _isFullScreen = val);
-      });
-    }
-  }
 
-  void _toggleFullScreen() async {
-    if (widget.onToggleFullScreen != null) {
-      widget.onToggleFullScreen!();
-      return;
-    }
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      bool isFull = await windowManager.isFullScreen();
-      if (isFull) {
-        await windowManager.setFullScreen(false);
-        if (Platform.isWindows) {
-          await windowManager.setTitleBarStyle(TitleBarStyle.normal);
-        }
-        if (mounted) setState(() => _isFullScreen = false);
-      } else {
-        if (Platform.isWindows) {
-          await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-        }
-        await windowManager.setFullScreen(true);
-        if (mounted) setState(() => _isFullScreen = true);
-      }
-    }
-  }
-
-  void _toggleOrientation() {
-    setState(() => _isPortrait = !_isPortrait);
-    SystemChrome.setPreferredOrientations(
-      _isPortrait
-          ? [DeviceOrientation.portraitUp]
-          : [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight],
-    );
-  }
 
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
@@ -626,27 +578,6 @@ class _BottomControlsState extends ConsumerState<BottomControls> {
                           ),
                         ],
 
-                        if (Platform.isAndroid || Platform.isIOS) ...[
-                          const SizedBox(width: 14),
-                          _buildActionIcon(
-                            _isPortrait
-                                ? Icons.screen_lock_landscape_outlined
-                                : Icons.screen_lock_portrait_outlined,
-                            _toggleOrientation,
-                          ),
-                        ],
-
-                        if (Platform.isWindows ||
-                            Platform.isLinux ||
-                            Platform.isMacOS) ...[
-                          const SizedBox(width: 14),
-                          _buildActionIcon(
-                            (widget.isFullScreen ?? _isFullScreen)
-                                ? Icons.fullscreen_exit_rounded
-                                : Icons.fullscreen_rounded,
-                            _toggleFullScreen,
-                          ),
-                        ],
                       ],
                     ),
                   ],
