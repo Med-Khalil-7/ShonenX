@@ -10,120 +10,50 @@ class LayoutVariants {
   final ComponentLayout wide;
   final ComponentLayout wideContinue;
   final ComponentLayout continueWatching;
-  final ComponentLayout continueReading;
 
   const LayoutVariants({
     required this.normal,
     ComponentLayout? wide,
     ComponentLayout? wideContinue,
     required this.continueWatching,
-    required this.continueReading,
   }) : wide = wide ?? const ComponentLayout(width: 340, height: 115),
        wideContinue =
            wideContinue ?? const ComponentLayout(width: 360, height: 120);
 
   ComponentLayout resolve({
     bool isContinueWatching = false,
-    bool isContinueReading = false,
     bool isWideMode = false,
   }) {
     if (isWideMode) {
-      if (isContinueWatching || isContinueReading) return wideContinue;
-      return wide;
+      return isContinueWatching ? wideContinue : wide;
     }
-    if (isContinueWatching) return continueWatching;
-    if (isContinueReading) return continueReading;
-    return normal;
+    return isContinueWatching ? continueWatching : normal;
   }
 }
 
 enum MediaCardStyle {
+  // Two styles only. Nine existed for phone personalisation; on a fixed
+  // 10-foot layout the choice is poster or wide, and each extra style is
+  // another focus treatment to keep consistent.
+  //
+  // Dimensions are TV-native. The card lays itself out at these sizes and
+  // scales via FittedBox, so they are the real design size rather than a
+  // phone size scaled up.
   classic(
-    'Classic',
+    'Poster',
     LayoutVariants(
-      normal: ComponentLayout(width: 140, height: 230),
-      continueWatching: ComponentLayout(width: 180, height: 180),
-      continueReading: ComponentLayout(width: 140, height: 210),
-    ),
-  ),
-
-  minimal(
-    'Minimal',
-    LayoutVariants(
-      normal: ComponentLayout(width: 120, height: 180),
-      continueWatching: ComponentLayout(width: 180, height: 180),
-      continueReading: ComponentLayout(width: 140, height: 210),
-    ),
-  ),
-
-  expressive(
-    'Expressive',
-    LayoutVariants(
-      normal: ComponentLayout(width: 140, height: 230),
-      wideContinue: ComponentLayout(width: 370, height: 125),
-      continueWatching: ComponentLayout(width: 200, height: 200),
-      continueReading: ComponentLayout(width: 160, height: 230),
-    ),
-  ),
-
-  material(
-    'Material',
-    LayoutVariants(
-      normal: ComponentLayout(width: 135, height: 210),
-      continueWatching: ComponentLayout(width: 190, height: 190),
-      continueReading: ComponentLayout(width: 150, height: 220),
+      normal: ComponentLayout(width: 240, height: 380),
+      continueWatching: ComponentLayout(width: 300, height: 260),
     ),
   ),
 
   cinematic(
-    'Cinematic',
+    'Wide',
     LayoutVariants(
-      normal: ComponentLayout(width: 320, height: 120),
-      wide: ComponentLayout(width: 360, height: 125),
-      wideContinue: ComponentLayout(width: 380, height: 125),
-      continueWatching: ComponentLayout(width: 320, height: 120),
-      continueReading: ComponentLayout(width: 320, height: 120),
-    ),
-  ),
-
-  neon(
-    'Neon',
-    LayoutVariants(
-      normal: ComponentLayout(width: 130, height: 200),
-      continueWatching: ComponentLayout(width: 180, height: 180),
-      continueReading: ComponentLayout(width: 130, height: 200),
-    ),
-  ),
-
-  compact(
-    'Compact',
-    LayoutVariants(
-      normal: ComponentLayout(width: 200, height: 80),
-      wide: ComponentLayout(width: 320, height: 95),
-      wideContinue: ComponentLayout(width: 340, height: 100),
-      continueWatching: ComponentLayout(width: 280, height: 90),
-      continueReading: ComponentLayout(width: 280, height: 90),
-    ),
-  ),
-
-  editorial(
-    'Editorial',
-    LayoutVariants(
-      normal: ComponentLayout(width: 140, height: 220),
-      wideContinue: ComponentLayout(width: 370, height: 125),
-      continueWatching: ComponentLayout(width: 200, height: 250),
-      continueReading: ComponentLayout(width: 170, height: 250),
-    ),
-  ),
-
-  wideBanner(
-    'Wide Banner',
-    LayoutVariants(
-      normal: ComponentLayout(width: 390, height: 125),
-      wide: ComponentLayout(width: 430, height: 135),
-      wideContinue: ComponentLayout(width: 440, height: 135),
-      continueWatching: ComponentLayout(width: 390, height: 125),
-      continueReading: ComponentLayout(width: 390, height: 125),
+      normal: ComponentLayout(width: 460, height: 180),
+      wide: ComponentLayout(width: 520, height: 190),
+      wideContinue: ComponentLayout(width: 540, height: 190),
+      continueWatching: ComponentLayout(width: 460, height: 180),
     ),
   );
 
@@ -137,25 +67,21 @@ enum MediaCardStyle {
 
   ComponentLayout getBaseLayout({
     bool isContinueWatching = false,
-    bool isContinueReading = false,
     bool isWideMode = false,
   }) {
     return _variants.resolve(
       isContinueWatching: isContinueWatching,
-      isContinueReading: isContinueReading,
       isWideMode: isWideMode,
     );
   }
 
   ComponentLayout getLayout({
     bool isContinueWatching = false,
-    bool isContinueReading = false,
     bool isWideMode = false,
   }) {
     return getScaledLayout(
       GlobalUI.uiScaleFactor,
       isContinueWatching: isContinueWatching,
-      isContinueReading: isContinueReading,
       isWideMode: isWideMode,
     );
   }
@@ -163,12 +89,10 @@ enum MediaCardStyle {
   ComponentLayout getScaledLayout(
     double scale, {
     bool isContinueWatching = false,
-    bool isContinueReading = false,
     bool isWideMode = false,
   }) {
     final base = getBaseLayout(
       isContinueWatching: isContinueWatching,
-      isContinueReading: isContinueReading,
       isWideMode: isWideMode,
     );
     return ComponentLayout(

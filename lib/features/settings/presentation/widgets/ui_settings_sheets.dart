@@ -269,9 +269,7 @@ void showCardStyleSheet(
             uiPrefsProvider.select((s) => s.isMediaCardWide(current.name)),
           );
           final canToggleWide =
-              current != MediaCardStyle.compact &&
-              current != MediaCardStyle.cinematic &&
-              current != MediaCardStyle.wideBanner;
+              current != MediaCardStyle.cinematic;
 
           if (!canToggleWide) return const SizedBox.shrink();
 
@@ -392,9 +390,7 @@ void showCardStyleSheet(
           final current = uiState.cardStyle;
           final isWide = uiState.isMediaCardWide(current.name);
           final canToggleWide =
-              current != MediaCardStyle.compact &&
-              current != MediaCardStyle.cinematic &&
-              current != MediaCardStyle.wideBanner;
+              current != MediaCardStyle.cinematic;
 
           return Wrap(
             spacing: 8,
@@ -458,10 +454,7 @@ void showContinueWatchingSheet(
               (s) => s.isContinueWatchingWide(current.name),
             ),
           );
-          final canToggleWide =
-              current != ContinueWatchingStyle.compact &&
-              current != ContinueWatchingStyle.cinematic &&
-              current != ContinueWatchingStyle.wideBanner;
+          final canToggleWide = current != ContinueWatchingStyle.cinematic;
 
           if (!canToggleWide) return const SizedBox.shrink();
 
@@ -1179,54 +1172,18 @@ class _EpisodeViewModePreview extends StatelessWidget {
 }
 
 String _cardStyleDesc(MediaCardStyle s) => switch (s) {
-  MediaCardStyle.classic => 'Classic poster layout with metadata overlay',
-  MediaCardStyle.minimal => 'Clean border-free poster card',
-  MediaCardStyle.expressive => 'Spacious container with bold badges',
-  MediaCardStyle.material => 'Rounded Material card styling',
-  MediaCardStyle.cinematic => 'Full-bleed cinematic landscape view',
-  MediaCardStyle.neon => 'Glowing vibrant accent borders',
-  MediaCardStyle.compact => 'Dense compact layout for high density',
-  MediaCardStyle.editorial => 'High-whitespace magazine design',
-  MediaCardStyle.wideBanner => 'Wide horizontal banner card',
+  MediaCardStyle.classic => 'Tall poster card',
+  MediaCardStyle.cinematic => 'Wide landscape card',
 };
 
 IconData _cardStyleIcon(MediaCardStyle s) => switch (s) {
-  MediaCardStyle.classic => Icons.grid_view_rounded,
-  MediaCardStyle.minimal => Icons.photo_size_select_actual_rounded,
-  MediaCardStyle.expressive => Icons.featured_play_list_rounded,
-  MediaCardStyle.material => Icons.crop_portrait_rounded,
-  MediaCardStyle.cinematic => Icons.movie_filter_rounded,
-  MediaCardStyle.neon => Icons.electric_bolt_rounded,
-  MediaCardStyle.compact => Icons.table_rows_rounded,
-  MediaCardStyle.editorial => Icons.newspaper_rounded,
-  MediaCardStyle.wideBanner => Icons.view_headline_rounded,
+  MediaCardStyle.classic => Icons.crop_portrait_rounded,
+  MediaCardStyle.cinematic => Icons.crop_16_9_rounded,
 };
 
-String _cwStyleDesc(ContinueWatchingStyle s) => switch (s) {
-  ContinueWatchingStyle.classic => 'Classic grid square continue card',
-  ContinueWatchingStyle.minimal => 'Border-free clean image card',
-  ContinueWatchingStyle.expressive => 'Spacious container with bold labels',
-  ContinueWatchingStyle.material => 'Unified color background material card',
-  ContinueWatchingStyle.cinematic => 'Horizontal full-bleed background banner',
-  ContinueWatchingStyle.neon => 'Vivid accent glowing neon borders',
-  ContinueWatchingStyle.compact => 'Super dense layout for small lists',
-  ContinueWatchingStyle.editorial => 'High-whitespace magazine design',
-  ContinueWatchingStyle.wideBanner => 'Wide horizontal banner card',
-};
+String _cwStyleDesc(ContinueWatchingStyle s) => _cardStyleDesc(s);
 
-IconData _cwStyleIcon(ContinueWatchingStyle s) => switch (s) {
-  ContinueWatchingStyle.classic => Icons.grid_view_rounded,
-  ContinueWatchingStyle.minimal => Icons.photo_size_select_actual_rounded,
-  ContinueWatchingStyle.expressive => Icons.featured_play_list_rounded,
-  ContinueWatchingStyle.material => Icons.crop_portrait_rounded,
-  ContinueWatchingStyle.cinematic => Icons.movie_filter_rounded,
-  ContinueWatchingStyle.neon => Icons.electric_bolt_rounded,
-  ContinueWatchingStyle.compact => Icons.table_rows_rounded,
-  ContinueWatchingStyle.editorial => Icons.newspaper_rounded,
-  ContinueWatchingStyle.wideBanner => Icons.view_headline_rounded,
-};
-
-
+IconData _cwStyleIcon(ContinueWatchingStyle s) => _cardStyleIcon(s);
 
 String _episodeModeLabel(EpisodeViewMode m) => switch (m) {
   EpisodeViewMode.classic => 'Classic',

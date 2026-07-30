@@ -145,7 +145,7 @@ class _ContinueWatchingItemState extends ConsumerState<ContinueWatchingItem>
       isLoading: isLoading,
       isWideMode: isWideMode,
       title: widget.entry.animeTitle,
-      subtitle: style == ContinueWatchingStyle.wideBanner
+      subtitle: style == ContinueWatchingStyle.cinematic
           ? (widget.entry.episodeTitle ?? 'Continue watching')
           : subtitleText,
       progress: widget.progress,

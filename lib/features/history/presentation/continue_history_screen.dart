@@ -411,7 +411,6 @@ class _ContinueHistoryItemsScreenState
 
           final layout = style.getLayout(
             isContinueWatching: true,
-            isContinueReading: false,
             isWideMode: isWideMode,
           );
 
