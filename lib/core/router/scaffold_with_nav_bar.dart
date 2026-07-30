@@ -7,25 +7,18 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:shonenx/shared/providers/ui_prefs_provider.dart';
 import 'package:shonenx/core/remote_config/providers/remote_config_provider.dart';
 import 'package:shonenx/core/remote_config/ui/remote_config_ui.dart';
 import 'package:shonenx/core/updates/services/update_service.dart';
 import 'package:shonenx/core/updates/ui/update_ui.dart';
 import 'package:shonenx/core/router/app_router.dart';
-import 'package:shonenx/core/utils/responsive.dart';
+import 'package:shonenx/core/router/widgets/tv_side_rail.dart';
 import 'package:shonenx/shared/widgets/app_scaffold.dart';
 import 'package:shonenx/shared/providers/navbar_action_provider.dart';
 import 'package:shonenx/app_init.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
 import 'package:shonenx/features/extensions/presentation/widgets/runtime_setup_sheet.dart';
 import 'package:shonenx/features/extensions/providers/runtime_update_provider.dart';
-
-final _navBreakpoints = ResponsiveBreakpoints.defaults.copyWith(
-  heightNormal: 750,
-  heightCompact: 600,
-  heightTight: 500,
-);
 
 class ScaffoldWithNavBar extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -244,6 +237,35 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
     }
   }
 
+  void _onDestinationSelected(TvNavDestination destination) {
+    final branch = destination.branchIndex;
+    if (branch != null) {
+      widget.navigationShell.goBranch(
+        branch,
+        // Re-selecting the active destination pops that branch to its root,
+        // which is the expected TV behaviour. The previous call omitted this
+        // and so did nothing.
+        initialLocation: branch == widget.navigationShell.currentIndex,
+      );
+      return;
+    }
+    if (destination.route != null) context.push(destination.route!);
+  }
+
+  /// BACK ladder: unwind the current route first, then step back towards
+  /// Home, and only then let the app exit.
+  bool _handleBack() {
+    if (context.canPop()) {
+      context.pop();
+      return true;
+    }
+    if (widget.navigationShell.currentIndex != 0) {
+      widget.navigationShell.goBranch(0);
+      return true;
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     // NOTE: this used to be a KeyboardListener with an inline `FocusNode()`
@@ -260,676 +282,26 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
         const SingleActivator(LogicalKeyboardKey.digit3): () =>
             widget.navigationShell.goBranch(2),
       },
-      child: ResponsiveHandler(
-        breakpoints: _navBreakpoints,
-        builder: (context, r) {
-          return AppScaffold(
-            extendBody: true,
-            body: r.isDesktop || r.isTabletLandscape
-                ? Row(
-                    children: [
-                      _SideNavBar(navigationShell: widget.navigationShell),
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            widget.navigationShell,
-                            _SideNavAttachment(
-                              navigationShell: widget.navigationShell,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  )
-                : Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      widget.navigationShell,
-                      _BottomNavBar(navigationShell: widget.navigationShell),
-                    ],
-                  ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _NavDest {
-  final IconData icon;
-  final String label;
-  const _NavDest(this.icon, this.label);
-}
-
-const _destinations = [
-  _NavDest(Icons.home_outlined, 'Home'),
-  _NavDest(Icons.search_rounded, 'Search'),
-  _NavDest(Icons.library_books_outlined, 'Library'),
-];
-
-class _BottomNavBar extends ConsumerWidget {
-  final StatefulNavigationShell navigationShell;
-  const _BottomNavBar({required this.navigationShell});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final r = context.responsive;
-    final cs = Theme.of(context).colorScheme;
-    final navState = ref.watch(navBarProvider);
-    final uiPrefs = ref.watch(uiPrefsProvider);
-    final navBarStyle = uiPrefs.navBarStyle;
-
-    if (navState.customBar != null) {
-      return SafeArea(
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: navState.customBar!,
-          ),
-        ),
-      );
-    }
-
-    final activeAttachmentWidget = navState.topForBranch(
-      navigationShell.currentIndex,
-    );
-
-    final uiScale = GlobalUI.uiScaleFactor.clamp(0.85, 1.25);
-    final double barHeight =
-        (navBarStyle == NavBarStyle.minimal
-            ? 54.0
-            : (r.isPhone ? 68.0 : 80.0)) *
-        uiScale;
-    final iconSize = (r.isPhone ? 25.0 : 28.0) * uiScale;
-    final fontSize = r.isPhone ? 14.5 : 16.0;
-    final hPad = (r.isPhone ? 6.0 : 10.5) * uiScale;
-
-    // Radius calculations
-    final barRadius =
-        (navBarStyle == NavBarStyle.material ||
-            navBarStyle == NavBarStyle.minimal)
-        ? barHeight / 2
-        : GlobalUI.uiRoundness;
-    final activeItemRadius =
-        (navBarStyle == NavBarStyle.material ||
-            navBarStyle == NavBarStyle.minimal)
-        ? (barHeight - 2 * hPad) / 2
-        : GlobalUI.uiRoundness;
-
-    // Background blur config
-    final double? blurAmount = switch (navBarStyle) {
-      NavBarStyle.classic => 14.0,
-      NavBarStyle.frosted => 24.0,
-      NavBarStyle.minimal => 12.0,
-      _ => null,
-    };
-
-    // Main bar background decoration
-    final barDecoration = switch (navBarStyle) {
-      NavBarStyle.classic => BoxDecoration(
-        color: cs.surface.withValues(alpha: 0.75),
-        borderRadius: BorderRadius.circular(barRadius),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.45)),
-      ),
-      NavBarStyle.minimal => BoxDecoration(
-        color: cs.surface.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(barRadius),
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.2),
-          width: 0.8,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 16,
-            spreadRadius: 0.5,
-          ),
-        ],
-      ),
-      NavBarStyle.frosted => BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(barRadius),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.15),
-          width: 0.8,
-        ),
-      ),
-      NavBarStyle.material => BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(barRadius),
-      ),
-    };
-
-    return SafeArea(
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: Padding(
-          padding: EdgeInsets.only(bottom: r.height * 0.018),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedSize(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOutCubic,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  child: activeAttachmentWidget != null
-                      ? KeyedSubtree(
-                          key: ValueKey(activeAttachmentWidget.hashCode),
-                          child: Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: activeAttachmentWidget,
-                          ),
-                        )
-                      : const SizedBox.shrink(key: ValueKey('empty_nav_att')),
-                ),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(barRadius),
-                    child: blurAmount != null
-                        ? BackdropFilter(
-                            filter: ImageFilter.blur(
-                              sigmaX: blurAmount,
-                              sigmaY: blurAmount,
-                            ),
-                            child: Container(
-                              height: barHeight,
-                              padding: EdgeInsets.all(hPad),
-                              decoration: barDecoration,
-                              child: _buildItemsRow(
-                                context,
-                                cs,
-                                iconSize,
-                                fontSize,
-                                activeItemRadius,
-                                navBarStyle,
-                              ),
-                            ),
-                          )
-                        : Container(
-                            height: barHeight,
-                            padding: EdgeInsets.all(hPad),
-                            decoration: barDecoration,
-                            child: _buildItemsRow(
-                              context,
-                              cs,
-                              iconSize,
-                              fontSize,
-                              activeItemRadius,
-                              navBarStyle,
-                            ),
-                          ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildItemsRow(
-    BuildContext context,
-    ColorScheme cs,
-    double iconSize,
-    double fontSize,
-    double itemRadius,
-    NavBarStyle navBarStyle,
-  ) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(_destinations.length, (i) {
-        final active = navigationShell.currentIndex == i;
-
-        // Colors based on NavBarStyle
-        final activeIconColor = switch (navBarStyle) {
-          NavBarStyle.material => cs.onSecondaryContainer,
-          NavBarStyle.frosted => Colors.white,
-          NavBarStyle.minimal => cs.primary,
-          _ => cs.onPrimary,
-        };
-
-        final inactiveIconColor = switch (navBarStyle) {
-          NavBarStyle.frosted => Colors.white54,
-          NavBarStyle.minimal => cs.onSurfaceVariant.withValues(alpha: 0.5),
-          _ => cs.onSurfaceVariant,
-        };
-
-        final activeTextColor = switch (navBarStyle) {
-          NavBarStyle.material => cs.onSecondaryContainer,
-          NavBarStyle.frosted => Colors.white,
-          NavBarStyle.minimal => cs.primary,
-          _ => cs.onPrimary,
-        };
-
-        // Item background decoration
-        final itemDecoration = switch (navBarStyle) {
-          NavBarStyle.classic => BoxDecoration(
-            color: active ? cs.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(itemRadius),
-          ),
-          NavBarStyle.minimal => const BoxDecoration(color: Colors.transparent),
-          NavBarStyle.frosted => BoxDecoration(
-            color: active
-                ? Colors.white.withValues(alpha: 0.12)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(itemRadius),
-            border: active
-                ? Border.all(
-                    color: Colors.white.withValues(alpha: 0.1),
-                    width: 0.5,
-                  )
-                : null,
-          ),
-          NavBarStyle.material => BoxDecoration(
-            color: active ? cs.secondaryContainer : Colors.transparent,
-            borderRadius: BorderRadius.circular(itemRadius),
-          ),
-        };
-
-        return InkWell(
-          onTap: () => navigationShell.goBranch(i),
-          borderRadius: BorderRadius.circular(itemRadius),
-          focusColor: cs.primary.withValues(alpha: 0.2),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            height: double.maxFinite,
-            padding: EdgeInsets.symmetric(horizontal: active ? 18 : 14),
-            decoration: itemDecoration,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+      child: TvBackHandler(
+        onBack: _handleBack,
+        child: AppScaffold(
+          extendBody: true,
+          // The rail draws its own overscan; the shell must not add another.
+          fullBleed: true,
+          body: TvShellBody(
+            currentIndex: widget.navigationShell.currentIndex,
+            onSelected: _onDestinationSelected,
+            content: Stack(
               children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedScale(
-                      scale: active ? 1.15 : 1.0,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOutBack,
-                      child: AnimatedOpacity(
-                        opacity: active ? 1.0 : 0.55,
-                        duration: const Duration(milliseconds: 250),
-                        child: Icon(
-                          _destinations[i].icon,
-                          color: active ? activeIconColor : inactiveIconColor,
-                          size: iconSize,
-                        ),
-                      ),
-                    ),
-                    ClipRect(
-                      child: AnimatedSize(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOutCubic,
-                        child: active
-                            ? Padding(
-                                padding: const EdgeInsets.only(left: 8),
-                                child: Text(
-                                  _destinations[i].label,
-                                  style: TextStyle(
-                                    fontSize: fontSize,
-                                    fontWeight: FontWeight.w600,
-                                    color: activeTextColor,
-                                  ),
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                    ),
-                  ],
+                widget.navigationShell,
+                _SideNavAttachment(
+                  navigationShell: widget.navigationShell,
                 ),
-                if (navBarStyle == NavBarStyle.minimal && active) ...[
-                  const SizedBox(height: 3),
-                  Container(
-                    width: 5,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: cs.primary,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
-        );
-      }),
-    );
-  }
-}
-
-class _SideNavBar extends ConsumerWidget {
-  final StatefulNavigationShell navigationShell;
-  const _SideNavBar({required this.navigationShell});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final r = context.responsive;
-    final cs = Theme.of(context).colorScheme;
-    final h = r.heightTier;
-    final uiPrefs = ref.watch(uiPrefsProvider);
-    final navBarStyle = uiPrefs.navBarStyle;
-
-    final barWidth = h.pick(
-      spacious: 72.0,
-      normal: 72.0,
-      compact: 70.0,
-      tight: 68.0,
-      cramped: 66.0,
-    );
-    final hPad = h.pick(
-      spacious: 8.0,
-      normal: 8.0,
-      compact: 6.0,
-      tight: 5.0,
-      cramped: 4.0,
-    );
-    final vOuterPad = h.pick(
-      spacious: 16.0,
-      normal: 16.0,
-      compact: 14.0,
-      tight: 8.0,
-      cramped: 6.0,
-    );
-    final hOuterPad = h.pick(
-      spacious: 16.0,
-      normal: 16.0,
-      compact: 14.0,
-      tight: 8.0,
-      cramped: 6.0,
-    );
-
-    final hideNavLabels = h == HeightTier.cramped;
-
-    final activeItemRadius = navBarStyle == NavBarStyle.material
-        ? 999.0
-        : GlobalUI.uiRoundness;
-
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          vertical: vOuterPad,
-          horizontal: hOuterPad,
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              flex: 3,
-              child: _SideBarContainer(
-                width: barWidth,
-                padding: hPad,
-                navBarStyle: navBarStyle,
-                cs: cs,
-                child: Column(
-                  children: List.generate(_destinations.length, (i) {
-                    final active = navigationShell.currentIndex == i;
-
-                    final itemDecoration = switch (navBarStyle) {
-                      NavBarStyle.classic => BoxDecoration(
-                        color: active ? cs.primary : Colors.transparent,
-                        borderRadius: BorderRadius.circular(activeItemRadius),
-                      ),
-                      NavBarStyle.minimal => const BoxDecoration(
-                        color: Colors.transparent,
-                      ),
-                      NavBarStyle.frosted => BoxDecoration(
-                        color: active
-                            ? Colors.white.withValues(alpha: 0.12)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(activeItemRadius),
-                        border: active
-                            ? Border.all(
-                                color: Colors.white.withValues(alpha: 0.1),
-                                width: 0.5,
-                              )
-                            : null,
-                      ),
-                      NavBarStyle.material => BoxDecoration(
-                        color: active
-                            ? cs.secondaryContainer
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(activeItemRadius),
-                      ),
-                    };
-
-                    return Expanded(
-                      child: InkWell(
-                        onTap: () => navigationShell.goBranch(i),
-                        borderRadius: BorderRadius.circular(activeItemRadius),
-                        focusColor: cs.primary.withValues(alpha: 0.2),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 350),
-                          curve: Curves.easeOutCubic,
-                          width: double.infinity,
-                          decoration: itemDecoration,
-                          child: _PillContent(
-                            icon: _destinations[i].icon,
-                            label: _destinations[i].label,
-                            active: active,
-                            cs: cs,
-                            heightTier: h,
-                            forceHideLabel: hideNavLabels,
-                            navBarStyle: navBarStyle,
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
-    );
-  }
-}
-
-class _SideBarContainer extends StatelessWidget {
-  final double width;
-  final double padding;
-  final Widget child;
-  final NavBarStyle navBarStyle;
-  final ColorScheme cs;
-
-  const _SideBarContainer({
-    required this.width,
-    required this.padding,
-    required this.child,
-    required this.navBarStyle,
-    required this.cs,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final barRadius =
-        (navBarStyle == NavBarStyle.material ||
-            navBarStyle == NavBarStyle.minimal)
-        ? 28.0
-        : GlobalUI.uiRoundness;
-
-    // Background blur config
-    final double? blurAmount = switch (navBarStyle) {
-      NavBarStyle.classic => 14.0,
-      NavBarStyle.frosted => 24.0,
-      NavBarStyle.minimal => 12.0,
-      _ => null,
-    };
-
-    // Container background decoration
-    final decoration = switch (navBarStyle) {
-      NavBarStyle.classic => BoxDecoration(
-        color: cs.surface.withValues(alpha: 0.75),
-        borderRadius: BorderRadius.circular(barRadius),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.45)),
-      ),
-      NavBarStyle.minimal => BoxDecoration(
-        color: cs.surface.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(barRadius),
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.2),
-          width: 0.8,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 16,
-            spreadRadius: 0.5,
-          ),
-        ],
-      ),
-      NavBarStyle.frosted => BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(barRadius),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.15),
-          width: 0.8,
-        ),
-      ),
-      NavBarStyle.material => BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(barRadius),
-      ),
-    };
-
-    final content = Container(
-      width: width,
-      padding: EdgeInsets.all(padding),
-      decoration: decoration,
-      child: child,
-    );
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(barRadius),
-      child: blurAmount != null
-          ? BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: blurAmount, sigmaY: blurAmount),
-              child: content,
-            )
-          : content,
-    );
-  }
-}
-
-class _PillContent extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-  final ColorScheme cs;
-  final HeightTier heightTier;
-  final bool forceHideLabel;
-  final NavBarStyle navBarStyle;
-
-  const _PillContent({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.cs,
-    required this.heightTier,
-    required this.navBarStyle,
-    this.forceHideLabel = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final iconSize = heightTier.pick(
-      spacious: 26.0,
-      normal: 25.0,
-      compact: 23.0,
-      tight: 21.0,
-      cramped: 20.0,
-    );
-    final labelSize = heightTier.pick(
-      spacious: 14.0,
-      normal: 14.0,
-      compact: 13.0,
-      tight: 12.0,
-      cramped: 11.0,
-    );
-    final labelSpacing = heightTier.pick(
-      spacious: 2.0,
-      normal: 2.0,
-      compact: 1.8,
-      tight: 1.6,
-      cramped: 1.4,
-    );
-    final labelTopPad = heightTier.pick(
-      spacious: 14.0,
-      normal: 12.0,
-      compact: 10.0,
-      tight: 7.0,
-      cramped: 5.0,
-    );
-
-    final showLabel = !forceHideLabel && active;
-
-    // Dynamic coloring based on NavBarStyle
-    final activeIconColor = switch (navBarStyle) {
-      NavBarStyle.material => cs.onSecondaryContainer,
-      NavBarStyle.frosted => Colors.white,
-      NavBarStyle.minimal => cs.primary,
-      _ => cs.onPrimary,
-    };
-
-    final inactiveIconColor = switch (navBarStyle) {
-      NavBarStyle.frosted => Colors.white54,
-      NavBarStyle.minimal => cs.onSurfaceVariant.withValues(alpha: 0.5),
-      _ => cs.onSurfaceVariant,
-    };
-
-    final activeTextColor = switch (navBarStyle) {
-      NavBarStyle.material => cs.onSecondaryContainer,
-      NavBarStyle.frosted => Colors.white,
-      NavBarStyle.minimal => cs.primary,
-      _ => cs.onPrimary,
-    };
-
-    final resolvedColor = active ? activeIconColor : inactiveIconColor;
-
-    final resolvedTextColor = active ? activeTextColor : inactiveIconColor;
-
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        AnimatedScale(
-          scale: active ? 1.15 : 1.0,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutBack,
-          child: AnimatedOpacity(
-            opacity: active ? 1.0 : 0.5,
-            duration: const Duration(milliseconds: 250),
-            child: Icon(icon, color: resolvedColor, size: iconSize),
-          ),
-        ),
-        ClipRect(
-          child: AnimatedSize(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            child: showLabel
-                ? Padding(
-                    padding: EdgeInsets.only(top: labelTopPad),
-                    child: RotatedBox(
-                      quarterTurns: -1,
-                      child: Text(
-                        label.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: labelSize,
-                          letterSpacing: labelSpacing,
-                          fontWeight: FontWeight.bold,
-                          color: resolvedTextColor,
-                        ),
-                      ),
-                    ),
-                  )
-                : const SizedBox.shrink(),
-          ),
-        ),
-      ],
     );
   }
 }
