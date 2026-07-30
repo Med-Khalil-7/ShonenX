@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -265,7 +267,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
         score: existing?.score ?? 0,
       );
       ref.invalidate(
-        mediaTrackingProvider(TrackingQuery(tracker.type, media.id, media.type)),
+        mediaTrackingProvider(
+          TrackingQuery(tracker.type, media.id, media.type),
+        ),
       );
       _toast('Added to ${tracker.type.displayName} plan to watch');
     } catch (e) {
@@ -332,19 +336,40 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                     gutter,
                     40,
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _IconButton(
-                        icon: Icons.arrow_back,
-                        onPressed: () => context.pop(),
-                        tooltip: 'Back',
-                      ),
-                      const SizedBox(width: 24),
-                      Expanded(child: _buildInfoColumn(media, theme, cs)),
-                      const SizedBox(width: 40),
-                      _Poster(media: media, tag: widget.tag),
-                    ],
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Every dimension here is derived, not fixed. Devices
+                      // report very different logical widths for the same
+                      // panel, and a hardcoded poster plus two hardcoded
+                      // buttons overflow the narrow ones.
+                      final posterHeight = math.min(
+                        ShonenX.detailPosterWidth * 1.5,
+                        size.height * 0.72,
+                      );
+                      final posterWidth = math.min(
+                        posterHeight * (2 / 3),
+                        constraints.maxWidth * 0.32,
+                      );
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _IconButton(
+                            icon: Icons.arrow_back,
+                            onPressed: () => context.pop(),
+                            tooltip: 'Back',
+                          ),
+                          const SizedBox(width: 24),
+                          Expanded(child: _buildInfoColumn(media, theme, cs)),
+                          const SizedBox(width: 40),
+                          _Poster(
+                            media: media,
+                            tag: widget.tag,
+                            width: posterWidth,
+                            height: posterWidth * 1.5,
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -383,19 +408,28 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        // A Wrap, not a Row: on a narrow viewport the badges and the two
+        // action icons cannot share a line, and a Row would just clip them.
+        Wrap(
+          spacing: 24,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             TvMetaRow(media: media),
-            const SizedBox(width: 32),
-            _IconButton(
-              icon: Icons.share_outlined,
-              tooltip: 'Share',
-              onPressed: () => _share(media),
-            ),
-            const SizedBox(width: 12),
-            _TrackerButton(
-              media: media,
-              onOpenManager: () => _openTrackerManager(media),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _IconButton(
+                  icon: Icons.share_outlined,
+                  tooltip: 'Share',
+                  onPressed: () => _share(media),
+                ),
+                const SizedBox(width: 12),
+                _TrackerButton(
+                  media: media,
+                  onOpenManager: () => _openTrackerManager(media),
+                ),
+              ],
             ),
           ],
         ),
@@ -431,36 +465,40 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
         ),
         const SizedBox(height: 32),
         FocusTraversalGroup(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Measured, not estimated. Deriving this from the parent's width
+              // minus everything else left it a pixel short, and the pair
+              // wrapped onto separate lines.
+              final buttonWidth = math.min(
+                280.0,
+                (constraints.maxWidth - 20) / 2,
+              );
+              return Wrap(
+                spacing: 16,
+                runSpacing: 12,
                 children: [
                   TvButton(
                     label: 'Play now',
                     icon: Icons.play_arrow_rounded,
-                    width: 280,
+                    width: buttonWidth,
                     loading: _resolving,
+                    ensureVisible: false,
                     // The reason the screen exists. Land here on arrival so
                     // watching something is a single press.
                     autofocus: true,
                     onPressed: () => _play(media),
                   ),
-                  const SizedBox(width: 16),
                   TvButton(
                     label: 'More episodes',
                     icon: Icons.layers_outlined,
-                    width: 280,
+                    width: buttonWidth,
                     variant: TvButtonVariant.filledWhite,
+                    ensureVisible: false,
                     onPressed: () => _openEpisodes(media),
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
                   SizedBox(
-                    width: 280,
+                    width: buttonWidth,
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: TvButton(
@@ -469,30 +507,45 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                         icon: Icons.mic_none_rounded,
                         height: 52,
                         variant: TvButtonVariant.bare,
+                        ensureVisible: false,
                         onPressed: () =>
                             _play(media, serverType: ServerType.dub),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  TvButton(
-                    label: 'Add to watch list',
-                    icon: Icons.add_circle_outline,
-                    height: 52,
-                    variant: TvButtonVariant.bare,
-                    onPressed: () => _addToWatchList(media),
+                  SizedBox(
+                    width: buttonWidth,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TvButton(
+                        label: 'Add to watch list',
+                        icon: Icons.add_circle_outline,
+                        height: 52,
+                        variant: TvButtonVariant.bare,
+                        ensureVisible: false,
+                        onPressed: () => _addToWatchList(media),
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: buttonWidth,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TvButton(
+                        label: 'Watch',
+                        emphasis: 'Subbed',
+                        icon: Icons.closed_caption_off_rounded,
+                        height: 52,
+                        variant: TvButtonVariant.bare,
+                        ensureVisible: false,
+                        onPressed: () =>
+                            _play(media, serverType: ServerType.sub),
+                      ),
+                    ),
                   ),
                 ],
-              ),
-              TvButton(
-                label: 'Watch',
-                emphasis: 'Subbed',
-                icon: Icons.closed_caption_off_rounded,
-                height: 52,
-                variant: TvButtonVariant.bare,
-                onPressed: () => _play(media, serverType: ServerType.sub),
-              ),
-            ],
+              );
+            },
           ),
         ),
       ],
@@ -542,8 +595,15 @@ class _Backdrop extends StatelessWidget {
 class _Poster extends StatelessWidget {
   final UnifiedMedia media;
   final String tag;
+  final double width;
+  final double height;
 
-  const _Poster({required this.media, required this.tag});
+  const _Poster({
+    required this.media,
+    required this.tag,
+    required this.width,
+    required this.height,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -553,24 +613,22 @@ class _Poster extends StatelessWidget {
     // Not focusable: it is an illustration, and a focus stop here would sit
     // between the action buttons and the rows below for no gain.
     return SizedBox(
-      width: ShonenX.detailPosterWidth,
-      child: AspectRatio(
-        aspectRatio: 2 / 3,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(ShonenX.posterRadius),
-          child: Hero(
-            tag: tag,
-            child: (url == null || url.isEmpty)
-                ? Container(color: cs.surfaceContainer)
-                : CachedNetworkImage(
-                    imageUrl: url,
-                    fit: BoxFit.cover,
-                    placeholder: (_, __) =>
-                        Container(color: cs.surfaceContainer),
-                    errorWidget: (_, __, ___) =>
-                        Container(color: cs.surfaceContainer),
-                  ),
-          ),
+      width: width,
+      height: height,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(ShonenX.posterRadius),
+        child: Hero(
+          tag: tag,
+          child: (url == null || url.isEmpty)
+              ? ColoredBox(color: cs.surfaceContainer)
+              : CachedNetworkImage(
+                  imageUrl: url,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) =>
+                      ColoredBox(color: cs.surfaceContainer),
+                  errorWidget: (_, __, ___) =>
+                      ColoredBox(color: cs.surfaceContainer),
+                ),
         ),
       ),
     );
