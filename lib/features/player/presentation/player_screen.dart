@@ -53,6 +53,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   /// Way in to the seek bar for presses that land before it is on screen.
   final SeekBarHandle _seekHandle = SeekBarHandle();
 
+  /// Way in to the skip button for an OK that lands with the controls down.
+  final SkipHandle _skipHandle = SkipHandle();
+
   /// The video, so the frame under a scrub can be captured off it.
   final GlobalKey _videoKey = GlobalKey();
 
@@ -128,6 +131,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final controller = ref.read(playerControllerProvider.notifier);
+      controller.setFrameGrabber(_grabVideoFrame);
       controller.initialize(widget.mode);
       // Once, here -- not from the transport bar's build, which re-registered
       // it on every position tick.
@@ -144,6 +148,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       WakelockPlus.disable();
     } catch (_) {}
     _controlsTimer?.cancel();
+    try {
+      ref.read(playerControllerProvider.notifier).setFrameGrabber(null);
+    } catch (_) {}
     _frozenFrame?.dispose();
     _playPauseFocus.dispose();
     SystemChrome.setEnabledSystemUIMode(
@@ -184,6 +191,32 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     if (!_showControls) return;
     _controlsTimer?.cancel();
     _controlsTimer = Timer(_autoHide, _hide);
+  }
+
+  /// Reads the frame on screen as PNG bytes, for the continue-watching card.
+  ///
+  /// Sized to roughly card width rather than the panel's: this gets base64'd
+  /// into a history row, and the old mpv path stored full-resolution frames --
+  /// megabytes per entry, re-decoded on every rebuild of the row.
+  Future<Uint8List?> _grabVideoFrame() async {
+    try {
+      final boundary = _videoKey.currentContext?.findRenderObject();
+      if (boundary is! RenderRepaintBoundary) return null;
+      final width = boundary.size.width;
+      if (width <= 0) return null;
+
+      final image = await boundary.toImage(
+        pixelRatio: (360 / width).clamp(0.05, 1.0),
+      );
+      try {
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        return data?.buffer.asUint8List();
+      } finally {
+        image.dispose();
+      }
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Grabs the on-screen frame at half resolution and holds it.
@@ -365,19 +398,42 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       Navigator.of(context).pop();
       return;
     }
-    if (_showControls) {
-      _controlsTimer?.cancel();
-      setState(() => _showControls = false);
-      return;
-    }
     if (_exitPromptOpen) return;
 
-    setState(() => _exitPromptOpen = true);
+    // BACK asks about leaving, whatever the overlay happens to be doing.
+    //
+    // It used to spend the first press dismissing the controls, so leaving
+    // took two presses whenever the bar was up -- and the first one looked
+    // like nothing had happened. The controls come down with it instead, so
+    // the prompt is the only thing on screen.
+    _controlsTimer?.cancel();
+    setState(() {
+      _showControls = false;
+      _exitPromptOpen = true;
+    });
     final engine = ref.read(videoEngineProvider);
     final wasPlaying = ref.read(videoEngineStateProvider).isPlaying;
     try {
       engine.pause();
     } catch (_) {}
+
+    // Let the press that got us here finish being dispatched before pushing a
+    // route onto it.
+    //
+    // BACK arrives as a platform pop, and putting the dialog up inside that
+    // same dispatch meant the tail of it reached the route we had just pushed
+    // and popped it again: the prompt flashed and vanished, leaving a paused
+    // player and no explanation. One frame is enough to separate them.
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      // Never leave playback stopped for a prompt that never appeared.
+      if (wasPlaying) {
+        try {
+          engine.play();
+        } catch (_) {}
+      }
+      return;
+    }
 
     final confirmed = await TvConfirmDialog.show(
       context: context,
@@ -390,6 +446,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       ref.read(playerControllerProvider.notifier).captureExitThumbnail();
       if (mounted) context.pop();
     } else if (wasPlaying) {
+      // Covers every way out that is not "yes": No, the barrier, and BACK
+      // again. Any of them leaves the player where it was, still playing.
       try {
         engine.play();
       } catch (_) {}
@@ -442,6 +500,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           controlsVisible: _showControls,
           onWake: _wake,
           onScrub: _scrubFromHidden,
+          onConfirmSkip: _skipHandle.skip,
           onUserInteraction: _keepAwake,
           onToggleEpisodePanel: _toggleEpisodePanel,
           onBack: _handleBack,
@@ -486,6 +545,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               PlayerSkipButton(
                 engine: engine,
                 aniskipArgs: _aniSkipArgs(engine),
+                handle: _skipHandle,
               ),
               PlayerTransportBar(
                 visible: _showControls,

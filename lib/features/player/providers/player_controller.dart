@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -835,9 +836,27 @@ class PlayerController extends Notifier<PlayerState> {
   /// Asks the engine rather than screenshotting the Flutter tree: on Android
   /// the video is a platform texture, so a RepaintBoundary capture of it comes
   /// back black.
+  /// Supplied by the player screen. See [setFrameGrabber].
+  Future<Uint8List?> Function()? _frameGrabber;
+
+  /// Registers a way to read the frame currently on screen.
+  ///
+  /// ExoPlayer renders straight to a Surface and hands back no pixels, so
+  /// grabCurrentFrame returns null on it -- and since it became the default
+  /// engine, nothing was ever captured and every continue-watching card fell
+  /// back to its placeholder. The screen can read the frame off its own
+  /// RepaintBoundary, which is the only place those pixels are reachable.
+  void setFrameGrabber(Future<Uint8List?> Function()? grab) {
+    _frameGrabber = grab;
+  }
+
   Future<String?> _captureThumbnail() async {
     try {
-      final image = await ref.read(videoEngineProvider).grabCurrentFrame();
+      // The engine first: mpv can screenshot itself, and its frame is the
+      // decoded one rather than a readback of the composited surface.
+      final image =
+          await ref.read(videoEngineProvider).grabCurrentFrame() ??
+          await _frameGrabber?.call();
       if (image != null) {
         _cachedThumbnail = base64Encode(image);
         _lastThumbnailTime = DateTime.now();

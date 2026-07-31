@@ -31,6 +31,9 @@ class PlayerKeyboardListener extends ConsumerWidget {
   /// timeline costs a second press and a traversal -- no TV player does that.
   final void Function(bool forward)? onScrub;
 
+  /// Takes OK when a skip is being offered. Returns whether it used it.
+  final bool Function()? onConfirmSkip;
+
   /// Reveal the controls and hand focus to play/pause.
   final VoidCallback onWake;
 
@@ -47,6 +50,7 @@ class PlayerKeyboardListener extends ConsumerWidget {
     required this.controller,
     required this.controlsVisible,
     this.onScrub,
+    this.onConfirmSkip,
     required this.onWake,
     required this.onUserInteraction,
     required this.onToggleEpisodePanel,
@@ -139,6 +143,19 @@ class PlayerKeyboardListener extends ConsumerWidget {
     }
 
     if (!controlsVisible && _directional.contains(key)) {
+      // OK belongs to the skip button whenever one is on screen. With the
+      // controls down this handler is the focus stop, so the button cannot
+      // take the press itself -- and a skip button you have to raise the
+      // overlay to use is not a skip button.
+      final isConfirm =
+          key == LogicalKeyboardKey.select ||
+          key == LogicalKeyboardKey.enter ||
+          key == LogicalKeyboardKey.numpadEnter ||
+          key == LogicalKeyboardKey.gameButtonA;
+      if (isDown && isConfirm && (onConfirmSkip?.call() ?? false)) {
+        return KeyEventResult.handled;
+      }
+
       final scrub = onScrub;
       final horizontal =
           key == LogicalKeyboardKey.arrowLeft ||
