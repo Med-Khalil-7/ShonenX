@@ -36,6 +36,12 @@ abstract class VideoEngine {
   /// seek may time out, or the engine may be mid-teardown.
   Future<Uint8List?> grabFrameAt(Duration position) async => null;
 
+  /// Drops any resources held for [grabFrameAt].
+  ///
+  /// Called when scrubbing stops. The frame source can be expensive to keep
+  /// alive, and nothing needs it between scrubs.
+  Future<void> releaseFramePreview() async {}
+
   /// A JPEG of the frame on screen right now, or null.
   ///
   /// Used for the continue-watching thumbnail. Capturing the Flutter tree

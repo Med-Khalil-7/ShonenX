@@ -287,6 +287,7 @@ class MediaKitEngine implements VideoEngine {
 
   /// Tears the hidden decoder down. Called when scrubbing stops, when the
   /// stream changes, and on dispose -- it must never outlive the scrub.
+  @override
   Future<void> releaseFramePreview() => _disposePreview();
 
   Future<void> _disposePreview() async {

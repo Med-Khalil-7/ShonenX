@@ -177,6 +177,9 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
   /// thumb, while the real seek waits until the user has actually stopped.
   static const _previewAfter = Duration(milliseconds: 250);
 
+  /// How long the hidden decoder survives after focus leaves the bar.
+  static const _releaseAfter = Duration(seconds: 10);
+
   late final FocusNode _node = FocusNode(
     debugLabel: 'seekBar',
     onKeyEvent: _handleKey,
@@ -190,15 +193,33 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
 
   Timer? _commitTimer;
   Timer? _previewTimer;
+  Timer? _releaseTimer;
   bool _focused = false;
 
   @override
   void initState() {
     super.initState();
-    _node.addListener(() {
-      if (mounted && _focused != _node.hasFocus) {
-        setState(() => _focused = _node.hasFocus);
-      }
+    _node.addListener(_onFocusChanged);
+  }
+
+  void _onFocusChanged() {
+    if (!mounted || _focused == _node.hasFocus) return;
+    setState(() => _focused = _node.hasFocus);
+
+    if (_focused) {
+      _releaseTimer?.cancel();
+      return;
+    }
+
+    // Leaving the bar ends the scrub.
+    _previewTimer?.cancel();
+    setState(() => _previewTarget = null);
+
+    // Give it a moment before dropping the hidden decoder: stepping off the
+    // bar and straight back on is common, and rebuilding it is not free.
+    _releaseTimer?.cancel();
+    _releaseTimer = Timer(_releaseAfter, () {
+      if (mounted && !_node.hasFocus) widget.engine.releaseFramePreview();
     });
   }
 
@@ -206,6 +227,8 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
   void dispose() {
     _commitTimer?.cancel();
     _previewTimer?.cancel();
+    _releaseTimer?.cancel();
+    widget.engine.releaseFramePreview();
     _node.dispose();
     super.dispose();
   }
@@ -213,6 +236,15 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
   /// Rounded to whole seconds so tiny thumb movements do not invalidate the
   /// provider family key and re-request a frame we already have.
   static Duration _round(Duration d) => Duration(seconds: d.inSeconds);
+
+  /// Coarser rounding for the idle case.
+  ///
+  /// While the bar merely holds focus the position keeps advancing, and a
+  /// per-second key would mint a new provider every second for a frame that
+  /// has barely changed. Five seconds matches the engine's cache bucket, so
+  /// every request after the first in a bucket is free.
+  static Duration _coarse(Duration d) =>
+      Duration(seconds: (d.inSeconds ~/ 5) * 5);
 
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
@@ -281,18 +313,20 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
       fontFeatures: const [FontFeature.tabularFigures()],
     );
 
-    final scrubbing = _focused && _pending != null;
+    // Shown on focus, not just while moving: landing on the bar should
+    // already tell you where you are.
+    final showPreview = _focused;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (scrubbing)
+        if (showPreview)
           Padding(
             // Line the card's track up with the bar itself, which is inset by
             // the two time readouts either side of it.
             padding: EdgeInsets.symmetric(horizontal: m.meta * 4.5),
             child: SeekPreviewCard(
-              target: _previewTarget ?? _round(shown),
+              target: _previewTarget ?? _coarse(shown),
               label: formatPlaybackTime(shown),
               fraction: duration.inMilliseconds == 0
                   ? 0

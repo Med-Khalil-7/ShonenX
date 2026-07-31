@@ -197,5 +197,8 @@ class VideoPlayerEngine implements VideoEngine {
   Future<Uint8List?> grabFrameAt(Duration position) async => null;
 
   @override
+  Future<void> releaseFramePreview() async {}
+
+  @override
   Future<Uint8List?> grabCurrentFrame() async => null;
 }
