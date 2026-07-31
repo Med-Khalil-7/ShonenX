@@ -58,9 +58,14 @@ void main(List<String> args) async {
   // otherwise happily fill. Note this bounds only *unreferenced* images; the
   // ceiling on live ones comes from decoding at display size in the first
   // place (see AppNetworkImage).
+  // Defaults are 1000 entries / 100 MB, sized for a 4 GB phone. Trimmed, but
+  // not so far that full-screen artwork cannot sit in it: a 1080p backdrop is
+  // 8 MB decoded, and the hero crossfade holds two at once. At 32 MB those
+  // alone evicted every poster on the screen behind them, so each pass through
+  // the carousel re-decoded the lot.
   PaintingBinding.instance.imageCache
     ..maximumSize = 150
-    ..maximumSizeBytes = 32 << 20;
+    ..maximumSizeBytes = 64 << 20;
 
   _installErrorHandlers();
 

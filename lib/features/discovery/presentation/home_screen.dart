@@ -295,7 +295,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               // the heading reads as part of the hero rather than as the label
               // of the row under it.
               SliverToBoxAdapter(
-                child: SizedBox(height: ShonenXMetrics.of(context).body * 2.5),
+                child: SizedBox(height: ShonenXMetrics.of(context).body * 0.15),
               ),
               ...() {
                 final discoveryIndexMap = <MediaType, int>{};

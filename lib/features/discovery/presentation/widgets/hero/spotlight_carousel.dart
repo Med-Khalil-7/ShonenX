@@ -224,7 +224,9 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
               // Leaves a band at the top for the header buttons, which are
               // drawn over this and would otherwise land on the poster.
               top: insets.top + height * _headerBandFraction,
-              bottom: m.body,
+              // Lifts the slide strip off the hero's bottom edge, where the
+              // artwork now runs down to.
+              bottom: m.body * 2.6,
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final posterHeight = constraints.maxHeight.clamp(
@@ -438,7 +440,7 @@ class _SlideStripState extends State<_SlideStrip> {
           // Directional traversal only reaches nodes that have been built.
           cacheExtent: 700,
           itemCount: widget.items.length,
-          separatorBuilder: (_, __) => SizedBox(width: m.heroThumb * 0.22),
+          separatorBuilder: (_, __) => SizedBox(width: m.heroThumb * 0.13),
           itemBuilder: (context, i) => _Thumb(
             media: widget.items[i],
             metrics: m,
@@ -540,10 +542,17 @@ class _Backdrop extends StatelessWidget {
                 : AppNetworkImage(
                     url: url,
                     alignment: Alignment.topCenter,
-                    // Half resolution: it is a backdrop sitting under two
-                    // scrims, and the crossfade keeps two of them alive at
-                    // once.
-                    decodeScale: 0.5,
+                    // Fills the hero edge to edge (cover is the default).
+                    //
+                    // AniList banners are a wide strip, about 1900x400, and
+                    // the hero is 1920x605 on a 1080p panel, so filling it
+                    // costs a 1.5x upscale and crops the sides. That is the
+                    // source's limit, not a setting -- there is no larger
+                    // banner to ask for. What is in our hands is the decode,
+                    // which is now at the size it is drawn: this used to run
+                    // at half resolution for the crossfade, making it a 960px
+                    // bitmap stretched across the whole screen, three times
+                    // its own size and the softest thing in the app.
                     placeholder: ColoredBox(color: cs.surface),
                   ),
           ),
@@ -570,12 +579,13 @@ class _Backdrop extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.bottomCenter,
               end: Alignment.topCenter,
-              colors: [
-                cs.surface,
-                cs.surface,
-                cs.surface.withValues(alpha: 0.0),
-              ],
-              stops: const [0.0, 0.12, 0.6],
+              colors: [cs.surface, cs.surface.withValues(alpha: 0.0)],
+              // Measured from the bottom edge up, and it starts fading from
+              // zero: no solid band at all. This was [0, 0.12, 0.6] -- opaque
+              // for the bottom eighth and not clear until past halfway, so the
+              // artwork died around the middle of the hero and everything
+              // below it was flat background.
+              stops: const [0.0, 0.34],
             ),
           ),
         ),

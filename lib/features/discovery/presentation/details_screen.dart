@@ -403,9 +403,6 @@ class _Backdrop extends StatelessWidget {
           AppNetworkImage(
             url: url,
             alignment: Alignment.topCenter,
-            // A tenth of full size. The scrim below covers almost all of it,
-            // so anything sharper is memory spent on pixels nobody sees.
-            decodeScale: 0.1,
             placeholder: const SizedBox.shrink(),
             error: const SizedBox.shrink(),
           ),

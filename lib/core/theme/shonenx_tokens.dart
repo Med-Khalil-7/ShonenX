@@ -53,7 +53,11 @@ abstract final class ShonenX {
   static const posterAspect = 2 / 3;
 
   /// Slide-strip thumbnails are slightly taller than wide.
-  static const thumbAspect = 0.85;
+  /// The slide strip shows banner art, so its tiles are landscape.
+  ///
+  /// They were 0.85 -- slightly taller than wide -- which cropped a 1900x400
+  /// banner down to a near-square keyhole showing almost none of it.
+  static const thumbAspect = 16 / 9;
 
   /// The hero carries metadata, a synopsis and the slide strip, and the first
   /// row peeks in below it.
@@ -241,5 +245,7 @@ class ShonenXMetrics {
   /// Above the reference scale on purpose: these double as the carousel's
   /// page indicator, so they have to be identifiable as artwork at a glance
   /// and not just as dots.
-  double get heroThumb => w * 0.047;
+  /// Wider than it was: the tile is landscape now, so the old width made a
+  /// strip too short to read as artwork.
+  double get heroThumb => w * 0.058;
 }
