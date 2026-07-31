@@ -191,8 +191,6 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final size = MediaQuery.sizeOf(context);
     final m = ShonenXMetrics.of(context);
 
@@ -245,12 +243,7 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
                         ),
                       ),
                       SizedBox(width: m.shellGutter(size) * 2),
-                      _Poster(
-                        media: media,
-                        focused: _focused,
-                        height: posterHeight,
-                        borderColor: cs.onSurface,
-                      ),
+                      _Poster(media: media, height: posterHeight),
                     ],
                   );
                 },
@@ -585,18 +578,17 @@ class _Backdrop extends StatelessWidget {
   }
 }
 
+/// The slide's artwork. Display only.
+///
+/// It used to grow a ring while the hero held focus, echoing the strip below
+/// it. Nothing about it is selectable, so the ring claimed a focus that lived
+/// on the thumbnails -- two things wearing the same highlight, only one of
+/// which answers to a keypress.
 class _Poster extends StatelessWidget {
   final UnifiedMedia? media;
-  final bool focused;
   final double height;
-  final Color borderColor;
 
-  const _Poster({
-    required this.media,
-    required this.focused,
-    required this.height,
-    required this.borderColor,
-  });
+  const _Poster({required this.media, required this.height});
 
   @override
   Widget build(BuildContext context) {
@@ -604,21 +596,9 @@ class _Poster extends StatelessWidget {
     final radius = BorderRadius.circular(ShonenX.posterRadius);
     final url = media?.cover ?? media?.banner;
 
-    // Not a focus stop -- the buttons are. The border only echoes that the
-    // hero as a whole is active.
-    return AnimatedContainer(
-      duration: TvFocus.animation,
-      curve: TvFocus.curve,
+    return SizedBox(
       width: height * ShonenX.posterAspect,
       height: height,
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        border: Border.all(
-          color: focused ? borderColor : Colors.transparent,
-          width: TvFocus.ringWidth,
-          strokeAlign: BorderSide.strokeAlignOutside,
-        ),
-      ),
       child: ClipRRect(
         borderRadius: radius,
         child: AnimatedSwitcher(
