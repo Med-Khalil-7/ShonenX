@@ -123,13 +123,20 @@ class _PlayerTransportBarState extends ConsumerState<PlayerTransportBar> {
                     onInteraction: widget.onInteraction,
                   ),
                   SizedBox(height: m.transportIcon * 0.25),
-                  _ControlRow(
-                    engine: widget.engine,
-                    controller: widget.controller,
-                    playPauseFocus: widget.playPauseFocus,
-                    onInteraction: widget.onInteraction,
-                    theme: theme,
-                    metrics: m,
+                  // Inset to line the controls up with the seek track rather
+                  // than the screen edge: the track is set in by the two time
+                  // readouts, so without this play/pause and Next Episode
+                  // hang off past both ends of the bar they belong to.
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: m.meta * 4.5),
+                    child: _ControlRow(
+                      engine: widget.engine,
+                      controller: widget.controller,
+                      playPauseFocus: widget.playPauseFocus,
+                      onInteraction: widget.onInteraction,
+                      theme: theme,
+                      metrics: m,
+                    ),
                   ),
                 ],
               ),
