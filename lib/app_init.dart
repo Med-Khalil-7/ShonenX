@@ -22,6 +22,19 @@ import 'package:shonenx/features/tracking/domain/isar_tracker_link.dart';
 
 class AppInit {
   static bool isBridgeInitialized = false;
+
+  /// Completes when [setupBridge] has finished, successfully or not.
+  ///
+  /// The flag alone was not enough to build on. It is set in a `finally`, so
+  /// it says "we tried", not "extensions are loaded" -- and anything that
+  /// looked at the extension runtime before that point got an exception, fell
+  /// back to inbuilt sources, and had no way to hear about it later. Awaiting
+  /// this instead means a fast launch waits rather than concluding there are
+  /// no extensions. It always completes: [setupBridge] cannot leave it hanging
+  /// even when the bridge throws.
+  static final Completer<void> _bridgeReady = Completer<void>();
+  static Future<void> get bridgeReady => _bridgeReady.future;
+
   static String? pendingDeepLink;
 
   late final ScopedLogger _log = AppLogger.scope(AppInit);
@@ -166,6 +179,7 @@ class AppInit {
       rethrow;
     } finally {
       isBridgeInitialized = true;
+      if (!_bridgeReady.isCompleted) _bridgeReady.complete();
     }
   }
 
