@@ -158,7 +158,7 @@ class _TvSideRailState extends State<TvSideRail> {
                     // have to step over decoration to reach a destination.
                     Padding(
                       padding: EdgeInsets.only(left: m.railItemInset),
-                      child: const ExcludeFocus(child: _RailLogo()),
+                      child: ExcludeFocus(child: _RailLogo(expanded: _expanded)),
                     ),
                     Expanded(
                       child: FocusTraversalGroup(
@@ -218,37 +218,84 @@ class _TvSideRailState extends State<TvSideRail> {
   }
 }
 
+/// The brand mark, and the app's name beside it once the rail expands.
+///
+/// Same shape as a destination row -- mark where the icon would be, wordmark
+/// where the label would be -- so the expansion reads as one motion rather
+/// than as the logo doing something of its own.
 class _RailLogo extends StatelessWidget {
-  const _RailLogo();
+  final bool expanded;
+
+  const _RailLogo({required this.expanded});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final m = ShonenXMetrics.of(context);
-    return SizedBox(
-      width: m.railLogo,
+    final expandedWidth =
+        m.railExpandedWidth * _railItemFraction - m.railItemInset * 2;
+
+    return AnimatedContainer(
+      duration: TvFocus.animation,
+      curve: TvFocus.curve,
+      width: expanded ? expandedWidth : m.railLogo,
       height: m.railLogo,
-      // No fill and no clip. The asset already carries its own dark rounded
-      // plate; a primary-coloured box behind it plus a rounded-rect clip that
-      // did not match the artwork's own corners left a thin red ring around
-      // the logo, which read as a border someone had drawn on purpose.
-      //
-      // The fallback keeps the fill, because a bare glyph on the rail's
-      // background would not read as a brand mark at all.
-      child: Image.asset(
-        'assets/images/app_icon.png',
-        fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary,
-            borderRadius: BorderRadius.circular(m.railLogo * 0.3),
+      child: Row(
+        children: [
+          SizedBox(
+            width: m.railLogo,
+            height: m.railLogo,
+            // No fill and no clip. The asset already carries its own dark
+            // rounded plate; a primary-coloured box behind it plus a
+            // rounded-rect clip that did not match the artwork's own corners
+            // left a thin red ring around the logo, which read as a border
+            // someone had drawn on purpose.
+            //
+            // The fallback keeps the fill, because a bare glyph on the rail's
+            // background would not read as a brand mark at all.
+            child: Image.asset(
+              'assets/images/app_icon.png',
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => Container(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(m.railLogo * 0.3),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: m.railIcon,
+                ),
+              ),
+            ),
           ),
-          alignment: Alignment.center,
-          child: Icon(
-            Icons.play_arrow_rounded,
-            color: Colors.white,
-            size: m.railIcon,
-          ),
-        ),
+          if (expanded)
+            // Clipped rather than wrapped, like the destination labels: mid
+            // animation the row is narrower than the word.
+            Expanded(
+              child: ClipRect(
+                child: OverflowBox(
+                  alignment: Alignment.centerLeft,
+                  maxWidth: expandedWidth,
+                  child: Padding(
+                    padding: EdgeInsets.only(left: m.railItemInset * 0.6),
+                    child: Text(
+                      'ShonenX',
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                      softWrap: false,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontSize: m.heading,
+                        color: theme.colorScheme.onSurface,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
