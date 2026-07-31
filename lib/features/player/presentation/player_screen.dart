@@ -117,10 +117,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       DeviceOrientation.landscapeRight,
     ]);
 
-    try {
-      ref.read(videoEngineProvider).dispose();
-    } catch (_) {}
-
+    // Deliberately not disposing the engine here. videoEngineProvider is
+    // autoDispose and this screen holds the only watch, so its own
+    // ref.onDispose tears the engine down a moment later. Doing it here as
+    // well meant two concurrent teardowns of one mpv context.
     super.dispose();
   }
 

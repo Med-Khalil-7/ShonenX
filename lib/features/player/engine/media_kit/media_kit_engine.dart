@@ -413,15 +413,39 @@ class MediaKitEngine implements VideoEngine {
     await _player.setRate(speed);
   }
 
+  /// Idempotent, and it has to be.
+  ///
+  /// Two owners call this: `PlayerScreen.dispose` and the provider's own
+  /// `ref.onDispose`. The flag alone was not enough -- it guarded the stream
+  /// listeners but not the teardown below, so both callers reached
+  /// `_player.dispose()`. media_kit throws on the second call, and because the
+  /// first call is never awaited that throw lands as an unhandled async error
+  /// part-way through the teardown, before `mpv_terminate_destroy` is
+  /// scheduled. The mpv context then leaks -- and with it the MediaCodec
+  /// instance it holds.
+  ///
+  /// That is what "the next episode loads everything and sits at 0:00" is: the
+  /// demuxer is fine, so the playlist parses and the duration appears, but
+  /// there is no decoder left to hand the frames to. The first playback after
+  /// a cold start works because the codec pool is empty; every one after it
+  /// inherits the leak.
+  Future<void>? _disposing;
+
   @override
-  Future<void> dispose() async {
+  Future<void> dispose() => _disposing ??= _dispose();
+
+  Future<void> _dispose() async {
     _disposed = true;
     await _positionSubscription?.cancel();
     for (final sub in _subscriptions) {
       await sub.cancel();
     }
     await _disposePreview();
-    await _player.dispose();
+    try {
+      await _player.dispose();
+    } catch (_) {
+      // Already gone. Nothing left to release.
+    }
   }
 
   @override
