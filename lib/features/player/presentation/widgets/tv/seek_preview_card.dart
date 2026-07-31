@@ -73,8 +73,8 @@ class _SeekPreviewCardState extends ConsumerState<SeekPreviewCard> {
 
         return SizedBox(
           height:
-              (widget.enabled ? width / (16 / 9) + m.meta * 2 : m.meta * 2) +
-              (hint == null ? 0 : m.meta * 1.4),
+              (widget.enabled ? width / (16 / 9) + m.playerLabel * 2 : m.playerLabel * 2) +
+              (hint == null ? 0 : m.playerLabel * 1.4),
           child: Stack(
             children: [
               Positioned(
@@ -86,12 +86,12 @@ class _SeekPreviewCardState extends ConsumerState<SeekPreviewCard> {
                     children: [
                       if (widget.enabled) ...[
                         _Frame(bytes: _lastFrame, width: width),
-                        SizedBox(height: m.meta * 0.3),
+                        SizedBox(height: m.playerLabel * 0.3),
                       ],
                       Text(
                         widget.label,
                         style: theme.textTheme.titleMedium?.copyWith(
-                          fontSize: m.meta,
+                          fontSize: m.playerLabel,
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
                           shadows: const [
@@ -103,7 +103,7 @@ class _SeekPreviewCardState extends ConsumerState<SeekPreviewCard> {
                         Text(
                           hint,
                           style: theme.textTheme.labelMedium?.copyWith(
-                            fontSize: m.meta * 0.8,
+                            fontSize: m.playerLabel * 0.8,
                             color: Colors.white70,
                             shadows: const [
                               Shadow(blurRadius: 6, color: Colors.black87),

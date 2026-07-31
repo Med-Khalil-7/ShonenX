@@ -154,7 +154,7 @@ class _PlayerSkipButtonState extends ConsumerState<PlayerSkipButton> {
       child: TvButton(
         label: label,
         icon: Icons.skip_next_rounded,
-        height: m.buttonHeight,
+        height: m.playerButtonHeight,
         focusNode: _focus,
         variant: TvButtonVariant.filledWhite,
         ensureVisible: false,

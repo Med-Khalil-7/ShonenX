@@ -119,7 +119,15 @@ class _SearchDiscoverScreenState extends ConsumerState<SearchDiscoverScreen> {
       // left column is already a control surface a title row is dead space.
       fullBleed: true,
       body: Padding(
-        padding: EdgeInsets.fromLTRB(gutter, gutter * 0.5, gutter, 0),
+        // The right edge uses the full gutter, not the rail-adjusted one:
+        // nothing has eaten into that side, and at the shell gutter the result
+        // descriptions ran within a few pixels of the screen edge.
+        padding: EdgeInsets.fromLTRB(
+          gutter,
+          gutter * 0.5,
+          m.gutter(MediaQuery.sizeOf(context)),
+          0,
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

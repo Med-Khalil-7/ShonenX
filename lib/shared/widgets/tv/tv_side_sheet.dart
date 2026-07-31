@@ -10,7 +10,11 @@ import 'package:flutter/material.dart';
 /// video or leaves a strip too short to list episodes in.
 abstract final class TvSideSheet {
   /// Fraction of the screen width the panel occupies.
-  static const widthFraction = 0.38;
+  ///
+  /// Matched to the reference's centred dialog, which measures 0.32 of the
+  /// screen. The panel is chrome rather than content, and at 0.38 it took more
+  /// of the picture than the thing it was configuring.
+  static const widthFraction = 0.32;
 
   static Future<T?> show<T>({
     required BuildContext context,

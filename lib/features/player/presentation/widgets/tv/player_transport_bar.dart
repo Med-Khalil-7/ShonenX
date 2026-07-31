@@ -133,7 +133,7 @@ class _PlayerTransportBarState extends ConsumerState<PlayerTransportBar> {
                   // readouts, so without this play/pause and Next Episode
                   // hang off past both ends of the bar they belong to.
                   Padding(
-                    padding: EdgeInsets.symmetric(horizontal: m.meta * 4.5),
+                    padding: EdgeInsets.symmetric(horizontal: m.playerLabel * 4.5),
                     child: _ControlRow(
                       engine: widget.engine,
                       controller: widget.controller,
@@ -412,7 +412,7 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
 
     final shown = _pending ?? position;
     final timeStyle = theme.textTheme.titleMedium?.copyWith(
-      fontSize: m.meta,
+      fontSize: m.playerLabel,
       color: Colors.white70,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
@@ -428,7 +428,7 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
           Padding(
             // Line the card's track up with the bar itself, which is inset by
             // the two time readouts either side of it.
-            padding: EdgeInsets.symmetric(horizontal: m.meta * 4.5),
+            padding: EdgeInsets.symmetric(horizontal: m.playerLabel * 4.5),
             child: SeekPreviewCard(
               target: _previewTarget ?? _coarse(shown),
               label: formatPlaybackTime(shown),
@@ -444,7 +444,7 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
         Row(
           children: [
             SizedBox(
-              width: m.meta * 4.5,
+              width: m.playerLabel * 4.5,
               child: Text(formatPlaybackTime(shown), style: timeStyle),
             ),
             Expanded(
@@ -482,7 +482,7 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
               ),
             ),
             SizedBox(
-              width: m.meta * 4.5,
+              width: m.playerLabel * 4.5,
               child: Text(
                 formatPlaybackTime(duration),
                 style: timeStyle,
@@ -620,12 +620,12 @@ class _TransportButton extends StatelessWidget {
                 Text(
                   label!,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    fontSize: m.meta,
+                    fontSize: m.playerLabel,
                     color: color,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                SizedBox(width: m.meta * 0.6),
+                SizedBox(width: m.playerLabel * 0.6),
               ],
               SizedBox(
                 width: m.transportIcon,

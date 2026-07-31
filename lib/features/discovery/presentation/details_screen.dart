@@ -206,6 +206,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                               ),
                             ),
                           ),
+                          // Clear space, so the arrow does not read as the
+                          // first item of the metadata line next to it.
+                          SizedBox(width: m.backArrowGap),
                           Expanded(child: _buildInfoColumn(media, theme, cs)),
                           SizedBox(width: gutter * 0.5),
                           _Poster(
@@ -478,6 +481,11 @@ class _IconButton extends StatelessWidget {
       onTap: onPressed,
       borderRadius: BorderRadius.circular(10),
       scaleOnFocus: false,
+      // Same treatment as the player's back arrow: over a backdrop image a
+      // white ring competes with whatever is behind it, so focus tints the
+      // glyph instead. It also keeps the arrow reading as a bare icon rather
+      // than as a boxed button.
+      ringColor: Colors.transparent,
       builder: (context, isFocused) => SizedBox(
         width: m.iconButton * 1.5,
         height: m.iconButton * 1.5,
@@ -485,7 +493,7 @@ class _IconButton extends StatelessWidget {
           icon,
           size: m.iconButton,
           semanticLabel: tooltip,
-          color: isFocused ? cs.onSurface : cs.onSurfaceVariant,
+          color: isFocused ? cs.primary : cs.onSurfaceVariant,
         ),
       ),
     );

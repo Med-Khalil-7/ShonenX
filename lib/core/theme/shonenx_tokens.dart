@@ -74,6 +74,29 @@ abstract final class ShonenX {
 /// Type sizes are here for the same reason, and are applied as explicit
 /// `fontSize` values: the replica screens must not inherit Material's scale
 /// *and* the 1.2x TV multiplier in `AppTheme._tvSizing` on top of it.
+///
+/// ## How these numbers were arrived at
+///
+/// The reference grab `Screenshot from 2026-07-30 20-23-22.png` is 1897x845
+/// with the screen spanning x 14..1894, so ~1881px of real width. Measuring
+/// the same elements there and in a device capture gives the ratio directly:
+///
+/// | element | reference | before | ratio |
+/// |---|---|---|---|
+/// | row poster (pitch 184.5, gap 8) | 0.094 | 0.140 | 0.67 |
+/// | detail poster | 0.186 | 0.248 | 0.75 |
+/// | Play now height, incl. ring | 0.034 | 0.050 | 0.68 |
+/// | detail title ink | 0.0175 | 0.0234 | 0.75 |
+/// | synopsis ink | 0.0101 | 0.0135 | 0.75 |
+///
+/// Two groups fall out: **boxes shrink ~0.67, type shrinks ~0.75**. Text
+/// holding relatively larger than the boxes around it is right for a 10-foot
+/// UI, and the same 0.75 comes out of two independent text measurements, so it
+/// is the design rather than measurement noise. Anything measurable is set to
+/// its measured value; everything else follows its group's factor.
+///
+/// The player overlay is deliberately **not** on this scale -- see the player
+/// group at the bottom.
 class ShonenXMetrics {
   /// Viewport width in logical pixels.
   final double w;
@@ -85,55 +108,95 @@ class ShonenXMetrics {
 
   // --- Layout -------------------------------------------------------------
 
-  double get railWidth => w * 0.095;
-  double get railIcon => w * 0.028;
-  double get railLogo => w * 0.045;
-  double get railItem => w * 0.062;
-  Size get railIndicator => Size(w * 0.0045, w * 0.030);
+  double get railWidth => w * 0.064;
+  double get railIcon => w * 0.019;
+  double get railLogo => w * 0.030;
+  double get railItem => w * 0.042;
+  Size get railIndicator => Size(w * 0.003, w * 0.020);
+
+  /// Width the rail grows to when it takes focus.
+  ///
+  /// Drawn over the content rather than pushing it, so this width costs
+  /// nothing below it -- see `TvSideRail`.
+  double get railExpandedWidth => w * 0.235;
+
+  /// Left inset of the rail's icons, held constant across the expansion so the
+  /// icons stay put and only the labels arrive.
+  double get railItemInset => w * 0.011;
 
   /// The left edge every screen aligns to.
   ///
   /// Margins deliberately do not scale with the rest: growing them only steals
   /// width from the content they frame.
   double gutter(Size size) =>
-      math.max(w * 0.091, TvMetrics.horizontalOfSize(size));
+      math.max(w * 0.061, TvMetrics.horizontalOfSize(size));
 
-  double get backArrowInset => w * 0.061;
+  /// Where the detail screen's back arrow sits.
+  ///
+  /// The content column lands at `backArrowInset + arrow slot + backArrowGap`,
+  /// which the reference puts at 0.073W with the arrow itself around 0.040W.
+  /// These two are chosen so that sum comes out right -- changing either moves
+  /// the column, not just the arrow.
+  double get backArrowInset => w * 0.026;
+
+  /// Clear space between the back arrow and the text beside it. Without it the
+  /// arrow reads as part of the metadata line rather than as its own control.
+  double get backArrowGap => w * 0.016;
 
   /// Gutter for content that already sits inside the navigation rail's
   /// padding. The rail has consumed part of the margin, so only the remainder
   /// is added -- otherwise the two stack and the column starts twice as far in
   /// as the design calls for.
+  ///
+  /// At the reference scale the rail is wider than the plain gutter, so this
+  /// is the floor in practice: `railWidth + 0.025` puts shell content at
+  /// ~0.089W, which is where the reference home starts its rows.
   double shellGutter(Size size) =>
-      math.max(gutter(size) - railWidth, w * 0.020);
+      math.max(gutter(size) - railWidth, w * 0.025);
 
-  double get heroPoster => w * 0.26;
-  double get rowPoster => w * 0.14;
-  double get rowGap => w * 0.008;
-  double get detailPoster => w * 0.25;
+  double get heroPoster => w * 0.180;
+  double get rowPoster => w * 0.094;
+  double get rowGap => w * 0.0045;
+  double get detailPoster => w * 0.186;
 
-  double get buttonWidth => w * 0.21;
-  double get buttonHeight => w * 0.052;
-  double get iconButton => w * 0.036;
+  double get buttonWidth => w * 0.140;
+
+  /// Slightly taller than the reference's 0.030: measured against the capture
+  /// the labels sat tight to the top and bottom edges, and the extra reads as
+  /// deliberate padding rather than as a bigger button.
+  double get buttonHeight => w * 0.042;
+  double get iconButton => w * 0.024;
 
   // --- Search -------------------------------------------------------------
 
-  double get searchColumn => w * 0.30;
-  double get searchField => w * 0.050;
-  double get keyHeight => w * 0.046;
-  double get resultThumb => w * 0.070;
+  /// The search column runs a notch larger than the reference scale would put
+  /// it. Everywhere else the user is reading; here they are aiming a D-pad at
+  /// 38 individual keys, and the keys have to stay comfortable targets.
+  double get searchColumn => w * 0.231;
+  double get searchField => w * 0.039;
+  double get keyHeight => w * 0.036;
+  double get resultThumb => w * 0.054;
 
   // --- Type ---------------------------------------------------------------
 
-  double get titleHero => w * 0.033;
-  double get titlePage => w * 0.030;
-  double get heading => w * 0.024;
-  double get meta => w * 0.018;
-  double get label => w * 0.018;
-  double get body => w * 0.015;
-  double get badge => w * 0.013;
+  double get titleHero => w * 0.0248;
+  double get titlePage => w * 0.0225;
+  double get heading => w * 0.0180;
+  double get meta => w * 0.0135;
+  double get label => w * 0.0135;
+  double get body => w * 0.0113;
+  double get badge => w * 0.0098;
 
   // --- Player -------------------------------------------------------------
+
+  /// The player overlay is held at the scale it was tuned to on a device and
+  /// is **not** part of the reference rescale: it was reviewed and accepted as
+  /// it stands, and the transport row in particular is read from across a room
+  /// while the video plays behind it.
+  ///
+  /// Its side surfaces -- the audio panel, the settings panel, the exit dialog
+  /// -- are ordinary app chrome and use the shared metrics above, so they do
+  /// come down with everything else.
 
   double get playerIcon => w * 0.027;
   double get playerIconGap => w * 0.075;
@@ -145,10 +208,21 @@ class ShonenXMetrics {
 
   /// Width of the scrub preview card. 16:9, so its height follows.
   double get seekPreview => w * 0.22;
-  double get dialogWidth => w * 0.400;
+
+  /// Type and button sizes for the overlay.
+  ///
+  /// These are what [heading], [meta] and [buttonHeight] were before the
+  /// rescale. They are separate getters rather than shared ones so the overlay
+  /// keeps its size when the app scale moves again -- borrowing the app's type
+  /// is exactly how it would have been shrunk by accident.
+  double get playerHeading => w * 0.024;
+  double get playerLabel => w * 0.018;
+  double get playerButtonHeight => w * 0.052;
+
+  double get dialogWidth => w * 0.320;
 
   // --- Hero ---------------------------------------------------------------
 
   /// Width of one artwork thumbnail in the slide strip.
-  double get heroThumb => w * 0.048;
+  double get heroThumb => w * 0.033;
 }

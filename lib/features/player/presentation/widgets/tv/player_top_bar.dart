@@ -92,19 +92,19 @@ class PlayerTopBar extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleLarge?.copyWith(
-                          fontSize: m.heading * 0.93,
+                          fontSize: m.playerHeading * 0.93,
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       if (subtitle != null) ...[
-                        SizedBox(height: m.meta * 0.2),
+                        SizedBox(height: m.playerLabel * 0.2),
                         Text(
                           subtitle!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.titleMedium?.copyWith(
-                            fontSize: m.meta,
+                            fontSize: m.playerLabel,
                             color: Colors.white70,
                           ),
                         ),

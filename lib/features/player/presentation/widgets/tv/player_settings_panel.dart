@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/core/tv/tv_focusable.dart';
 import 'package:shonenx/features/player/domain/stream_catalog.dart';
 import 'package:shonenx/features/player/engine/video_engine.dart';
@@ -89,7 +90,9 @@ class _PlayerSettingsPanelState extends ConsumerState<PlayerSettingsPanel> {
     final firstRow = hasQuality ? _Row.quality : _Row.server;
 
     return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(
+        vertical: ShonenXMetrics.of(context).meta * 0.6,
+      ),
       children: [
         if (hasQuality)
           _NavRow(
@@ -303,9 +306,15 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final m = ShonenXMetrics.of(context);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+      padding: EdgeInsets.fromLTRB(
+        m.meta * 1.4,
+        m.meta * 1.4,
+        m.meta * 1.4,
+        m.meta * 0.8,
+      ),
       child: Row(
         children: [
           if (onBack != null) ...[
@@ -313,17 +322,18 @@ class _Header extends StatelessWidget {
               onTap: onBack,
               borderRadius: BorderRadius.circular(8),
               scaleOnFocus: false,
-              child: const SizedBox(
-                width: 40,
-                height: 40,
-                child: Icon(Icons.arrow_back, size: 26),
+              child: SizedBox(
+                width: m.iconButton * 1.5,
+                height: m.iconButton * 1.5,
+                child: Icon(Icons.arrow_back, size: m.iconButton),
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: m.meta * 0.9),
           ],
           Text(
             title,
             style: theme.textTheme.titleLarge?.copyWith(
+              fontSize: m.heading,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -350,6 +360,7 @@ class _NavRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final m = ShonenXMetrics.of(context);
 
     return TvFocusable(
       onTap: onTap,
@@ -360,23 +371,31 @@ class _NavRow extends StatelessWidget {
       focusFillColor: cs.surfaceContainerHigh,
       ringColor: Colors.transparent,
       child: Container(
-        height: 64,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        height: m.buttonHeight * 1.3,
+        padding: EdgeInsets.symmetric(horizontal: m.meta * 1.4),
         alignment: Alignment.centerLeft,
         child: Row(
           children: [
             Expanded(
-              child: Text(label, style: theme.textTheme.titleMedium),
+              child: Text(
+                label,
+                style: theme.textTheme.titleMedium?.copyWith(fontSize: m.meta),
+              ),
             ),
             if (value.isNotEmpty)
               Text(
                 value,
                 style: theme.textTheme.titleMedium?.copyWith(
+                  fontSize: m.meta,
                   color: cs.onSurfaceVariant,
                 ),
               ),
-            const SizedBox(width: 8),
-            Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+            SizedBox(width: m.meta * 0.6),
+            Icon(
+              Icons.chevron_right,
+              size: m.meta * 1.5,
+              color: cs.onSurfaceVariant,
+            ),
           ],
         ),
       ),
@@ -401,10 +420,11 @@ class _OptionList<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final m = ShonenXMetrics.of(context);
     final selectedIndex = options.indexWhere(isSelected);
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(vertical: m.meta * 0.6),
       itemCount: options.length,
       itemBuilder: (context, index) {
         final option = options[index];
@@ -421,8 +441,8 @@ class _OptionList<T> extends StatelessWidget {
           focusFillColor: cs.surfaceContainerHigh,
           ringColor: Colors.transparent,
           child: Container(
-            height: 60,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            height: m.buttonHeight * 1.2,
+            padding: EdgeInsets.symmetric(horizontal: m.meta * 1.4),
             child: Row(
               children: [
                 Expanded(
@@ -430,10 +450,13 @@ class _OptionList<T> extends StatelessWidget {
                     labelOf(option),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontSize: m.meta,
+                    ),
                   ),
                 ),
-                if (selected) Icon(Icons.check, color: cs.primary),
+                if (selected)
+                  Icon(Icons.check, size: m.meta * 1.4, color: cs.primary),
               ],
             ),
           ),

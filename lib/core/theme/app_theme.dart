@@ -13,7 +13,7 @@ class AppTheme {
   AppTheme._();
 
   /// Minimum hit target for a D-pad-driven UI.
-  static const _tvButtonMinSize = Size(120, 60);
+  static const _tvButtonMinSize = Size(88, 44);
 
   static ThemeData light(ThemePrefsState prefs, ColorScheme? colorScheme) {
     return _buildTheme(
@@ -249,7 +249,14 @@ class AppTheme {
     return theme.copyWith(shadowColor: Colors.transparent);
   }
 
-  static const double _tvTextScale = 1.2;
+  /// Type multiplier for the Material-styled screens.
+  ///
+  /// Settings, extensions, history and the sheets are not in the design
+  /// reference and inherit Material's scale rather than [ShonenXMetrics]. When
+  /// the replica screens were rescaled to the reference they came down by
+  /// ~0.75 on type and ~0.67 on boxes, and a 1.2x multiplier here left these
+  /// screens visibly larger than everything they sit next to.
+  static const double _tvTextScale = 0.9;
 
   /// Undoes [_tvSizing]'s type scale for a subtree.
   ///
@@ -365,35 +372,35 @@ class AppTheme {
       visualDensity: VisualDensity.comfortable,
       textTheme: _scaleTextTheme(theme.textTheme),
       primaryTextTheme: _scaleTextTheme(theme.primaryTextTheme),
-      iconTheme: theme.iconTheme.copyWith(size: 30),
+      iconTheme: theme.iconTheme.copyWith(size: 22),
       // ListTile and bare InkWells fall back to this; the stock 20%-alpha
       // wash is invisible at 10 feet, so it is much stronger here.
       focusColor: cs.primary.withValues(alpha: 0.34),
       listTileTheme: theme.listTileTheme.copyWith(
-        minTileHeight: 72,
-        minVerticalPadding: 14,
+        minTileHeight: 52,
+        minVerticalPadding: 10,
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 24,
-          vertical: 8,
+          horizontal: 18,
+          vertical: 6,
         ),
       ),
       // Merge rather than replace: _widgets already set the rounded shape.
       iconButtonTheme: IconButtonThemeData(
         style: (theme.iconButtonTheme.style ?? const ButtonStyle()).copyWith(
-          minimumSize: const WidgetStatePropertyAll(Size(56, 56)),
-          iconSize: const WidgetStatePropertyAll(28),
+          minimumSize: const WidgetStatePropertyAll(Size(42, 42)),
+          iconSize: const WidgetStatePropertyAll(21),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: _tvButtonMinSize,
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
         ).copyWith(side: _focusRing(cs), overlayColor: _focusOverlay(cs)),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           minimumSize: _tvButtonMinSize,
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
         ).copyWith(side: _focusRing(cs), overlayColor: _focusOverlay(cs)),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -405,7 +412,7 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           minimumSize: _tvButtonMinSize,
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
         ).copyWith(side: _focusRing(cs), overlayColor: _focusOverlay(cs)),
       ),
       chipTheme: theme.chipTheme.copyWith(
