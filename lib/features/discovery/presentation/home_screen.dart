@@ -243,15 +243,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     totalCount = totalDiscoveryCounts[mt] ?? 1;
                   }
 
+                  // No padding here: the gap below a row is the row's own, so
+                  // a section with nothing to show collapses to nothing
+                  // instead of leaving a gap where it would have been.
                   return SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 16.0),
-                      child: _buildSectionWidget(
-                        context,
-                        section,
-                        discoveryIndex: dIndex,
-                        totalDiscoverySections: totalCount,
-                      ),
+                    child: _buildSectionWidget(
+                      context,
+                      section,
+                      discoveryIndex: dIndex,
+                      totalDiscoverySections: totalCount,
                     ),
                   );
                 });

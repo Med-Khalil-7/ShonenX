@@ -50,83 +50,90 @@ class HorizontalSection<T> extends StatelessWidget {
     // up/down move between rows, instead of the geometric policy wandering
     // diagonally into a neighbouring row's items.
     return FocusTraversalGroup(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: EdgeInsets.only(
-              left: edge,
-              right: edge,
-              top: 8,
-              bottom: 12,
-            ),
-            // No "see all" affordance: it is an extra focus stop between the
-            // heading and the row it labels, and everything it leads to is
-            // reachable by scrolling the row itself.
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontSize: m.heading,
-                fontWeight: FontWeight.w700,
+      child: Padding(
+        // The gap below a row belongs to the row. Home used to add it around
+        // every section from the outside, so a section that had nothing to
+        // show and collapsed itself still left its gap behind -- an empty
+        // Continue Watching pushed the first category down by a row's margin.
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: EdgeInsets.only(
+                left: edge,
+                right: edge,
+                top: 8,
+                bottom: 12,
               ),
-            ),
-          ),
-          SizedBox(
-            height: height,
-            child: data.when(
-              loading: () => Skeletonizer(
-                enabled: true,
-                child: ListView.separated(
-                  clipBehavior: Clip.none,
-                  scrollDirection: Axis.horizontal,
-                  padding: EdgeInsets.symmetric(horizontal: edge),
-                  itemCount: skeletonCount,
-                  itemBuilder: (context, index) {
-                    if (skeletonItemBuilder != null) {
-                      return skeletonItemBuilder!(context, index);
-                    }
-                    return Container(
-                      width: height * 0.7,
-                      height: height,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    );
-                  },
-                  separatorBuilder: (context, index) =>
-                      SizedBox(width: separator),
+              // No "see all" affordance: it is an extra focus stop between the
+              // heading and the row it labels, and everything it leads to is
+              // reachable by scrolling the row itself.
+              child: Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: m.heading,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              error: (e, _) => Center(child: Text('Error: $e')),
-              data: (items) {
-                if (items.isEmpty) {
-                  return Center(
-                    child: Text(
-                      emptyText,
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  );
-                }
-
-                return ListView.separated(
-                  clipBehavior: Clip.none,
-                  scrollDirection: Axis.horizontal,
-                  padding: EdgeInsets.symmetric(horizontal: edge),
-                  // Directional traversal can only reach focus nodes that have
-                  // actually been built. Without a generous cache the row simply
-                  // dead-ends at the edge of the viewport.
-                  cacheExtent: 1600,
-                  itemCount: items.length,
-                  itemBuilder: (context, index) =>
-                      itemBuilder(context, items[index]),
-                  separatorBuilder: (context, index) =>
-                      SizedBox(width: separator),
-                );
-              },
             ),
-          ),
-        ],
+            SizedBox(
+              height: height,
+              child: data.when(
+                loading: () => Skeletonizer(
+                  enabled: true,
+                  child: ListView.separated(
+                    clipBehavior: Clip.none,
+                    scrollDirection: Axis.horizontal,
+                    padding: EdgeInsets.symmetric(horizontal: edge),
+                    itemCount: skeletonCount,
+                    itemBuilder: (context, index) {
+                      if (skeletonItemBuilder != null) {
+                        return skeletonItemBuilder!(context, index);
+                      }
+                      return Container(
+                        width: height * 0.7,
+                        height: height,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      );
+                    },
+                    separatorBuilder: (context, index) =>
+                        SizedBox(width: separator),
+                  ),
+                ),
+                error: (e, _) => Center(child: Text('Error: $e')),
+                data: (items) {
+                  if (items.isEmpty) {
+                    return Center(
+                      child: Text(
+                        emptyText,
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                    );
+                  }
+
+                  return ListView.separated(
+                    clipBehavior: Clip.none,
+                    scrollDirection: Axis.horizontal,
+                    padding: EdgeInsets.symmetric(horizontal: edge),
+                    // Directional traversal can only reach focus nodes that have
+                    // actually been built. Without a generous cache the row simply
+                    // dead-ends at the edge of the viewport.
+                    cacheExtent: 1600,
+                    itemCount: items.length,
+                    itemBuilder: (context, index) =>
+                        itemBuilder(context, items[index]),
+                    separatorBuilder: (context, index) =>
+                        SizedBox(width: separator),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

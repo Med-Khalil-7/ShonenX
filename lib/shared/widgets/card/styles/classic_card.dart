@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:shonenx/core/tv/tv_metrics.dart';
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/shared/providers/ui_prefs_provider.dart';
 import '../components/card_badges.dart';
 import '../components/card_metadata.dart';
@@ -29,9 +31,12 @@ class ClassicCard extends StatelessWidget {
       height: config.height,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(GlobalUI.uiRoundness),
+        // White at the app's ring width, the same focus language every other
+        // card on the screen uses. A tertiary-toned outline read as a red
+        // accent belonging to the card rather than as "this is selected".
         border: Border.all(
-          color: config.isActive ? cs.tertiary : Colors.transparent,
-          width: config.isActive ? 2.5 : 1.0,
+          color: config.isActive ? ShonenX.ringColor : Colors.transparent,
+          width: config.isActive ? TvFocus.ringWidth : 1.0,
           strokeAlign: BorderSide.strokeAlignOutside,
         ),
       ),
@@ -96,7 +101,6 @@ class ClassicCard extends StatelessWidget {
   }
 
   Widget _buildWide(ThemeData theme) {
-    final cs = theme.colorScheme;
     final thumbW = config.width * 0.48;
 
     return AnimatedContainer(
@@ -105,9 +109,12 @@ class ClassicCard extends StatelessWidget {
       height: config.height,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(GlobalUI.uiRoundness),
+        // White at the app's ring width, the same focus language every other
+        // card on the screen uses. A tertiary-toned outline read as a red
+        // accent belonging to the card rather than as "this is selected".
         border: Border.all(
-          color: config.isActive ? cs.tertiary : Colors.transparent,
-          width: config.isActive ? 2.5 : 1.0,
+          color: config.isActive ? ShonenX.ringColor : Colors.transparent,
+          width: config.isActive ? TvFocus.ringWidth : 1.0,
           strokeAlign: BorderSide.strokeAlignOutside,
         ),
       ),

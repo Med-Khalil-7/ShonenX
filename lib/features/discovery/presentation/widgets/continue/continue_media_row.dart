@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shonenx/core/theme/shonenx_tokens.dart';
+import 'package:shonenx/core/tv/tv_metrics.dart';
 import 'package:shonenx/shared/providers/ui_prefs_provider.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/continue/continue_watching_card.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/rows/horizontal_section.dart';
@@ -51,6 +52,12 @@ class ContinueMediaRow extends ConsumerWidget {
     return HorizontalSection(
       title: title,
       height: rowHeight,
+      // The poster rows ask for a gap that already includes the transparent
+      // focus ring their cards carry, and the section deducts it. These cards
+      // have no such ring, so the same request would come out as almost no
+      // gap at all -- add the ring back, plus more room because the cards are
+      // wider and need the separation to read as separate.
+      gap: m.rowGap * 2.4 + TvFocus.ringWidth * 2,
       emptyText: 'No anime in this list.',
       data: asyncData,
       onMoreTap: () => context.push('/continue/${type.id}'),
