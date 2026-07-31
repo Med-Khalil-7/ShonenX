@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/core/tv/tv_focusable.dart';
+import 'package:shonenx/shared/widgets/tv/tv_confirm_dialog.dart';
 import 'package:shonenx/core/tv/tv_metrics.dart';
 
 class TvNavDestination {
@@ -283,7 +284,7 @@ class _RailLogo extends StatelessWidget {
                     // sit centred in a box larger than themselves and get
                     // clear space for free; the mark fills its box edge to
                     // edge, so all of its breathing room has to be asked for.
-                    padding: EdgeInsets.only(left: m.railItemInset * 1.9),
+                    padding: EdgeInsets.only(left: m.railItemInset),
                     child: Text(
                       'ShonenX',
                       maxLines: 1,
@@ -564,11 +565,61 @@ class _TvShellBodyState extends State<TvShellBody> {
 /// Android delivers BACK as a platform pop rather than a key event, so
 /// PopScope is the reliable mechanism -- LogicalKeyboardKey.goBack only
 /// arrives from some remotes.
-class TvBackHandler extends StatelessWidget {
+class TvBackHandler extends StatefulWidget {
   final Widget child;
   final bool Function() onBack;
 
   const TvBackHandler({super.key, required this.child, required this.onBack});
+
+  @override
+  State<TvBackHandler> createState() => _TvBackHandlerState();
+}
+
+class _TvBackHandlerState extends State<TvBackHandler> {
+  /// Guards against a second BACK arriving while the first is still unwinding.
+  ///
+  /// A held or double-tapped BACK delivers again before `pop` has finished its
+  /// transition, and `canPop` still reports true through it -- so the same
+  /// route was popped twice and the shell ended up somewhere it could not
+  /// navigate out of.
+  bool _handling = false;
+
+  /// Separate from [_handling] because the exit prompt outlives a frame: the
+  /// transition guard has to release on the next one, this must not.
+  bool _promptOpen = false;
+
+  Future<void> _onBack() async {
+    if (_handling || _promptOpen) return;
+    _handling = true;
+
+    if (widget.onBack()) {
+      // Released on the next frame: the guard exists to swallow repeats that
+      // arrive during a transition, not to block the next real press.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _handling = false);
+      return;
+    }
+
+    // Nothing left to unwind, so this press means "leave the app" -- and BACK
+    // is a single keypress on a remote that is easy to hit by accident, so it
+    // asks first rather than dropping the user on the launcher mid-episode.
+    _handling = false;
+    _promptOpen = true;
+    final confirmed = await TvConfirmDialog.show(
+      context: context,
+      message: 'Close ShonenX?',
+      confirmLabel: 'Close',
+      cancelLabel: 'Stay',
+    );
+    if (!mounted) return;
+    _promptOpen = false;
+
+    if (confirmed == true) {
+      // Not maybePop() on the root navigator: that walks back into this very
+      // PopScope, which returns false again and calls it again. It never
+      // exited and never stopped -- that spin is what froze the app.
+      SystemNavigator.pop();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -576,13 +627,9 @@ class TvBackHandler extends StatelessWidget {
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        if (!onBack()) {
-          // Nothing left to unwind: leave the app rather than trapping the
-          // user on Home with a dead BACK button.
-          Navigator.of(context, rootNavigator: true).maybePop();
-        }
+        _onBack();
       },
-      child: child,
+      child: widget.child,
     );
   }
 }

@@ -111,25 +111,29 @@ class ShonenXMetrics {
 
   // --- Layout -------------------------------------------------------------
 
-  double get railWidth => w * 0.064;
-  double get railIcon => w * 0.019;
+  /// The rail runs a step above the reference scale.
+  ///
+  /// It is the one control on screen with no label at rest and no neighbour to
+  /// judge it against, so it takes more size than the ratio alone would give
+  /// it to stay an obvious target from across a room.
+  double get railWidth => w * 0.092;
+  double get railIcon => w * 0.028;
 
-  /// Above the reference scale, like the hero thumbnails: the mark is the only
-  /// thing on the rail that says which app this is, and at the icon sizes
-  /// around it there was nothing to recognise.
-  double get railLogo => w * 0.046;
-  double get railItem => w * 0.042;
-  Size get railIndicator => Size(w * 0.003, w * 0.020);
+  /// The mark is the only thing on the rail that says which app this is, and
+  /// at the icon sizes around it there was nothing to recognise.
+  double get railLogo => w * 0.060;
+  double get railItem => w * 0.062;
+  Size get railIndicator => Size(w * 0.0045, w * 0.030);
 
   /// Width the rail grows to when it takes focus.
   ///
   /// Drawn over the content rather than pushing it, so this width costs
   /// nothing below it -- see `TvSideRail`.
-  double get railExpandedWidth => w * 0.235;
+  double get railExpandedWidth => w * 0.300;
 
   /// Left inset of the rail's icons, held constant across the expansion so the
   /// icons stay put and only the labels arrive.
-  double get railItemInset => w * 0.011;
+  double get railItemInset => w * 0.016;
 
   /// The left edge every screen aligns to.
   ///
@@ -155,11 +159,13 @@ class ShonenXMetrics {
   /// is added -- otherwise the two stack and the column starts twice as far in
   /// as the design calls for.
   ///
-  /// At the reference scale the rail is wider than the plain gutter, so this
-  /// is the floor in practice: `railWidth + 0.025` puts shell content at
-  /// ~0.089W, which is where the reference home starts its rows.
+  /// The rail is wider than the plain gutter, so this is the floor in
+  /// practice. The reference starts its rows at ~0.092W, which the rail alone
+  /// now fills, so shell content sits further in than the reference by however
+  /// much this adds -- the cost of a rail sized to be hit from a sofa, taken
+  /// deliberately.
   double shellGutter(Size size) =>
-      math.max(gutter(size) - railWidth, w * 0.025);
+      math.max(gutter(size) - railWidth, w * 0.015);
 
   double get heroPoster => w * 0.180;
   double get rowPoster => w * 0.094;

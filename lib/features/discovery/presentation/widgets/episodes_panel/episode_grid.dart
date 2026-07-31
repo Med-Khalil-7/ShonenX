@@ -351,12 +351,12 @@ class _Grid extends StatelessWidget {
     // Target sizes, as a fraction of the viewport like every other measure in
     // the design. Rounding to the nearest whole cell is what makes the count
     // stable across titles.
-    final columns = math.max(4, ((width + gap) / (m.body * 3.6 + gap)).round());
+    final columns = math.max(4, ((width + gap) / (m.body * 5.0 + gap)).round());
     final cellW = (width - gap * (columns - 1)) / columns;
 
     if (!height.isFinite) return (columns, cellW, cellW);
 
-    final rows = math.max(3, ((height + gap) / (m.body * 3.2 + gap)).floor());
+    final rows = math.max(3, ((height + gap) / (m.body * 4.2 + gap)).floor());
     final cellH = (height - gap * (rows - 1)) / rows;
 
     return (columns, cellW, cellH);
@@ -491,7 +491,7 @@ class _Grid extends StatelessWidget {
 /// OK switches the range and leaves focus on the tab; DOWN enters the grid and
 /// UP comes back. One job per direction -- if OK also dived into the grid there
 /// would be no way to tell whether a press meant "select" or "select and go".
-class _RangeTabStrip extends StatelessWidget {
+class _RangeTabStrip extends StatefulWidget {
   final List<String> ranges;
   final int selected;
   final List<FocusNode> nodes;
@@ -505,6 +505,49 @@ class _RangeTabStrip extends StatelessWidget {
     required this.onSelected,
     required this.onEnterGrid,
   });
+
+  @override
+  State<_RangeTabStrip> createState() => _RangeTabStripState();
+}
+
+class _RangeTabStripState extends State<_RangeTabStrip> {
+  final _scroll = ScrollController();
+  bool _atStart = true;
+  bool _atEnd = true;
+
+  List<String> get ranges => widget.ranges;
+  int get selected => widget.selected;
+  List<FocusNode> get nodes => widget.nodes;
+  ValueChanged<int> get onSelected => widget.onSelected;
+  VoidCallback get onEnterGrid => widget.onEnterGrid;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_sync);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _sync());
+  }
+
+  @override
+  void dispose() {
+    _scroll.removeListener(_sync);
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Which edges still have tabs beyond them.
+  void _sync() {
+    if (!_scroll.hasClients) return;
+    final p = _scroll.position;
+    final atStart = p.pixels <= p.minScrollExtent + 1;
+    final atEnd = p.pixels >= p.maxScrollExtent - 1;
+    if (atStart != _atStart || atEnd != _atEnd) {
+      setState(() {
+        _atStart = atStart;
+        _atEnd = atEnd;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -532,43 +575,88 @@ class _RangeTabStrip extends StatelessWidget {
   }
 
   Widget _buildStrip(BuildContext context, ColorScheme cs, ShonenXMetrics m) {
-    return SingleChildScrollView(
+    // Always scrolls, and the tabs are sized for a sofa rather than sized to
+    // fit. Dividing the width between them made each one narrower the more
+    // ranges a series had -- exactly backwards, since a long series is when
+    // the strip matters most.
+    final strip = SingleChildScrollView(
+      controller: _scroll,
       scrollDirection: Axis.horizontal,
-      clipBehavior: Clip.none,
       child: Row(
         spacing: m.rowGap,
         children: [
-          for (var i = 0; i < ranges.length; i++)
-            TvFocusable(
-              focusNode: i < nodes.length ? nodes[i] : null,
-              onTap: () => onSelected(i),
-              borderRadius: BorderRadius.circular(m.body),
-              scaleOnFocus: false,
-              builder: (context, isFocused) => Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: m.body,
-                  vertical: m.body * 0.45,
-                ),
-                decoration: BoxDecoration(
-                  color: i == selected
-                      ? cs.primary
-                      : cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(m.body),
-                ),
-                child: Text(
-                  ranges[i],
-                  style: TextStyle(
-                    fontSize: m.badge,
-                    height: 1.2,
-                    color: i == selected ? cs.onPrimary : cs.onSurfaceVariant,
-                    fontWeight: i == selected || isFocused
-                        ? FontWeight.w800
-                        : FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
+          for (var i = 0; i < ranges.length; i++) _tab(context, cs, m, i),
         ],
+      ),
+    );
+
+    final fadeStart = !_atStart;
+    final fadeEnd = !_atEnd;
+    if (!fadeStart && !fadeEnd) return strip;
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Fades where the row continues, so a tab cut off at the edge reads as
+        // "there is more" rather than as a clipping bug.
+        ShaderMask(
+          shaderCallback: (rect) => LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              if (fadeStart) Colors.transparent else Colors.white,
+              Colors.white,
+              Colors.white,
+              if (fadeEnd) Colors.transparent else Colors.white,
+            ],
+            stops: const [0.0, 0.06, 0.94, 1.0],
+          ).createShader(rect),
+          blendMode: BlendMode.dstIn,
+          child: strip,
+        ),
+        if (fadeStart)
+          Positioned(left: 0, child: _edgeArrow(cs, m, Icons.chevron_left_rounded)),
+        if (fadeEnd)
+          Positioned(right: 0, child: _edgeArrow(cs, m, Icons.chevron_right_rounded)),
+      ],
+    );
+  }
+
+  /// A hint, not a control: the D-pad already moves along the strip, and an
+  /// extra focus stop at each end would sit between the tabs and the grid.
+  Widget _edgeArrow(ColorScheme cs, ShonenXMetrics m, IconData icon) {
+    return IgnorePointer(
+      child: Icon(icon, size: m.body * 1.5, color: cs.onSurfaceVariant),
+    );
+  }
+
+  Widget _tab(BuildContext context, ColorScheme cs, ShonenXMetrics m, int i) {
+    return TvFocusable(
+      focusNode: i < nodes.length ? nodes[i] : null,
+      onTap: () => onSelected(i),
+      borderRadius: BorderRadius.circular(m.body * 1.2),
+      scaleOnFocus: false,
+      builder: (context, isFocused) => Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: m.body * 1.5,
+          vertical: m.body * 0.7,
+        ),
+        decoration: BoxDecoration(
+          color: i == selected ? cs.primary : cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(m.body * 1.2),
+        ),
+        child: Text(
+          ranges[i],
+          maxLines: 1,
+          style: TextStyle(
+            fontSize: m.body,
+            height: 1.2,
+            color: i == selected ? cs.onPrimary : cs.onSurfaceVariant,
+            fontWeight: i == selected || isFocused
+                ? FontWeight.w800
+                : FontWeight.w600,
+          ),
+        ),
       ),
     );
   }
