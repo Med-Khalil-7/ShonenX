@@ -224,21 +224,30 @@ class _RailLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = ShonenXMetrics.of(context);
-    return Container(
+    return SizedBox(
       width: m.railLogo,
       height: m.railLogo,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary,
-        borderRadius: BorderRadius.circular(ShonenX.railLogoRadius),
-      ),
-      clipBehavior: Clip.antiAlias,
+      // No fill and no clip. The asset already carries its own dark rounded
+      // plate; a primary-coloured box behind it plus a rounded-rect clip that
+      // did not match the artwork's own corners left a thin red ring around
+      // the logo, which read as a border someone had drawn on purpose.
+      //
+      // The fallback keeps the fill, because a bare glyph on the rail's
+      // background would not read as a brand mark at all.
       child: Image.asset(
         'assets/images/app_icon.png',
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Icon(
-          Icons.play_arrow_rounded,
-          color: Colors.white,
-          size: m.railIcon,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary,
+            borderRadius: BorderRadius.circular(m.railLogo * 0.3),
+          ),
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.play_arrow_rounded,
+            color: Colors.white,
+            size: m.railIcon,
+          ),
         ),
       ),
     );

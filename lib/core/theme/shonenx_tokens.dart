@@ -44,7 +44,6 @@ abstract final class ShonenX {
   // --- Shape --------------------------------------------------------------
 
   static const posterRadius = 8.0;
-  static const railLogoRadius = 14.0;
   static const searchFieldRadius = 16.0;
   static const keyboardRadius = 6.0;
   static const keyboardColumns = 6;
@@ -110,7 +109,11 @@ class ShonenXMetrics {
 
   double get railWidth => w * 0.064;
   double get railIcon => w * 0.019;
-  double get railLogo => w * 0.030;
+
+  /// Above the reference scale, like the hero thumbnails: the mark is the only
+  /// thing on the rail that says which app this is, and at the icon sizes
+  /// around it there was nothing to recognise.
+  double get railLogo => w * 0.046;
   double get railItem => w * 0.042;
   Size get railIndicator => Size(w * 0.003, w * 0.020);
 
