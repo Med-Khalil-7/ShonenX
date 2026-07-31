@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shonenx/shared/widgets/app_network_image.dart';
 import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/features/player/providers/seek_preview_provider.dart';
 
@@ -158,6 +159,10 @@ class _Frame extends StatelessWidget {
           : Image.memory(
               bytes!,
               fit: BoxFit.cover,
+              // The grab comes back at the rendition's own size. Decoding it
+              // at card width matters here more than anywhere: a new frame
+              // arrives every few hundred milliseconds while scrubbing.
+              cacheWidth: AppNetworkImage.decodeBudget(context, width),
               // Without this every new frame fades in from nothing, which
               // reads as flicker when they arrive a few per second.
               gaplessPlayback: true,

@@ -190,6 +190,10 @@ class VideoPlayerEngine implements VideoEngine {
 
   // ExoPlayer gives no way to read a decoded frame back, at any position. The
   // scrub preview falls back to a bare time readout on this engine.
+  /// No frame preview on this engine, so nothing to point anywhere.
+  @override
+  void setPreviewSource(VideoStream? stream) {}
+
   @override
   bool get supportsFramePreview => false;
 

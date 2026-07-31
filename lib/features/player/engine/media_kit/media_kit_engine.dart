@@ -31,6 +31,10 @@ class MediaKitEngine implements VideoEngine {
   /// the same URL. The engine did not previously retain this.
   stream.VideoStream? _current;
 
+  /// Set by the controller once the quality list is known. Preferred over
+  /// [_current] for frame grabs -- see [setPreviewSource].
+  stream.VideoStream? _previewSource;
+
   FramePreviewPlayer? _preview;
 
   Future<void> updatePrefs(MediaKitPrefs newPrefs) async {
@@ -193,7 +197,10 @@ class MediaKitEngine implements VideoEngine {
     Duration? startAt,
   }) async {
     _current = stream;
-    // Frames cached from the previous stream are of the wrong video.
+    // Frames cached from the previous stream are of the wrong video, and a
+    // preview source left over from the last episode would show frames of it.
+    // The controller re-arms this immediately after.
+    _previewSource = null;
     unawaited(_disposePreview());
     final media = Media(stream.url, httpHeaders: stream.headers);
 
@@ -273,14 +280,22 @@ class MediaKitEngine implements VideoEngine {
   bool get supportsFramePreview => true;
 
   @override
+  void setPreviewSource(stream.VideoStream? source) {
+    if (_previewSource?.url == source?.url) return;
+    _previewSource = source;
+    // The open preview points at the old URL.
+    unawaited(_disposePreview());
+  }
+
+  @override
   Future<Uint8List?> grabFrameAt(Duration position) async {
     if (_disposed) return null;
-    final current = _current;
-    if (current == null) return null;
+    final source = _previewSource ?? _current;
+    if (source == null) return null;
 
     final preview = _preview ??= FramePreviewPlayer(
-      url: current.url,
-      headers: current.headers,
+      url: source.url,
+      headers: source.headers,
     );
     return preview.frameAt(position);
   }

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:shonenx/features/player/domain/stream_catalog.dart';
 import 'package:shonenx/core/network/http_client.dart';
 import 'package:shonenx/core/utils/extensions.dart';
 import 'package:shonenx/core/utils/http_x.dart';
@@ -526,6 +527,7 @@ class PlayerController extends Notifier<PlayerState> {
                 : activeSubtitle,
             startAt: startPosition,
           );
+      _armPreviewSource();
 
       _startProgressTracker();
     } catch (e) {
@@ -587,6 +589,7 @@ class PlayerController extends Notifier<PlayerState> {
             : newStream.subtitles.firstOrNull,
         startAt: currentPos,
       );
+      _armPreviewSource();
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -625,6 +628,7 @@ class PlayerController extends Notifier<PlayerState> {
             : state.activeSubtitle,
         startAt: currentPos,
       );
+      _armPreviewSource();
       state = state.copyWith(isLoading: false);
     } catch (e) {
       state = state.copyWith(
@@ -725,6 +729,16 @@ class PlayerController extends Notifier<PlayerState> {
 
     _autoNextTriggered = true;
     skipEpisode();
+  }
+
+  /// Aims the scrub preview at the smallest rendition of the current episode.
+  ///
+  /// Safe to call whenever the quality list changes; a null result leaves the
+  /// engine previewing whatever is playing, which is the old behaviour.
+  void _armPreviewSource() {
+    ref
+        .read(videoEngineProvider)
+        .setPreviewSource(StreamCatalog.cheapestRendition(state.qualities));
   }
 
   Future<void> _startProgressTracker() async {

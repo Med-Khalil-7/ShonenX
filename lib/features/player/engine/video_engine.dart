@@ -36,6 +36,13 @@ abstract class VideoEngine {
   /// seek may time out, or the engine may be mid-teardown.
   Future<Uint8List?> grabFrameAt(Duration position) async => null;
 
+  /// Points [grabFrameAt] at a cheaper rendition of the same episode.
+  ///
+  /// The preview decodes in software on a second player, so aiming it at the
+  /// 1080p stream the viewer is watching makes every scrub step cost a
+  /// full-size decode. Null means "use whatever is playing".
+  void setPreviewSource(VideoStream? stream) {}
+
   /// Drops any resources held for [grabFrameAt].
   ///
   /// Called when scrubbing stops. The frame source can be expensive to keep
