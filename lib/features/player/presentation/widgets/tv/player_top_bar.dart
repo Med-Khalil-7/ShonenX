@@ -3,17 +3,23 @@ import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/core/tv/tv_focusable.dart';
 import 'package:shonenx/core/tv/tv_metrics.dart';
 
-/// Back arrow, title and episode on the left; audio, subtitles and settings on
-/// the right.
+/// Back arrow, title and episode on the left; episodes, audio, subtitles and
+/// settings on the right.
 ///
-/// Three destinations, three behaviours: audio opens a panel, subtitles is a
-/// straight toggle with no panel at all, settings opens the settings panel.
-/// The episode list moved into settings when audio took this slot.
+/// Four destinations, four behaviours: episodes and audio each open a panel,
+/// subtitles is a straight toggle with no panel at all, settings opens the
+/// settings panel. Episodes keeps the same stacked-layers mark it carries on
+/// the detail screen, so the same icon means the same thing in both places.
 class PlayerTopBar extends StatelessWidget {
   final bool visible;
   final String title;
   final String? subtitle;
   final VoidCallback onBack;
+
+  /// Opens the episode list. Null for local playback, which has no list --
+  /// the control is dropped rather than shown doing nothing.
+  final VoidCallback? onEpisodes;
+
   final VoidCallback onAudio;
   final VoidCallback onToggleSubtitles;
   final VoidCallback onSettings;
@@ -28,6 +34,7 @@ class PlayerTopBar extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onBack,
+    required this.onEpisodes,
     required this.onAudio,
     required this.onToggleSubtitles,
     required this.onSettings,
@@ -106,6 +113,14 @@ class PlayerTopBar extends StatelessWidget {
                   ),
                 ),
                 SizedBox(width: m.playerIconGap * 0.6),
+                if (onEpisodes != null) ...[
+                  _PlayerIconButton(
+                    icon: Icons.layers_outlined,
+                    tooltip: 'Episodes',
+                    onPressed: onEpisodes!,
+                  ),
+                  SizedBox(width: m.playerIconGap),
+                ],
                 _PlayerIconButton(
                   icon: Icons.multitrack_audio_rounded,
                   tooltip: 'Audio',

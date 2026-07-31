@@ -10,12 +10,11 @@ import 'package:shonenx/features/player/domain/aniskip_prefs.dart';
 import 'package:shonenx/features/player/engine/video_engine.dart';
 import 'package:shonenx/features/player/presentation/widgets/progress_bar.dart';
 import 'package:shonenx/features/player/presentation/widgets/tv/seek_preview_card.dart';
-import 'package:shonenx/features/player/providers/aniskip_prefs_provider.dart';
 import 'package:shonenx/features/player/providers/aniskip_provider.dart';
 import 'package:shonenx/features/player/providers/player_controller.dart';
 import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
+import 'package:shonenx/features/player/providers/scrub_provider.dart';
 import 'package:shonenx/features/player/providers/video_engine_provider.dart';
-import 'package:shonenx/shared/widgets/tv/tv_button.dart';
 
 /// How far through the auto-next countdown we are, or null when it has not
 /// started. Drawn as a ring on the Next Episode button.
@@ -57,6 +56,10 @@ class PlayerTransportBar extends ConsumerStatefulWidget {
   /// Any interaction restarts the auto-hide countdown.
   final VoidCallback onInteraction;
 
+  /// A committed scrub takes the overlay down with it: the user has said where
+  /// they want to be, and what they want next is the picture, not the bar.
+  final VoidCallback onSeekCommitted;
+
   const PlayerTransportBar({
     super.key,
     required this.visible,
@@ -65,6 +68,7 @@ class PlayerTransportBar extends ConsumerStatefulWidget {
     required this.aniskipArgs,
     required this.playPauseFocus,
     required this.onInteraction,
+    required this.onSeekCommitted,
   });
 
   @override
@@ -121,6 +125,7 @@ class _PlayerTransportBarState extends ConsumerState<PlayerTransportBar> {
                     engine: widget.engine,
                     aniSkips: aniSkips.value ?? const [],
                     onInteraction: widget.onInteraction,
+                    onCommitted: widget.onSeekCommitted,
                   ),
                   SizedBox(height: m.transportIcon * 0.25),
                   // Inset to line the controls up with the seek track rather
@@ -150,18 +155,29 @@ class _PlayerTransportBarState extends ConsumerState<PlayerTransportBar> {
 
 /// The seek bar is a focus stop of its own so left/right can scrub.
 ///
-/// Presses accumulate into a pending position and commit once the user stops,
-/// rather than issuing a seek per press: holding the key on a remote produces
-/// a fast repeat, and seeking on every one of those makes the decoder thrash.
+/// Scrubbing does not move playback. Left and right walk a pending position
+/// and the preview card follows it; the video itself pauses and holds the
+/// frame it was on. Only OK commits: that is the one moment a seek is issued
+/// and the one moment the player has to re-buffer.
+///
+/// The alternative -- seeking as you go, or committing on a timer once you
+/// stop -- makes every intermediate position a real seek. On a remote, where
+/// crossing an episode takes a dozen presses, that is a dozen re-buffers to
+/// reach a place the user was only passing through.
 class _SeekRow extends ConsumerStatefulWidget {
   final VideoEngine engine;
   final List<AniSkipStamp> aniSkips;
   final VoidCallback onInteraction;
 
+  /// Called once the scrub is committed, so the overlay can fade away and
+  /// leave the video it just seeked to.
+  final VoidCallback onCommitted;
+
   const _SeekRow({
     required this.engine,
     required this.aniSkips,
     required this.onInteraction,
+    required this.onCommitted,
   });
 
   @override
@@ -169,16 +185,30 @@ class _SeekRow extends ConsumerStatefulWidget {
 }
 
 class _SeekRowState extends ConsumerState<_SeekRow> {
-  static const _commitAfter = Duration(milliseconds: 400);
-
   /// How long to sit still before asking for a frame.
   ///
-  /// Shorter than the seek commit: the preview should keep up with a moving
-  /// thumb, while the real seek waits until the user has actually stopped.
+  /// Long enough that holding the key down does not queue a decode per repeat,
+  /// short enough that the card keeps up with a deliberate press.
   static const _previewAfter = Duration(milliseconds: 250);
 
   /// How long the hidden decoder survives after focus leaves the bar.
   static const _releaseAfter = Duration(seconds: 10);
+
+  // Not const: LogicalKeyboardKey overrides ==, which a const set forbids.
+  static final _confirmKeys = <LogicalKeyboardKey>{
+    LogicalKeyboardKey.select,
+    LogicalKeyboardKey.enter,
+    LogicalKeyboardKey.numpadEnter,
+    LogicalKeyboardKey.gameButtonA,
+    LogicalKeyboardKey.space,
+  };
+
+  static final _cancelKeys = <LogicalKeyboardKey>{
+    LogicalKeyboardKey.escape,
+    LogicalKeyboardKey.goBack,
+    LogicalKeyboardKey.browserBack,
+    LogicalKeyboardKey.gameButtonB,
+  };
 
   late final FocusNode _node = FocusNode(
     debugLabel: 'seekBar',
@@ -191,10 +221,15 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
   /// [_previewAfter] so a fast scrub does not queue a decode per keypress.
   Duration? _previewTarget;
 
-  Timer? _commitTimer;
+  /// Whether playback was running when the scrub began, so committing or
+  /// abandoning it can put things back the way they were.
+  bool _wasPlaying = false;
+
   Timer? _previewTimer;
   Timer? _releaseTimer;
   bool _focused = false;
+
+  bool get _scrubbing => _pending != null;
 
   @override
   void initState() {
@@ -211,9 +246,9 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
       return;
     }
 
-    // Leaving the bar ends the scrub.
-    _previewTimer?.cancel();
-    setState(() => _previewTarget = null);
+    // Stepping off the bar abandons the scrub rather than committing it: the
+    // user moved to another control, which is not an instruction to seek.
+    _cancelScrub();
 
     // Give it a moment before dropping the hidden decoder: stepping off the
     // bar and straight back on is common, and rebuilding it is not free.
@@ -225,12 +260,73 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
 
   @override
   void dispose() {
-    _commitTimer?.cancel();
     _previewTimer?.cancel();
     _releaseTimer?.cancel();
+    // An episode change can take the bar away mid-scrub. Clear the flag or the
+    // scrim stays over a player that has nothing left to dim for.
+    if (_pending != null) {
+      try {
+        ref.read(scrubTargetProvider.notifier).update(null);
+      } catch (_) {}
+    }
     widget.engine.releaseFramePreview();
     _node.dispose();
     super.dispose();
+  }
+
+  /// Freezes playback for the duration of the scrub.
+  ///
+  /// Pausing is what makes the preview readable: with the video still running
+  /// underneath, the frame behind the card keeps changing and there are two
+  /// moving pictures competing for attention.
+  void _beginScrub() {
+    if (_scrubbing) return;
+    _wasPlaying = ref.read(videoEngineStateProvider).isPlaying;
+    if (_wasPlaying) {
+      try {
+        widget.engine.pause();
+      } catch (_) {}
+    }
+  }
+
+  /// Seeks to the pending position and resumes. The only seek in this widget.
+  void _commitScrub() {
+    final target = _pending;
+    if (target == null) return;
+
+    _previewTimer?.cancel();
+    setState(() {
+      _pending = null;
+      _previewTarget = null;
+    });
+    ref.read(scrubTargetProvider.notifier).update(null);
+
+    () async {
+      try {
+        await widget.engine.seekTo(target);
+        if (_wasPlaying) await widget.engine.play();
+      } catch (_) {}
+    }();
+
+    widget.onCommitted();
+  }
+
+  /// Drops the scrub without seeking, leaving playback where it always was.
+  void _cancelScrub() {
+    if (!_scrubbing) return;
+
+    _previewTimer?.cancel();
+    setState(() {
+      _pending = null;
+      _previewTarget = null;
+    });
+    ref.read(scrubTargetProvider.notifier).update(null);
+
+    if (_wasPlaying) {
+      try {
+        widget.engine.play();
+      } catch (_) {}
+    }
   }
 
   /// Rounded to whole seconds so tiny thumb movements do not invalidate the
@@ -250,6 +346,25 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
+
+    // OK lands the scrub. Handled here rather than through an ActivateIntent
+    // so the press never reaches the default binding while a scrub is open --
+    // the same button would otherwise toggle play/pause underneath it.
+    if (_confirmKeys.contains(event.logicalKey)) {
+      if (!_scrubbing) return KeyEventResult.ignored;
+      widget.onInteraction();
+      if (event is KeyDownEvent) _commitScrub();
+      return KeyEventResult.handled;
+    }
+
+    // BACK abandons it, so a scrub started by accident costs nothing.
+    if (_cancelKeys.contains(event.logicalKey)) {
+      if (!_scrubbing) return KeyEventResult.ignored;
+      widget.onInteraction();
+      if (event is KeyDownEvent) _cancelScrub();
+      return KeyEventResult.handled;
+    }
+
     final step = Duration(
       seconds: ref.read(playerPrefsProvider).seekStepSeconds,
     );
@@ -261,33 +376,22 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
     if (delta == null) return KeyEventResult.ignored;
 
     widget.onInteraction();
+    _beginScrub();
+
     final duration = ref.read(videoEngineStateProvider).duration;
     final base = _pending ?? ref.read(videoEngineStateProvider).position;
     final next = base + delta;
+    final target = next < Duration.zero
+        ? Duration.zero
+        : (next > duration ? duration : next);
 
-    setState(() {
-      _pending = next < Duration.zero
-          ? Duration.zero
-          : (next > duration ? duration : next);
-    });
+    setState(() => _pending = target);
+    ref.read(scrubTargetProvider.notifier).update(target);
 
     _previewTimer?.cancel();
     _previewTimer = Timer(_previewAfter, () {
       if (!mounted || _pending == null) return;
       setState(() => _previewTarget = _round(_pending!));
-    });
-
-    _commitTimer?.cancel();
-    _commitTimer = Timer(_commitAfter, () async {
-      final target = _pending;
-      if (target == null) return;
-      await widget.engine.seekTo(target);
-      if (mounted) {
-        setState(() {
-          _pending = null;
-          _previewTarget = null;
-        });
-      }
     });
 
     return KeyEventResult.handled;
@@ -328,6 +432,9 @@ class _SeekRowState extends ConsumerState<_SeekRow> {
             child: SeekPreviewCard(
               target: _previewTarget ?? _coarse(shown),
               label: formatPlaybackTime(shown),
+              // Nothing has moved yet on the first frame after focus lands,
+              // so say what the bar does before saying how to leave it.
+              hint: _scrubbing ? 'OK to play here' : null,
               fraction: duration.inMilliseconds == 0
                   ? 0
                   : shown.inMilliseconds / duration.inMilliseconds,

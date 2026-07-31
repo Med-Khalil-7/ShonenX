@@ -17,12 +17,17 @@ class SeekPreviewCard extends ConsumerStatefulWidget {
     required this.label,
     required this.fraction,
     required this.enabled,
+    this.hint,
   });
 
   /// Scrub target, rounded by the caller so it does not change every frame.
   final Duration target;
 
   final String label;
+
+  /// What the confirm button will do, shown only once a scrub is under way.
+  /// Committing on OK is not a convention a viewer can be assumed to know.
+  final String? hint;
 
   /// Where the thumb sits along the bar, 0..1. Used to follow it.
   final double fraction;
@@ -64,10 +69,12 @@ class _SeekPreviewCardState extends ConsumerState<SeekPreviewCard> {
           (constraints.maxWidth - width).clamp(0.0, double.infinity),
         );
 
+        final hint = widget.hint;
+
         return SizedBox(
-          height: widget.enabled
-              ? width / (16 / 9) + m.meta * 2
-              : m.meta * 2,
+          height:
+              (widget.enabled ? width / (16 / 9) + m.meta * 2 : m.meta * 2) +
+              (hint == null ? 0 : m.meta * 1.4),
           child: Stack(
             children: [
               Positioned(
@@ -92,6 +99,17 @@ class _SeekPreviewCardState extends ConsumerState<SeekPreviewCard> {
                           ],
                         ),
                       ),
+                      if (hint != null)
+                        Text(
+                          hint,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            fontSize: m.meta * 0.8,
+                            color: Colors.white70,
+                            shadows: const [
+                              Shadow(blurRadius: 6, color: Colors.black87),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ),

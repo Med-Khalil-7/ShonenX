@@ -20,6 +20,7 @@ import 'package:shonenx/features/player/presentation/widgets/tv/player_transport
 import 'package:shonenx/features/player/providers/aniskip_provider.dart';
 import 'package:shonenx/features/player/providers/player_controller.dart';
 import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
+import 'package:shonenx/features/player/providers/scrub_provider.dart';
 import 'package:shonenx/features/player/providers/video_engine_provider.dart';
 import 'package:shonenx/shared/models/unified_episode.dart';
 import 'package:shonenx/shared/models/video_stream.dart';
@@ -148,10 +149,22 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   void _hide() {
     if (!mounted || !_showControls) return;
-    // A panel or the exit prompt means the user is mid-decision; hiding the
-    // controls under them would drop focus into nothing on dismissal.
-    if (_panelOpen || _exitPromptOpen) return;
+    // A panel, the exit prompt or an open scrub all mean the user is
+    // mid-decision; hiding the controls under them would drop focus into
+    // nothing. Check back rather than returning, or the countdown is lost and
+    // the overlay stays up for the rest of the episode.
+    if (_panelOpen || _exitPromptOpen || ref.read(isScrubbingProvider)) {
+      _controlsTimer = Timer(_autoHide, _hide);
+      return;
+    }
     setState(() => _showControls = false);
+  }
+
+  /// Drops the overlay now, without waiting out the countdown. Used when the
+  /// user has just committed a seek and wants to watch the result.
+  void _hideNow() {
+    _controlsTimer?.cancel();
+    if (mounted && _showControls) setState(() => _showControls = false);
   }
 
   void _toggleEpisodePanel() {
@@ -190,9 +203,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       builder: (_) => PlayerSettingsPanel(
         engine: ref.read(videoEngineProvider),
         controller: ref.read(playerControllerProvider.notifier),
-        onEpisodes: widget.mode is PlayerModeOnline
-            ? _toggleEpisodePanel
-            : null,
       ),
     );
   }
@@ -322,6 +332,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                   child: engine.buildVideoView(),
                 ),
               ),
+              // Pulls the paused frame back while a scrub is open, so the
+              // preview card reads against it instead of competing with it.
+              const _ScrubScrim(),
               if (playerState.activeSubtitle != null)
                 const CustomSubtitleOverlay(),
               const PlayerCenterIndicator(),
@@ -330,6 +343,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 title: _mediaTitle,
                 subtitle: _episodeLabel(activeEpisode),
                 onBack: _handleBack,
+                onEpisodes: widget.mode is PlayerModeOnline
+                    ? _toggleEpisodePanel
+                    : null,
                 onAudio: _openAudioPanel,
                 onToggleSubtitles: _toggleSubtitles,
                 onSettings: _openSettingsPanel,
@@ -348,6 +364,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 aniskipArgs: _aniSkipArgs(engine),
                 playPauseFocus: _playPauseFocus,
                 onInteraction: _keepAwake,
+                onSeekCommitted: _hideNow,
               ),
             ],
           ),
@@ -438,6 +455,32 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dims the video for the duration of a scrub.
+///
+/// Playback is paused while scrubbing, so what is behind the overlay is a
+/// still frame from wherever the user happened to be -- not where they are
+/// going. Holding it at full brightness invites reading it as the destination.
+class _ScrubScrim extends ConsumerWidget {
+  const _ScrubScrim();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scrubbing = ref.watch(isScrubbingProvider);
+
+    return IgnorePointer(
+      child: AnimatedOpacity(
+        duration: Durations.medium1,
+        curve: Curves.easeOut,
+        opacity: scrubbing ? 1 : 0,
+        child: const ColoredBox(
+          color: Colors.black54,
+          child: SizedBox.expand(),
         ),
       ),
     );

@@ -10,26 +10,23 @@ import 'package:shonenx/shared/models/video_server.dart';
 import 'package:shonenx/shared/models/video_stream.dart';
 
 /// Everything that used to be scattered across the top and bottom bars:
-/// episodes, quality, server, mirror, audio track, subtitles, speed and fit.
+/// quality, server, mirror, audio track, subtitles, speed and fit.
 ///
 /// They were nine separate targets crowded along two edges, most of them
 /// 22px icons. Collapsed into one panel they become a list of full-width rows,
 /// which is the only shape a D-pad navigates well.
+///
+/// Episodes is not among them: it has its own control in the top bar, and a
+/// second route to the same panel is one more row to cross on the way to
+/// everything below it.
 class PlayerSettingsPanel extends ConsumerStatefulWidget {
   final VideoEngine engine;
   final PlayerController controller;
-
-  /// Opens the episode list. Null for local playback, which has no list.
-  ///
-  /// Episodes live here because the top bar's third slot went to audio, which
-  /// is changed far more often mid-episode than the list is.
-  final VoidCallback? onEpisodes;
 
   const PlayerSettingsPanel({
     super.key,
     required this.engine,
     required this.controller,
-    this.onEpisodes,
   });
 
   @override
@@ -87,23 +84,13 @@ class _PlayerSettingsPanelState extends ConsumerState<PlayerSettingsPanel> {
         .toList();
     final hasAudioTracks = realAudioTracks.length > 1;
 
-    final firstRow = widget.onEpisodes != null
-        ? _Row.episodes
-        : (hasQuality ? _Row.quality : _Row.server);
+    // Whichever of the two lead rows this source actually offers takes first
+    // focus, so the panel never opens with nothing selected.
+    final firstRow = hasQuality ? _Row.quality : _Row.server;
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
-        if (widget.onEpisodes != null)
-          _NavRow(
-            label: 'Episodes',
-            value: '',
-            autofocus: firstRow == _Row.episodes,
-            onTap: () {
-              Navigator.of(context).pop();
-              widget.onEpisodes!();
-            },
-          ),
         if (hasQuality)
           _NavRow(
             label: 'Quality',
@@ -274,11 +261,6 @@ class _PlayerSettingsPanelState extends ConsumerState<PlayerSettingsPanel> {
     }
   }
 
-  /// Only worth offering a sub/dub switch when the source actually has both.
-  static bool _hasBothServerTypes(PlayerState state) {
-    final types = state.servers.map((s) => s.type).toSet();
-    return types.contains(ServerType.sub) && types.contains(ServerType.dub);
-  }
 }
 
 /// External subtitles from the source, plus any muxed into the file.
@@ -298,7 +280,7 @@ List<SubtitleTrack> _subtitleOptions(PlayerState state, EngineState engine) {
 }
 
 /// Which row gets first focus. Depends on what the source actually offers.
-enum _Row { episodes, quality, server }
+enum _Row { quality, server }
 
 enum _Section {
   quality('Quality'),
