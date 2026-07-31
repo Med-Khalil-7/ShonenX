@@ -174,7 +174,11 @@ class PlayerController extends Notifier<PlayerState> {
   Future<void> _applyNativeSubtitle(SubtitleTrack? subtitle) async {
     final prefs = ref.read(subtitlePrefsProvider);
     try {
-      if (prefs.useCustomSubtitle || subtitle?.url.isEmpty == true) {
+      // Embedded tracks always go native: the custom overlay renders cues it
+      // parsed from a URL, and a muxed track has none to parse.
+      if (subtitle != null && subtitle.isEmbedded) {
+        await ref.read(videoEngineProvider).setSubtitle(subtitle);
+      } else if (prefs.useCustomSubtitle || subtitle?.url.isEmpty == true) {
         await ref.read(videoEngineProvider).setSubtitle(null);
       } else {
         await ref.read(videoEngineProvider).setSubtitle(subtitle);

@@ -34,9 +34,33 @@ class SubtitleTrack {
   final String url;
   final String language;
 
-  const SubtitleTrack({required this.url, required this.language});
+  /// Track id inside the container, for subtitles muxed into the video.
+  ///
+  /// Null means an external file the source handed us a URL for. Embedded
+  /// tracks have no URL -- they are selected by id -- which is why they were
+  /// invisible to a picker that only knew about URLs.
+  final String? embeddedId;
+
+  const SubtitleTrack({
+    required this.url,
+    required this.language,
+    this.embeddedId,
+  });
+
+  bool get isEmbedded => embeddedId != null;
 
   static const none = SubtitleTrack(url: '', language: 'Off');
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SubtitleTrack &&
+          other.url == url &&
+          other.language == language &&
+          other.embeddedId == embeddedId;
+
+  @override
+  int get hashCode => Object.hash(url, language, embeddedId);
 }
 
 class AudioTrack {

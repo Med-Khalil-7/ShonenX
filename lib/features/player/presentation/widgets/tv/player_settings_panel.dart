@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shonenx/core/tv/tv_focusable.dart';
+import 'package:shonenx/features/player/domain/stream_catalog.dart';
 import 'package:shonenx/features/player/engine/video_engine.dart';
 import 'package:shonenx/features/player/providers/player_controller.dart';
 import 'package:shonenx/features/player/providers/video_engine_provider.dart';
@@ -64,6 +65,32 @@ class _PlayerSettingsPanelState extends ConsumerState<PlayerSettingsPanel> {
   }
 
   Widget _buildRoot(PlayerState state, EngineState engineState) {
+    final catalog = StreamCatalog.from(state.streams);
+    final active = catalog.facetFor(state.activeStream);
+
+    // Sources that ship direct files put resolution in the stream label, so
+    // the quality axis lives there rather than in the m3u8-derived list.
+    final qualityFromStreams = catalog.hasHeights;
+    final qualityValue = qualityFromStreams
+        ? (active?.qualityLabel ?? '-')
+        : (state.activeQuality?.quality ?? 'Auto');
+    final hasQuality = qualityFromStreams || state.qualities.length > 1;
+
+    // A mirror list only means something when two streams are the same thing.
+    final mirrors = catalog.mirrorsFor(active);
+    final hasMirrors = mirrors.length > 1;
+
+    // Filtering out auto/no still leaves the single embedded track that every
+    // single-language file has, and a menu with one entry is noise.
+    final realAudioTracks = engineState.audioTracks
+        .where((t) => t.id != 'auto' && t.id != 'no')
+        .toList();
+    final hasAudioTracks = realAudioTracks.length > 1;
+
+    final firstRow = widget.onEpisodes != null
+        ? _Row.episodes
+        : (hasQuality ? _Row.quality : _Row.server);
+
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
@@ -71,41 +98,39 @@ class _PlayerSettingsPanelState extends ConsumerState<PlayerSettingsPanel> {
           _NavRow(
             label: 'Episodes',
             value: '',
-            autofocus: true,
+            autofocus: firstRow == _Row.episodes,
             onTap: () {
               Navigator.of(context).pop();
               widget.onEpisodes!();
             },
           ),
-        if (state.qualities.isNotEmpty)
+        if (hasQuality)
           _NavRow(
             label: 'Quality',
-            value: state.activeQuality?.quality ?? 'Auto',
-            autofocus: widget.onEpisodes == null,
+            value: qualityValue,
+            autofocus: firstRow == _Row.quality,
             onTap: () => setState(() => _section = _Section.quality),
           ),
-        if (state.servers.isNotEmpty)
+        if (state.servers.length > 1)
           _NavRow(
             label: 'Server',
             value: state.activeServer?.name ?? '-',
-            autofocus: widget.onEpisodes == null && state.qualities.isEmpty,
+            autofocus: firstRow == _Row.server,
             onTap: () => setState(() => _section = _Section.server),
           ),
-        if (state.streams.length > 1)
+        if (hasMirrors)
           _NavRow(
             label: 'Mirror',
             value: state.activeStream?.quality ?? '-',
             onTap: () => setState(() => _section = _Section.stream),
           ),
-        if (engineState.audioTracks
-            .where((t) => t.id != 'auto' && t.id != 'no')
-            .isNotEmpty)
+        if (hasAudioTracks)
           _NavRow(
             label: 'Audio track',
             value: engineState.activeAudioTrack?.label ?? 'Auto',
             onTap: () => setState(() => _section = _Section.audioTrack),
           ),
-        if (state.subtitles.isNotEmpty)
+        if (_subtitleOptions(state, engineState).length > 1)
           _NavRow(
             label: 'Subtitles',
             value: state.activeSubtitle?.language ?? 'Off',
@@ -163,8 +188,28 @@ class _PlayerSettingsPanelState extends ConsumerState<PlayerSettingsPanel> {
     PlayerState state,
     EngineState engineState,
   ) {
+    final catalog = StreamCatalog.from(state.streams);
+    final active = catalog.facetFor(state.activeStream);
+
     switch (section) {
       case _Section.quality:
+        if (catalog.hasHeights) {
+          // Switching resolution holds the language steady, and vice versa --
+          // the whole point of splitting the label into two axes.
+          return _OptionList<int>(
+            options: catalog.heights,
+            labelOf: (h) => '${h}p',
+            isSelected: (h) => h == active?.height,
+            onSelected: (h) {
+              final target = catalog.find(
+                language: active?.language,
+                height: h,
+              );
+              if (target != null) widget.controller.changeStream(target);
+              setState(() => _section = null);
+            },
+          );
+        }
         return _OptionList<VideoStream>(
           options: state.qualities,
           labelOf: (q) => q.quality,
@@ -186,7 +231,7 @@ class _PlayerSettingsPanelState extends ConsumerState<PlayerSettingsPanel> {
         );
       case _Section.stream:
         return _OptionList<VideoStream>(
-          options: state.streams,
+          options: catalog.mirrorsFor(active),
           labelOf: (s) => s.quality,
           isSelected: (s) => s == state.activeStream,
           onSelected: (s) {
@@ -195,11 +240,10 @@ class _PlayerSettingsPanelState extends ConsumerState<PlayerSettingsPanel> {
           },
         );
       case _Section.subtitle:
-        return _OptionList<SubtitleTrack?>(
-          // state.subtitles already begins with SubtitleTrack.none, so
-          // prepending null as well listed "Off" twice.
-          options: state.subtitles,
-          labelOf: (s) => (s == null || s.url.isEmpty) ? 'Off' : s.language,
+        return _OptionList<SubtitleTrack>(
+          options: _subtitleOptions(state, engineState),
+          labelOf: (s) =>
+              (s.url.isEmpty && !s.isEmbedded) ? 'Off' : s.language,
           isSelected: (s) => s == state.activeSubtitle,
           onSelected: (s) {
             widget.controller.changeSubtitle(s);
@@ -236,6 +280,25 @@ class _PlayerSettingsPanelState extends ConsumerState<PlayerSettingsPanel> {
     return types.contains(ServerType.sub) && types.contains(ServerType.dub);
   }
 }
+
+/// External subtitles from the source, plus any muxed into the file.
+///
+/// Two independent sources: the extension hands over sidecar URLs, and the
+/// container may carry its own tracks. Only the first was ever listed.
+List<SubtitleTrack> _subtitleOptions(PlayerState state, EngineState engine) {
+  // state.subtitles already begins with SubtitleTrack.none, so nothing else
+  // should add an "Off" entry.
+  final seen = <String>{};
+  final out = <SubtitleTrack>[];
+  for (final track in [...state.subtitles, ...engine.embeddedSubtitles]) {
+    final key = '${track.embeddedId ?? track.url}|${track.language}';
+    if (seen.add(key)) out.add(track);
+  }
+  return out;
+}
+
+/// Which row gets first focus. Depends on what the source actually offers.
+enum _Row { episodes, quality, server }
 
 enum _Section {
   quality('Quality'),

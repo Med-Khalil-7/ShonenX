@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/core/tv/tv_focusable.dart';
+import 'package:shonenx/features/player/domain/stream_catalog.dart';
 import 'package:shonenx/features/player/providers/player_controller.dart';
 import 'package:shonenx/shared/models/video_server.dart';
 
@@ -29,6 +30,27 @@ class PlayerAudioPanel extends ConsumerWidget {
     final m = ShonenXMetrics.of(context);
 
     final state = ref.watch(playerControllerProvider);
+    final catalog = StreamCatalog.from(state.streams);
+
+    // Some sources express dub/sub as separate servers; others put the
+    // language in the stream label and serve everything from one. Offer
+    // whichever axis this source actually varies along.
+    if (catalog.hasLanguages) {
+      return _LanguageList(
+        catalog: catalog,
+        active: catalog.facetFor(state.activeStream),
+        onSelected: (language) {
+          final current = catalog.facetFor(state.activeStream);
+          final target = catalog.find(
+            language: language,
+            height: current?.height,
+          );
+          Navigator.of(context).pop();
+          if (target != null) controller.changeStream(target);
+        },
+      );
+    }
+
     final servers = state.servers;
     final active = state.activeServer;
 
@@ -116,6 +138,61 @@ class PlayerAudioPanel extends ConsumerWidget {
   }
 }
 
+/// Languages carried by the stream list, holding the current resolution.
+class _LanguageList extends StatelessWidget {
+  const _LanguageList({
+    required this.catalog,
+    required this.active,
+    required this.onSelected,
+  });
+
+  final StreamCatalog catalog;
+  final StreamFacet? active;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final m = ShonenXMetrics.of(context);
+    final languages = catalog.languages;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            m.meta * 1.4,
+            m.meta * 1.4,
+            m.meta * 1.4,
+            m.meta * 0.8,
+          ),
+          child: Text(
+            'Audio',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontSize: m.heading,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.only(bottom: m.meta * 2),
+            children: [
+              for (final language in languages)
+                _OptionRow(
+                  label: language,
+                  selected: language == active?.language,
+                  autofocus: language == active?.language,
+                  onTap: () => onSelected(language),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _ServerRow extends StatelessWidget {
   const _ServerRow({
     required this.server,
@@ -125,6 +202,28 @@ class _ServerRow extends StatelessWidget {
   });
 
   final VideoServer server;
+  final bool selected;
+  final bool autofocus;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => _OptionRow(
+    label: server.name,
+    selected: selected,
+    autofocus: autofocus,
+    onTap: onTap,
+  );
+}
+
+class _OptionRow extends StatelessWidget {
+  const _OptionRow({
+    required this.label,
+    required this.selected,
+    required this.autofocus,
+    required this.onTap,
+  });
+
+  final String label;
   final bool selected;
   final bool autofocus;
   final VoidCallback onTap;
@@ -150,13 +249,14 @@ class _ServerRow extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                server.name,
+                label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleMedium?.copyWith(fontSize: m.meta),
               ),
             ),
-            if (selected) Icon(Icons.check, size: m.meta * 1.3, color: cs.primary),
+            if (selected)
+              Icon(Icons.check, size: m.meta * 1.3, color: cs.primary),
           ],
         ),
       ),

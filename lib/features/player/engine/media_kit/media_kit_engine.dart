@@ -123,9 +123,19 @@ class MediaKitEngine implements VideoEngine {
       _player.stream.tracks.listen((tracks) {
         if (!_disposed) {
           final audioList = tracks.audio.map((t) => _mapAudioTrack(t)).toList();
+          // Subtitles muxed into the container. These were read for audio
+          // only, so any file carrying its own subtitle tracks looked like it
+          // had none.
+          final subtitleList = tracks.subtitle
+              .where((t) => t.id != 'auto' && t.id != 'no')
+              .map(_mapSubtitleTrack)
+              .toList();
           ref
               .read(videoEngineStateProvider.notifier)
-              .updateState(audioTracks: audioList);
+              .updateState(
+                audioTracks: audioList,
+                embeddedSubtitles: subtitleList,
+              );
         }
       }),
       _player.stream.track.listen((track) {
@@ -298,13 +308,49 @@ class MediaKitEngine implements VideoEngine {
 
   @override
   Future<void> setSubtitle(stream.SubtitleTrack? subtitle) async {
-    if (subtitle == null || subtitle.url.isEmpty) {
+    if (subtitle == null) {
       await _player.setSubtitleTrack(SubtitleTrack.no());
-    } else {
-      await _player.setSubtitleTrack(
-        SubtitleTrack.uri(subtitle.url, language: subtitle.language),
-      );
+      return;
     }
+    final embeddedId = subtitle.embeddedId;
+    if (embeddedId != null) {
+      // Selected by track id; an embedded track has no URI to load.
+      await _player.setSubtitleTrack(
+        SubtitleTrack(embeddedId, null, subtitle.language),
+      );
+      return;
+    }
+    if (subtitle.url.isEmpty) {
+      await _player.setSubtitleTrack(SubtitleTrack.no());
+      return;
+    }
+    await _player.setSubtitleTrack(
+      SubtitleTrack.uri(subtitle.url, language: subtitle.language),
+    );
+  }
+
+  stream.SubtitleTrack _mapSubtitleTrack(SubtitleTrack track) {
+    final title = track.title?.trim();
+    final lang = track.language?.trim();
+
+    String label;
+    if (title != null && title.isNotEmpty) {
+      label = (lang != null &&
+              lang.isNotEmpty &&
+              !title.toLowerCase().contains(lang.toLowerCase()))
+          ? '$title ($lang)'
+          : title;
+    } else if (lang != null && lang.isNotEmpty) {
+      label = lang;
+    } else {
+      label = 'Track ${track.id}';
+    }
+
+    return stream.SubtitleTrack(
+      url: '',
+      language: label,
+      embeddedId: track.id,
+    );
   }
 
   stream.AudioTrack _mapAudioTrack(AudioTrack track) {
