@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shonenx/shared/widgets/app_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -132,12 +132,15 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
     }
   }
 
+  /// The hero no longer advances on its own.
+  ///
+  /// Each tick cross-faded two full-screen banners through an AnimatedSwitcher,
+  /// which is a full-viewport saveLayer for the length of the transition --
+  /// every eight seconds, forever, including while the user is on another
+  /// screen with home still alive in the shell. The slide strip is a D-pad
+  /// control and nothing on a TV needs a carousel that moves by itself.
   void _restartTimer() {
     _timer?.cancel();
-    _timer = Timer.periodic(_advanceInterval, (_) {
-      if (!mounted || _items.length < 2) return;
-      setState(() => _index = (_index + 1) % _items.length);
-    });
   }
 
   /// Up escapes to the header, which is drawn over the hero and is therefore
@@ -433,7 +436,7 @@ class _SlideStripState extends State<_SlideStrip> {
           scrollDirection: Axis.horizontal,
           clipBehavior: Clip.none,
           // Directional traversal only reaches nodes that have been built.
-          cacheExtent: 1600,
+          cacheExtent: 700,
           itemCount: widget.items.length,
           separatorBuilder: (_, __) => SizedBox(width: m.heroThumb * 0.22),
           itemBuilder: (context, i) => _Thumb(
@@ -496,13 +499,14 @@ class _Thumb extends StatelessWidget {
             borderRadius: radius,
             child: (url == null || url.isEmpty)
                 ? ColoredBox(color: cs.surfaceContainer)
-                : CachedNetworkImage(
-                    imageUrl: url,
-                    fit: BoxFit.cover,
-                    placeholder: (_, __) =>
-                        ColoredBox(color: cs.surfaceContainer),
-                    errorWidget: (_, __, ___) =>
-                        ColoredBox(color: cs.surfaceContainer),
+                : AppNetworkImage(
+                    url: url,
+                    // A wide banner cropped into a tall tile: width is the
+                    // short edge here, so budgeting from it would blur the
+                    // part actually on screen.
+                    fromHeight: true,
+                    height: m.heroThumb / ShonenX.thumbAspect,
+                    placeholder: ColoredBox(color: cs.surfaceContainer),
                   ),
           ),
         ),
@@ -533,12 +537,14 @@ class _Backdrop extends StatelessWidget {
             key: ValueKey(url ?? 'empty'),
             child: (url == null || url.isEmpty)
                 ? ColoredBox(color: cs.surface)
-                : CachedNetworkImage(
-                    imageUrl: url,
-                    fit: BoxFit.cover,
+                : AppNetworkImage(
+                    url: url,
                     alignment: Alignment.topCenter,
-                    placeholder: (_, __) => ColoredBox(color: cs.surface),
-                    errorWidget: (_, __, ___) => ColoredBox(color: cs.surface),
+                    // Half resolution: it is a backdrop sitting under two
+                    // scrims, and the crossfade keeps two of them alive at
+                    // once.
+                    decodeScale: 0.5,
+                    placeholder: ColoredBox(color: cs.surface),
                   ),
           ),
         ),
@@ -607,13 +613,10 @@ class _Poster extends StatelessWidget {
             key: ValueKey(url ?? 'empty'),
             child: (url == null || url.isEmpty)
                 ? ColoredBox(color: cs.surfaceContainer)
-                : CachedNetworkImage(
-                    imageUrl: url,
-                    fit: BoxFit.cover,
-                    placeholder: (_, __) =>
-                        ColoredBox(color: cs.surfaceContainer),
-                    errorWidget: (_, __, ___) =>
-                        ColoredBox(color: cs.surfaceContainer),
+                : AppNetworkImage(
+                    url: url,
+                    width: height * ShonenX.posterAspect,
+                    placeholder: ColoredBox(color: cs.surfaceContainer),
                   ),
           ),
         ),

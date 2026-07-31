@@ -27,7 +27,7 @@ class HorizontalSection<T> extends StatelessWidget {
     this.emptyText = 'No data found',
     this.onMoreTap,
     this.skeletonItemBuilder,
-    this.skeletonCount = 25,
+    this.skeletonCount = 12,
   });
 
   @override
@@ -122,7 +122,7 @@ class HorizontalSection<T> extends StatelessWidget {
                     // Directional traversal can only reach focus nodes that have
                     // actually been built. Without a generous cache the row simply
                     // dead-ends at the edge of the viewport.
-                    cacheExtent: 1600,
+                    cacheExtent: 700,
                     itemCount: items.length,
                     itemBuilder: (context, index) =>
                         itemBuilder(context, items[index]),

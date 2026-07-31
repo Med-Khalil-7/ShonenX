@@ -1,10 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+    <!-- Both themes are dark, and both pin windowBackground to the app's own
+         background colour.
+
+         They used to inherit Theme.Light.NoTitleBar, whose ?android:colorBackground
+         is white, so every millisecond between the launcher icon and the first
+         Flutter frame rendered as a white screen. On a slow TV box that reads as
+         a hung app. An explicit colour is used instead of ?android:colorBackground
+         so the value cannot drift with the parent theme again. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
-    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
-        <item name="android:windowBackground">?android:colorBackground</item>
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/shonenx_bg</item>
     </style>
 </resources>

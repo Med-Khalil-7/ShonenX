@@ -1,5 +1,6 @@
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shonenx/shared/providers/theme_prefs_provider.dart';
 import 'package:shonenx/core/theme/shonenx_tokens.dart';
@@ -189,7 +190,26 @@ class AppTheme {
     _widgets,
     _shadows,
     _tvSizing,
+    _skeletons,
   ];
+
+  /// Skeleton loaders paint flat instead of shimmering.
+  ///
+  /// Skeletonizer's default effect animates a gradient shader over every bone,
+  /// every frame. During a cold home load that is four rows of a dozen cards
+  /// each, running exactly while the app is also fetching and decoding images.
+  /// Registering the config as a theme extension reaches every Skeletonizer in
+  /// the app without touching a single call site.
+  static ThemeData _skeletons(ThemeData theme, ThemePrefsState prefs) {
+    return theme.copyWith(
+      extensions: [
+        ...theme.extensions.values,
+        SkeletonizerConfigData(
+          effect: SolidColorEffect(color: theme.colorScheme.surfaceContainerHigh),
+        ),
+      ],
+    );
+  }
 
   static ThemeData _widgets(ThemeData theme, ThemePrefsState prefs) {
     final cs = theme.colorScheme;

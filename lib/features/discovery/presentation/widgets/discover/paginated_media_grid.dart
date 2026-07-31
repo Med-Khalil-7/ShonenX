@@ -32,7 +32,7 @@ class PaginatedMediaGrid extends ConsumerWidget {
       loading: () => Skeletonizer(
         enabled: true,
         child: GridView.builder(
-          cacheExtent: 1600,
+          cacheExtent: 400,
           padding: EdgeInsets.only(bottom: 200, top: paddingTop),
           gridDelegate: SliverGridDelegateWithMinCrossAxisExtent(
             minCrossAxisExtent: style.layout.width,
@@ -78,7 +78,7 @@ class PaginatedMediaGrid extends ConsumerWidget {
         return Stack(
           children: [
             GridView.builder(
-              cacheExtent: 1600,
+              cacheExtent: 400,
               controller: scrollController,
               padding: EdgeInsets.only(bottom: 200, top: paddingTop),
               gridDelegate: SliverGridDelegateWithMinCrossAxisExtent(

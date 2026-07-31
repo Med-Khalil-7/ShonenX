@@ -81,7 +81,7 @@ class PaginatedMediaList extends ConsumerWidget {
                     // Directional traversal can only reach nodes that have
                     // been built; without a generous cache the list dead-ends
                     // at the edge of the viewport.
-                    cacheExtent: 1600,
+                    cacheExtent: 400,
                     padding: const EdgeInsets.only(bottom: 120),
                     itemCount: result.items.length,
                     separatorBuilder: (_, __) => SizedBox(height: m.body),

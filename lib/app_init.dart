@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:anymex_extension_runtime_bridge/Settings/KvStore.dart';
@@ -33,14 +34,17 @@ class AppInit {
 
     log.section('START');
 
-    await _initVideoEngines();
-    log.s('Video engines initialized');
-
+    // MediaKit is deliberately not initialised here. It dlopens libmpv and
+    // its JNI glue -- tens of megabytes mapped into a 1 GB device -- on every
+    // cold start, for a first screen that plays no video. videoEngineProvider
+    // does it instead, and that is the only route to a Player.
     await _initDatabase();
     log.s('Database initialized');
 
-    await _cleanupOldDslProviders();
-    log.s('Old DSL providers cleaned up');
+    // Housekeeping for a directory no build has written since the DSL sources
+    // were removed. Nothing waits on it, so it must not sit on the path to the
+    // first frame.
+    unawaited(_cleanupOldDslProviders());
 
     log.section('DONE');
 
@@ -133,13 +137,18 @@ class AppInit {
         projectName: "ShonenX",
       );
 
-      await AnymeXRuntimeBridge.checkAndInitialize();
+      // Deliberately no checkAndInitialize() here. Get.find below constructs
+      // ExtensionManager (registered with Get.lazyPut), and its onInit already
+      // calls it. Calling it here too ran the whole runtime-host load twice on
+      // every launch -- the completer inside only dedupes *concurrent* calls,
+      // and these were sequential -- which meant unzipping every native
+      // library out of the host APK twice before the app was usable.
+      final extManager = Get.find<ExtensionManager>();
 
       // Give the managers a moment to register, but do not sit here for a
       // full five seconds: this runs in the background now, and a caller that
       // needs sources reads them through providers that are invalidated once
       // the bridge reports ready.
-      final extManager = Get.find<ExtensionManager>();
       const pollInterval = Duration(milliseconds: 50);
       const maxWait = Duration(seconds: 2);
       var waited = Duration.zero;
@@ -164,10 +173,9 @@ class AppInit {
     return getApplicationDocumentsDirectory();
   }
 
-  static Future<void> _initVideoEngines() async {
-    final log = AppLogger.scope('AppInit').child('initVideoEngines');
-
+  /// Loads libmpv. Idempotent, and called from `videoEngineProvider` rather
+  /// than from startup so a session that never opens the player never pays it.
+  static void ensureVideoEnginesReady() {
     MediaKit.ensureInitialized();
-    log.i('MediaKit initialized');
   }
 }

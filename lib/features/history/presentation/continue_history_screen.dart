@@ -261,7 +261,7 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
                 child: filtered.isEmpty
                     ? const Center(child: Text('No matching history items.'))
                     : GridView.builder(
-                        cacheExtent: 1600,
+                        cacheExtent: 400,
                         padding: const EdgeInsets.all(10),
                         gridDelegate: SliverGridDelegateWithMinCrossAxisExtent(
                           minCrossAxisExtent: style.layout.width,

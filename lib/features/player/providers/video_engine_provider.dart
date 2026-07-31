@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shonenx/app_init.dart';
 import 'package:shonenx/features/player/engine/media_kit/media_kit_engine.dart';
 import 'package:shonenx/features/player/engine/video_engine.dart';
 import 'package:shonenx/features/player/engine/video_player/video_player_engine.dart';
@@ -107,6 +108,10 @@ final videoEngineStateProvider =
     );
 
 final videoEngineProvider = Provider.autoDispose<VideoEngine>((ref) {
+  // The only path to a Player, so this is where libmpv gets loaded. Keeping it
+  // out of AppInit means a browse-only session never maps it at all.
+  AppInit.ensureVideoEnginesReady();
+
   final playerType = ref.watch(playerPrefsProvider.select((s) => s.playerType));
 
   switch (playerType) {

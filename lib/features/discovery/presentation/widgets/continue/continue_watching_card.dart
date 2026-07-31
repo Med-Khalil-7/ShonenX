@@ -1,11 +1,11 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shonenx/shared/providers/ui_prefs_provider.dart';
-import 'package:shonenx/core/utils/image_headers.dart';
+import 'package:shonenx/shared/widgets/app_network_image.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/continue/continue_media_mixin.dart';
 import 'package:shonenx/features/history/domain/models/watch_history_entry.dart';
 import 'package:shonenx/features/history/providers/continue_watching_resolver.dart';
@@ -198,6 +198,25 @@ class _ContinueWatchingItemState extends ConsumerState<ContinueWatchingItem>
     return '$remainingMins min left';
   }
 
+  /// Decoded frames, keyed by the base64 they came from.
+  ///
+  /// `base64Decode` used to run inside `build`, which minted a fresh list every
+  /// frame. `MemoryImage` keys its cache entry on the list's *identity*, so no
+  /// two builds ever hit the cache and a full-resolution screenshot was decoded
+  /// from scratch on every rebuild of the card.
+  static final _frames = <String, Uint8List>{};
+  static const _maxFrames = 12;
+
+  static Uint8List _frameBytes(String base64) {
+    final hit = _frames[base64];
+    if (hit != null) return hit;
+    final bytes = base64Decode(base64);
+    if (_frames.length >= _maxFrames) {
+      _frames.remove(_frames.keys.first);
+    }
+    return _frames[base64] = bytes;
+  }
+
   Widget _buildThumbnail(String? thumbnail, ColorScheme cs) {
     if (thumbnail == null || thumbnail.isEmpty) {
       return Container(
@@ -206,36 +225,31 @@ class _ContinueWatchingItemState extends ConsumerState<ContinueWatchingItem>
       );
     }
 
+    final broken = Container(
+      color: cs.surfaceContainerHighest,
+      child: Icon(Icons.broken_image_rounded, color: cs.onSurfaceVariant),
+    );
+
     try {
       if (thumbnail.startsWith('http')) {
-        final imageUrl = thumbnail.split('#').first;
-        final headers = decodeUrlHeaders(thumbnail);
-
-        return CachedNetworkImage(
-          imageUrl: imageUrl,
-          httpHeaders: headers.isEmpty ? null : headers,
-          fit: BoxFit.cover,
-          errorWidget: (_, __, ___) => Container(
-            color: cs.surfaceContainerHighest,
-            child: Icon(Icons.broken_image_rounded, color: cs.onSurfaceVariant),
-          ),
-        );
+        return AppNetworkImage(url: thumbnail, error: broken);
       }
 
-      return Image.memory(
-        base64Decode(thumbnail),
-        fit: BoxFit.cover,
-        gaplessPlayback: true,
-        errorBuilder: (_, __, ___) => Container(
-          color: cs.surfaceContainerHighest,
-          child: Icon(Icons.broken_image_rounded, color: cs.onSurfaceVariant),
+      // A screenshot straight off the video, so it is frame-sized: 1920x1080
+      // is 8 MB decoded for a card a couple of hundred pixels wide.
+      return LayoutBuilder(
+        builder: (context, constraints) => Image.memory(
+          _frameBytes(thumbnail),
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          cacheWidth: constraints.hasBoundedWidth
+              ? AppNetworkImage.decodeBudget(context, constraints.maxWidth)
+              : null,
+          errorBuilder: (_, __, ___) => broken,
         ),
       );
     } catch (_) {
-      return Container(
-        color: cs.surfaceContainerHighest,
-        child: Icon(Icons.broken_image_rounded, color: cs.onSurfaceVariant),
-      );
+      return broken;
     }
   }
 }

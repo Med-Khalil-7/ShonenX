@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shonenx/shared/widgets/app_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/core/tv/tv_focusable.dart';
@@ -81,12 +81,13 @@ class TvPosterCard extends StatelessWidget {
       borderRadius: radius,
       child: (imageUrl == null || imageUrl!.isEmpty)
           ? _placeholder(context)
-          : CachedNetworkImage(
-              imageUrl: imageUrl!,
-              fit: BoxFit.cover,
-              fadeInDuration: const Duration(milliseconds: 200),
-              placeholder: (_, __) => Container(color: cs.surfaceContainer),
-              errorWidget: (_, __, ___) => _placeholder(context),
+          : AppNetworkImage(
+              url: imageUrl,
+              // The source cover is ~1000px wide; the card is a tenth of that.
+              // Decoding at card width is the difference between 6 MB and
+              // 0.2 MB per poster, times the dozens on a home screen.
+              width: width ?? m.rowPoster,
+              error: _placeholder(context),
             ),
     );
 

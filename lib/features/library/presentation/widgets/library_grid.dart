@@ -27,7 +27,7 @@ class LibraryGridWidget extends ConsumerWidget {
         child: Padding(
           padding: const EdgeInsets.all(10.0),
           child: GridView.builder(
-            cacheExtent: 1600,
+            cacheExtent: 400,
             padding: const EdgeInsets.only(bottom: 200),
             gridDelegate: SliverGridDelegateWithMinCrossAxisExtent(
               minCrossAxisExtent: cardStyle.layout.width,
@@ -117,7 +117,7 @@ class LibraryGridWidget extends ConsumerWidget {
             child: Padding(
               padding: const EdgeInsets.all(10.0),
               child: GridView.builder(
-                cacheExtent: 1600,
+                cacheExtent: 400,
                 padding: const EdgeInsets.only(bottom: 200),
                 gridDelegate: SliverGridDelegateWithMinCrossAxisExtent(
                   minCrossAxisExtent: cardStyle.layout.width,

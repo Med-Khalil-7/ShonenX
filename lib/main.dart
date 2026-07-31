@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,11 +18,59 @@ import 'package:shonenx/shared/widgets/global_background.dart';
 final _log = AppLogger.scope('Main');
 final _riverpodLog = AppLogger.scope('RiverpodObserver');
 
+/// Catches what the try/catch around startup cannot: anything thrown after
+/// runApp, from a build, or from an unawaited future.
+///
+/// Without these the app had no error path at all. A failure during a build
+/// showed Flutter's grey box in release, and an async error vanished silently
+/// -- indistinguishable, on a slow TV, from the app simply having hung.
+void _installErrorHandlers() {
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    _log.e('FLUTTER ERROR: ${details.exceptionAsString()}', details.stack);
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    _log.e('UNCAUGHT ASYNC: $error', stack);
+    return true;
+  };
+
+  // The default is a red-on-yellow strip of monospace, unreadable at ten feet
+  // and alarming. Fail quietly and legibly instead; the detail is in the log.
+  ErrorWidget.builder = (details) => Container(
+    color: const Color(0xFF0E1216),
+    alignment: Alignment.center,
+    padding: const EdgeInsets.all(24),
+    child: const Text(
+      'Something went wrong here.',
+      textAlign: TextAlign.center,
+      style: TextStyle(color: Color(0xFFB4BCC6), fontSize: 16),
+    ),
+  );
+}
+
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // The defaults -- 1000 images, 100 MB of decoded bitmaps -- are sized for a
+  // phone with several gigabytes. This runs on 1 GB TV boxes that also have to
+  // hold libmpv, so the cache is capped well below what the app would
+  // otherwise happily fill. Note this bounds only *unreferenced* images; the
+  // ceiling on live ones comes from decoding at display size in the first
+  // place (see AppNetworkImage).
+  PaintingBinding.instance.imageCache
+    ..maximumSize = 150
+    ..maximumSizeBytes = 32 << 20;
+
+  _installErrorHandlers();
+
   final log = _log.child('main');
   try {
-    await AppLogger.init();
+    // Not awaited: it asks the platform for the external storage directory and
+    // then creates a file on eMMC, and nothing before the first frame needs
+    // the log to be on disk. On a slow box that was pure dead time in front of
+    // a blank window.
+    unawaited(AppLogger.init());
 
     log.i('App starting');
     log.i('Args: $args');
@@ -93,8 +142,14 @@ class ShonenXApp extends ConsumerWidget {
     final themePrefs = ref.watch(themePrefsProvider);
     log.d('Theme changed: ${themePrefs.themeMode}');
 
-    final lightTheme = AppTheme.light(themePrefs, null);
     final darkTheme = AppTheme.dark(themePrefs, null);
+    // Building the light theme costs a whole FlexColorScheme plus a GoogleFonts
+    // text theme, and MaterialApp never reads `theme` when the mode is dark.
+    // On a TV that is always dark, that was half the theme work wasted on
+    // every rebuild.
+    final lightTheme = themePrefs.themeMode == ThemeMode.dark
+        ? darkTheme
+        : AppTheme.light(themePrefs, null);
 
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,

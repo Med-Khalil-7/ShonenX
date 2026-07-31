@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ShonenX.bg from lib/core/theme/shonenx_tokens.dart. The launch window
+         is painted with this so the cold start is the app's own background
+         rather than a white flash. -->
+    <color name="shonenx_bg">#FF0E1216</color>
+</resources>

@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shonenx/shared/widgets/app_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -400,11 +400,14 @@ class _Backdrop extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          CachedNetworkImage(
-            imageUrl: url!,
-            fit: BoxFit.cover,
+          AppNetworkImage(
+            url: url,
             alignment: Alignment.topCenter,
-            errorWidget: (_, __, ___) => const SizedBox.shrink(),
+            // A tenth of full size. The scrim below covers almost all of it,
+            // so anything sharper is memory spent on pixels nobody sees.
+            decodeScale: 0.1,
+            placeholder: const SizedBox.shrink(),
+            error: const SizedBox.shrink(),
           ),
           // Heavy enough that white body text stays legible over any artwork.
           DecoratedBox(
@@ -447,13 +450,10 @@ class _Poster extends StatelessWidget {
           tag: tag,
           child: (url == null || url.isEmpty)
               ? ColoredBox(color: cs.surfaceContainer)
-              : CachedNetworkImage(
-                  imageUrl: url,
-                  fit: BoxFit.cover,
-                  placeholder: (_, __) =>
-                      ColoredBox(color: cs.surfaceContainer),
-                  errorWidget: (_, __, ___) =>
-                      ColoredBox(color: cs.surfaceContainer),
+              : AppNetworkImage(
+                  url: url,
+                  width: width,
+                  placeholder: ColoredBox(color: cs.surfaceContainer),
                 ),
         ),
       ),

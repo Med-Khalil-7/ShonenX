@@ -1,6 +1,5 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shonenx/shared/widgets/app_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:shonenx/core/utils/image_headers.dart';
 import 'package:shonenx/shared/providers/ui_prefs_provider.dart';
 import '../models/card_config.dart';
 
@@ -52,15 +51,16 @@ class CardThumbnail extends StatelessWidget {
     }
 
     if (config.imageUrl != null && config.imageUrl!.isNotEmpty) {
-      Widget img = CachedNetworkImage(
-        imageUrl: config.imageUrl!,
-        httpHeaders: decodeUrlHeaders(config.imageUrl!),
+      // w/h here are layout only -- they do not bound the decode, which is
+      // why an unsized 1000px cover used to cost 6 MB in a 120px cell.
+      Widget img = SizedBox(
         width: w,
         height: h,
-        fit: BoxFit.cover,
-        fadeInDuration: const Duration(milliseconds: 220),
-        placeholderFadeInDuration: const Duration(milliseconds: 120),
-        errorWidget: (_, __, ___) => _buildFallback(cs, w, h),
+        child: AppNetworkImage(
+          url: config.imageUrl,
+          width: w,
+          error: _buildFallback(cs, w, h),
+        ),
       );
       if (config.heroTag != null && config.heroTag!.isNotEmpty) {
         img = Hero(tag: config.heroTag!, child: img);
