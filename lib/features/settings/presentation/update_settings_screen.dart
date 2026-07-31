@@ -1,9 +1,7 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shonenx/core/updates/models/github_release.dart';
 import 'package:shonenx/core/updates/services/update_service.dart';
-import 'package:shonenx/core/updates/ui/linux_update_widget.dart';
 import 'package:shonenx/core/updates/ui/update_ui.dart';
 import 'package:shonenx/features/settings/presentation/widgets/settings_ui_components.dart';
 import 'package:shonenx/shared/widgets/app_scaffold.dart';
@@ -88,19 +86,6 @@ class _UpdateSettingsScreenState extends ConsumerState<UpdateSettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 50),
           children: [
-            if (Platform.isLinux)
-              SettingsSection(
-                title: 'Linux Installation & Updater',
-                children: [
-                  SettingsActionTile(
-                    icon: Icons.terminal_rounded,
-                    title: 'Open Linux Update Manager',
-                    subtitle:
-                        'Interactive installer, custom repo/icon config, and live terminal output',
-                    onTap: () => LinuxUpdateWidget.show(context),
-                  ),
-                ],
-              ),
             SettingsSection(
               title: 'Check for Updates',
               children: [

@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/core/utils/wallpaper_processor.dart';
 
 import 'package:shonenx/shared/providers/storage_provider.dart';
@@ -216,14 +217,18 @@ class ThemePrefsState {
   double get backgroundImageOpacity => wallpaperSettings?.opacity ?? 0.4;
 
   const ThemePrefsState({
-    this.themeMode = ThemeMode.system,
+    // TV panels are viewed in the dark and the replica is a dark design; a
+    // light theme is reachable from settings but is never the default.
+    this.themeMode = ThemeMode.dark,
     this.flexScheme = FlexScheme.deepBlue,
     this.themeVariant = AppThemeVariant.classic,
     this.useAmoled = false,
     this.useDynamic = false,
     this.swapColors = false,
-    this.exclusiveScheme,
-    this.blendLevel = 10,
+    this.exclusiveScheme = ShonenX.schemeKey,
+    // Any blend at all pulls the pinned surfaces off their exact values
+    // before AppTheme gets a chance to restore them.
+    this.blendLevel = 0,
     this.useGradients = false,
     this.gradientStyle = BackgroundGradientStyle.linear,
     this.gradientDirection = BackgroundGradientDirection.diagonalUp,
@@ -401,14 +406,17 @@ class ThemePrefsState {
     }
 
     return ThemePrefsState(
-      themeMode: ThemeMode.values[map['themeMode'] ?? ThemeMode.system.index],
+      themeMode: ThemeMode.values[map['themeMode'] ?? ThemeMode.dark.index],
       flexScheme:
           FlexScheme.values[map['flexScheme'] ?? FlexScheme.deepBlue.index],
       themeVariant: resolvedVariant,
       useAmoled: map['useAmoled'] ?? false,
       useDynamic: map['useDynamic'] ?? false,
-      exclusiveScheme: map['exclusiveScheme'],
-      blendLevel: map['blendLevel'] ?? 10,
+      // Absent means "never chose one", not "chose none" -- the picker always
+      // writes a value. Without this fallback an install that predates the
+      // default scheme keeps rendering the old blue forever.
+      exclusiveScheme: map['exclusiveScheme'] ?? ShonenX.schemeKey,
+      blendLevel: map['blendLevel'] ?? 0,
       useGradients: map['useGradients'] ?? false,
       gradientStyle:
           (map['gradientStyle'] is int &&

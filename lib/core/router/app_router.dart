@@ -5,11 +5,11 @@ import 'package:shonenx/app_init.dart';
 import 'package:shonenx/core/router/complex_extra_codec.dart';
 import 'package:shonenx/core/router/scaffold_with_nav_bar.dart';
 import 'package:shonenx/features/discovery/presentation/details_screen.dart';
+import 'package:shonenx/features/discovery/presentation/episodes_screen.dart';
 import 'package:shonenx/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:shonenx/features/discovery/presentation/home_screen.dart';
 import 'package:shonenx/features/splash/presentation/splash_screen.dart';
 import 'package:shonenx/features/discovery/presentation/discover_screen.dart';
-import 'package:shonenx/features/downloads/presentation/downloads_screen.dart';
 import 'package:shonenx/features/extensions/presentation/extensions_settings_screen.dart';
 import 'package:shonenx/features/extensions/presentation/extension_tester_screen.dart';
 import 'package:shonenx/core/remote_config/ui/remote_config_editor_screen.dart';
@@ -17,22 +17,16 @@ import 'package:shonenx/features/history/presentation/continue_history_screen.da
 import 'package:shonenx/features/library/presentation/library_screen.dart';
 import 'package:shonenx/features/player/domain/player_mode.dart';
 import 'package:shonenx/features/player/presentation/player_screen.dart';
-import 'package:shonenx/features/reader/domain/reader_mode.dart';
-import 'package:shonenx/features/reader/presentation/reader_screen.dart';
 import 'package:shonenx/features/settings/presentation/cache_settings_screen.dart';
-import 'package:shonenx/features/settings/presentation/download_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/home_settings_screen.dart';
-import 'package:shonenx/features/settings/presentation/permissions_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/player_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/settings_screen.dart';
-import 'package:shonenx/features/settings/presentation/reader_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/theme_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/tracking_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/ui_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/backup_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/import_preview_screen.dart';
 import 'package:shonenx/features/settings/presentation/debug_settings_screen.dart';
-import "package:shonenx/features/notifications/presentation/notifications_settings_screen.dart";
 import 'package:shonenx/features/settings/presentation/content_settings_screen.dart';
 import 'package:shonenx/features/settings/presentation/logs_screen.dart';
 import 'package:shonenx/features/settings/presentation/about_screen.dart';
@@ -155,7 +149,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             navigatorKey: _homeNavigatorKey,
             routes: [
-              GoRoute(path: '/home', builder: (context, state) => HomeScreen()),
+              GoRoute(
+                path: '/home',
+                builder: (context, state) => const HomeScreen(),
+              ),
             ],
           ),
           StatefulShellBranch(
@@ -226,10 +223,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      // GoRoute(
-      //     path: AppRoutes.sourceSettings,
-      //     builder: (context, state) => const SourceSettingsScreen(),
-      //   ),
+      GoRoute(
+        path: '/episodes',
+        builder: (context, state) =>
+            EpisodesScreen(media: state.extra as UnifiedMedia),
+      ),
       GoRoute(
         path: '/player',
         builder: (context, state) {
@@ -238,32 +236,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: '/reader',
-        builder: (context, state) {
-          final mode = state.extra as ReaderModeOnline;
-          return ReaderScreen(key: ValueKey(mode.episode.id), mode: mode);
-        },
-      ),
-      GoRoute(
-        path: '/downloads',
-        builder: (context, state) => const DownloadsScreen(),
-      ),
-      GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
         routes: [
-          GoRoute(
-            path: 'downloads',
-            builder: (context, state) => const DownloadSettingsScreen(),
-          ),
-          GoRoute(
-            path: 'permissions',
-            builder: (context, state) => const PermissionsSettingsScreen(),
-          ),
-          GoRoute(
-            path: 'notifications',
-            builder: (context, state) => const NotificationsSettingsScreen(),
-          ),
           GoRoute(
             path: 'tracking',
             builder: (context, state) => const TrackingSettingsScreen(),
@@ -307,10 +282,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'player',
             builder: (context, state) => const PlayerSettingsScreen(),
-          ),
-          GoRoute(
-            path: 'reader',
-            builder: (context, state) => const ReaderSettingsScreen(),
           ),
           GoRoute(
             path: 'cache',

@@ -105,6 +105,7 @@ class _TrackerProfileSheetState extends ConsumerState<TrackerProfileSheet> {
         ),
       ],
       child: TextField(
+               keyboardType: TextInputType.none, // TV: never raise the system IME
         controller: controller,
         decoration: const InputDecoration(
           hintText: 'https://example.com/avatar.png',
@@ -485,8 +486,6 @@ class _TrackerProfileSheetState extends ConsumerState<TrackerProfileSheet> {
                   '★ ${profile.meanScore!.toStringAsFixed(1)}',
                   'Score',
                 ),
-              if (profile.mangaCount != null)
-                _cleanStat(theme, cs, profile.mangaCount.toString(), 'Manga'),
             ],
           ),
           if (profile.statusCounts != null &&
@@ -769,6 +768,7 @@ class _TrackerProfileSheetState extends ConsumerState<TrackerProfileSheet> {
         ),
         const SizedBox(height: 24),
         TextFormField(
+          keyboardType: TextInputType.none, // TV: never raise the system IME
           controller: _nameController,
           decoration: InputDecoration(
             labelText: 'Override Display Name',
@@ -781,6 +781,7 @@ class _TrackerProfileSheetState extends ConsumerState<TrackerProfileSheet> {
         ),
         const SizedBox(height: 16),
         TextFormField(
+          keyboardType: TextInputType.none, // TV: never raise the system IME
           controller: _bioController,
           maxLines: 3,
           decoration: InputDecoration(
@@ -908,13 +909,6 @@ class _TrackerProfileSheetState extends ConsumerState<TrackerProfileSheet> {
                 Icons.video_library_outlined,
                 m.uniqueSeriesTracked.toString(),
                 'Series',
-              ),
-              _exclusiveMetric(
-                theme,
-                cs,
-                Icons.menu_book_rounded,
-                m.chaptersRead.toString(),
-                'Chapters',
               ),
             ],
           ),

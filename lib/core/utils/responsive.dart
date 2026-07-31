@@ -176,7 +176,6 @@ class ResponsiveData {
     final mq = MediaQuery.of(context);
     final size = mq.size;
     final platform = Theme.of(context).platform;
-
     return ResponsiveData._(
       width: size.width,
       height: size.height,
@@ -184,21 +183,14 @@ class ResponsiveData {
       textScaleFactor: mq.textScaler.scale(1.0),
       orientation: mq.orientation,
       platform: platform,
-      isPhysicalKeyboardConnected: _hasPhysicalKeyboard(platform, mq),
+      isPhysicalKeyboardConnected: true,
       widthTier: breakpoints.resolveWidth(size.width),
       heightTier: breakpoints.resolveHeight(size.height),
       breakpoints: breakpoints,
     );
   }
 
-  static bool _hasPhysicalKeyboard(TargetPlatform platform, MediaQueryData mq) {
-    if (platform == TargetPlatform.windows ||
-        platform == TargetPlatform.macOS ||
-        platform == TargetPlatform.linux) {
-      return true;
-    }
-    return false;
-  }
+
 
   bool get isPortrait => orientation == Orientation.portrait;
   bool get isLandscape => orientation == Orientation.landscape;

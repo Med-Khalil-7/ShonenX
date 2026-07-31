@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shonenx/shared/providers/ui_prefs_provider.dart';
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/rows/horizontal_section.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/cards/media_card.dart';
+import 'package:shonenx/shared/widgets/tv/tv_poster_card.dart';
 import 'package:shonenx/features/library/providers/cloud_library_provider.dart';
 import 'package:shonenx/features/library/providers/local_library_provider.dart';
 import 'package:shonenx/features/tracking/domain/models/tracked_status.dart';
@@ -28,19 +28,14 @@ class LibraryRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isLocal = targetTracker == TrackerType.local;
     final mediaType = targetMediaType ?? MediaType.ANIME;
-    final style = ref.watch(uiPrefsProvider.select((s) => s.cardStyle));
-    final isWide = ref.watch(
-      uiPrefsProvider.select((s) => s.isMediaCardWide(style.name)),
-    );
-    final rowHeight = style.getLayout(isWideMode: isWide).height;
+    final m = ShonenXMetrics.of(context);
+    final rowHeight = TvPosterCard.rowExtent(context, width: m.rowPoster);
 
     Widget buildCard(BuildContext ctx, dynamic entry, String tagPrefix) {
-      return MediaCard(
-        tag: '$tagPrefix-$status-${entry.providerId}',
+      return TvPosterCard(
+        heroTag: '$tagPrefix-$status-${entry.providerId}',
         title: entry.title,
         imageUrl: entry.cover,
-        format: entry.format,
-        style: style,
         onTap: () => ctx.push(
           '/details/${entry.type}/?tag=$tagPrefix-$status-${entry.providerId}',
           extra: entry.toUnifiedMedia(),

@@ -92,7 +92,7 @@ class _ExtensionsSettingsScreenState
     final theme = Theme.of(context);
 
     return DefaultTabController(
-      length: 6,
+      length: 2,
       child: AppScaffold(
         title: 'Sources',
         subtitle: 'Extensions & Catalogs',
@@ -110,35 +110,7 @@ class _ExtensionsSettingsScreenState
             ),
             SourcesTab(
               engineFilter: _selectedEngineFilter,
-              type: MediaType.MANGA,
-              searchQuery: _searchQuery,
-              langFilter: _selectedLangFilter,
-              isInstalled: true,
-            ),
-            SourcesTab(
-              engineFilter: _selectedEngineFilter,
-              type: MediaType.NOVEL,
-              searchQuery: _searchQuery,
-              langFilter: _selectedLangFilter,
-              isInstalled: true,
-            ),
-            SourcesTab(
-              engineFilter: _selectedEngineFilter,
               type: MediaType.ANIME,
-              searchQuery: _searchQuery,
-              langFilter: _selectedLangFilter,
-              isInstalled: false,
-            ),
-            SourcesTab(
-              engineFilter: _selectedEngineFilter,
-              type: MediaType.MANGA,
-              searchQuery: _searchQuery,
-              langFilter: _selectedLangFilter,
-              isInstalled: false,
-            ),
-            SourcesTab(
-              engineFilter: _selectedEngineFilter,
-              type: MediaType.NOVEL,
               searchQuery: _searchQuery,
               langFilter: _selectedLangFilter,
               isInstalled: false,
@@ -395,75 +367,17 @@ class _ExtensionsSettingsScreenState
 
   Widget _buildTabBarContent() {
     final animeSources = ref.watch(availableAnimeSourcesProvider).value ?? [];
-    final mangaSources = ref.watch(availableMangaSourcesProvider).value ?? [];
-    final novelSources = ref.watch(availableNovelSourcesProvider).value ?? [];
     final enabledManagers = ref.watch(enabledExtensionManagersProvider);
 
-    // 5. Removed Obx entirely. Riverpod's `ref.watch` already triggers rebuilds.
-    final countInstalledAnime = ExtensionsService.getSourcesTabCount(
+    int countFor(bool isInstalled) => ExtensionsService.getSourcesTabCount(
       type: MediaType.ANIME,
-      isInstalled: true,
+      isInstalled: isInstalled,
       engineFilter: _selectedEngineFilter,
       searchQuery: _searchQuery,
       langFilter: _selectedLangFilter,
       animeSources: animeSources,
-      mangaSources: mangaSources,
-      novelSources: novelSources,
-      enabledManagers: enabledManagers.toList(),
-    );
-    final countInstalledManga = ExtensionsService.getSourcesTabCount(
-      type: MediaType.MANGA,
-      isInstalled: true,
-      engineFilter: _selectedEngineFilter,
-      searchQuery: _searchQuery,
-      langFilter: _selectedLangFilter,
-      animeSources: animeSources,
-      mangaSources: mangaSources,
-      novelSources: novelSources,
-      enabledManagers: enabledManagers.toList(),
-    );
-    final countInstalledNovel = ExtensionsService.getSourcesTabCount(
-      type: MediaType.NOVEL,
-      isInstalled: true,
-      engineFilter: _selectedEngineFilter,
-      searchQuery: _searchQuery,
-      langFilter: _selectedLangFilter,
-      animeSources: animeSources,
-      mangaSources: mangaSources,
-      novelSources: novelSources,
-      enabledManagers: enabledManagers.toList(),
-    );
-    final countAvailableAnime = ExtensionsService.getSourcesTabCount(
-      type: MediaType.ANIME,
-      isInstalled: false,
-      engineFilter: _selectedEngineFilter,
-      searchQuery: _searchQuery,
-      langFilter: _selectedLangFilter,
-      animeSources: animeSources,
-      mangaSources: mangaSources,
-      novelSources: novelSources,
-      enabledManagers: enabledManagers.toList(),
-    );
-    final countAvailableManga = ExtensionsService.getSourcesTabCount(
-      type: MediaType.MANGA,
-      isInstalled: false,
-      engineFilter: _selectedEngineFilter,
-      searchQuery: _searchQuery,
-      langFilter: _selectedLangFilter,
-      animeSources: animeSources,
-      mangaSources: mangaSources,
-      novelSources: novelSources,
-      enabledManagers: enabledManagers.toList(),
-    );
-    final countAvailableNovel = ExtensionsService.getSourcesTabCount(
-      type: MediaType.NOVEL,
-      isInstalled: false,
-      engineFilter: _selectedEngineFilter,
-      searchQuery: _searchQuery,
-      langFilter: _selectedLangFilter,
-      animeSources: animeSources,
-      mangaSources: mangaSources,
-      novelSources: novelSources,
+      mangaSources: const [],
+      novelSources: const [],
       enabledManagers: enabledManagers.toList(),
     );
 
@@ -474,12 +388,8 @@ class _ExtensionsSettingsScreenState
       tabAlignment: TabAlignment.start,
       dividerColor: Colors.transparent,
       tabs: [
-        _buildTab('Installed Anime', countInstalledAnime),
-        _buildTab('Installed Manga', countInstalledManga),
-        _buildTab('Installed Novel', countInstalledNovel),
-        _buildTab('Available Anime', countAvailableAnime),
-        _buildTab('Available Manga', countAvailableManga),
-        _buildTab('Available Novel', countAvailableNovel),
+        _buildTab('Installed', countFor(true)),
+        _buildTab('Available', countFor(false)),
       ],
     );
   }
@@ -545,6 +455,8 @@ class _ExtensionsSettingsScreenState
           height: 52,
           controller: _searchController,
           hintText: 'Search extensions...',
+          // TODO(tv): gate on !isTv once TvPlatform lands (Phase 2)
+          autofocus: true,
           onExpand: () => setState(() => _isSearching = true),
           onBackPressed: () => setState(() {
             _isSearching = false;
@@ -618,13 +530,13 @@ class _ExtensionsSettingsScreenState
               (
                 'mangayomi',
                 'Mangayomi Engine',
-                'External runtime engine for Anime & Manga extensions',
+                'External runtime engine for anime extensions',
                 Icons.auto_awesome_mosaic_rounded,
               ),
               (
                 'aniyomi',
                 'Tachiyomi / Aniyomi Engine',
-                'External runtime engine for Manga & Anime extensions',
+                'External runtime engine for anime extensions',
                 Icons.video_library_rounded,
               ),
               (
@@ -634,85 +546,81 @@ class _ExtensionsSettingsScreenState
                 Icons.cloud_queue_rounded,
               ),
               (
-                'kotatsu',
-                'Kotatsu Engine',
-                'External runtime engine for Manga reading extensions',
-                Icons.menu_book_rounded,
-              ),
-              (
                 'sora',
                 'Sora Engine',
-                'External runtime engine for Novel & Anime extensions',
+                'External runtime engine for anime extensions',
                 Icons.auto_stories_rounded,
               ),
             ];
 
             return AppBottomSheet(
               title: 'Manage Extension Engines',
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    child: Text(
-                      'Enable or disable external extension runtime engines. Enabled engines will appear in your catalogs and discovery feeds alongside your native inbuilt sources.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                        height: 1.3,
+              // Five switch tiles at the 10-foot tile height exceed the
+              // sheet's bounded height, which clipped the last engine and put
+              // its toggle out of reach of a remote entirely. Scrolling makes
+              // it reachable: focus movement scrolls it into view.
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      child: Text(
+                        'Enable or disable external extension runtime engines. Enabled engines will appear in your catalogs and discovery feeds alongside your native inbuilt sources.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                          height: 1.3,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  ...engines.map((e) {
-                    final id = e.$1;
-                    final title = e.$2;
-                    final desc = e.$3;
-                    final isRuntimeEngine = [
-                      'mangayomi',
-                      'aniyomi',
-                      'cloudstream',
-                      'kotatsu',
-                      'sora',
-                    ].contains(id);
+                    const SizedBox(height: 12),
+                    ...engines.map((e) {
+                      final id = e.$1;
+                      final title = e.$2;
+                      final desc = e.$3;
+                      final isRuntimeEngine = [
+                        'mangayomi',
+                        'aniyomi',
+                        'cloudstream',
+                        'kotatsu',
+                        'sora',
+                      ].contains(id);
 
-                    final isEnabled =
-                        enabled.contains(id) &&
-                        (!isRuntimeEngine || isRuntimeReady);
+                      final isEnabled =
+                          enabled.contains(id) &&
+                          (!isRuntimeEngine || isRuntimeReady);
 
-                    return SettingsSwitchTile(
-                      icon: e.$4,
-                      title: title,
-                      subtitle: desc,
-                      value: isEnabled,
-                      onChanged: (val) {
-                        if (val && isRuntimeEngine) {
-                          if (!isRuntimeReady) {
-                            showRuntimeSetupSheet(
-                              context,
-                              ref,
-                              onComplete: () {
-                                notifier.toggleManager(id, true);
-                                ref.invalidate(availableAnimeSourcesProvider);
-                                ref.invalidate(availableMangaSourcesProvider);
-                                ref.invalidate(availableNovelSourcesProvider);
-                              },
-                            );
-                            return;
+                      return SettingsSwitchTile(
+                        icon: e.$4,
+                        title: title,
+                        subtitle: desc,
+                        value: isEnabled,
+                        onChanged: (val) {
+                          if (val && isRuntimeEngine) {
+                            if (!isRuntimeReady) {
+                              showRuntimeSetupSheet(
+                                context,
+                                ref,
+                                onComplete: () {
+                                  notifier.toggleManager(id, true);
+                                  ref.invalidate(availableAnimeSourcesProvider);
+                                },
+                              );
+                              return;
+                            }
                           }
-                        }
-                        notifier.toggleManager(id, val);
-                        ref.invalidate(availableAnimeSourcesProvider);
-                        ref.invalidate(availableMangaSourcesProvider);
-                        ref.invalidate(availableNovelSourcesProvider);
-                      },
-                    );
-                  }),
-                  const SizedBox(height: 16),
-                ],
+                          notifier.toggleManager(id, val);
+                          ref.invalidate(availableAnimeSourcesProvider);
+                        },
+                      );
+                    }),
+                    const SizedBox(height: 16),
+                  ],
+                ),
               ),
             );
           },

@@ -61,6 +61,7 @@ class _TrackingSettingsScreenState
           ),
           const SizedBox(height: 16),
           TextField(
+            keyboardType: TextInputType.none, // TV: never raise the system IME
             controller: idController,
             decoration: const InputDecoration(
               labelText: 'Client ID',
@@ -69,6 +70,7 @@ class _TrackingSettingsScreenState
           ),
           const SizedBox(height: 16),
           TextField(
+            keyboardType: TextInputType.none, // TV: never raise the system IME
             controller: secretController,
             decoration: const InputDecoration(
               labelText: 'Client Secret',

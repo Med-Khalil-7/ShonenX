@@ -198,6 +198,7 @@ class _CharactersSheetState extends ConsumerState<CharactersSheet> {
           child: Column(
             children: [
               TextField(
+                keyboardType: TextInputType.none, // TV: never raise the system IME
                 controller: _searchController,
                 onChanged: (val) => setState(() => _searchQuery = val),
                 decoration: InputDecoration(

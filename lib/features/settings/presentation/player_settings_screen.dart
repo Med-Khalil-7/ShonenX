@@ -5,7 +5,6 @@ import 'package:shonenx/features/player/domain/aniskip_prefs.dart';
 import 'package:shonenx/features/player/presentation/widgets/media_kit/media_kit_settings.dart';
 import 'package:shonenx/features/player/providers/aniskip_prefs_provider.dart';
 import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
-import 'package:shonenx/features/settings/presentation/widgets/gesture_settings_sheet.dart';
 import 'package:shonenx/features/settings/presentation/widgets/subtitle_settings_sheet.dart';
 import 'package:shonenx/features/settings/presentation/widgets/settings_ui_components.dart';
 import 'package:shonenx/shared/models/video_server.dart';
@@ -271,7 +270,95 @@ class PlayerSettingsScreen extends ConsumerWidget {
             ],
           ),
           SettingsSection(
-            title: 'Subtitles & Gestures',
+            title: 'Skip Opening & Ending',
+            subtitle: 'The button that appears over the video on an AniSkip '
+                'segment. Whether a segment is skipped for you instead is set '
+                'per type in Aniskip above.',
+            children: [
+              SettingsSwitchTile(
+                icon: Icons.skip_next_outlined,
+                title: 'Show Skip Button',
+                subtitle: 'Offer a Skip Opening/Ending button over the video',
+                value: playerPrefs.showAniSkipButton,
+                onChanged: (val) => prefsNotifier.setShowAniSkipButton(val),
+              ),
+              if (playerPrefs.showAniSkipButton) ...[
+                SettingsSwitchTile(
+                  icon: Icons.center_focus_strong_outlined,
+                  title: 'Focus It On Appear',
+                  subtitle: 'Ready to press without moving the remote first',
+                  value: playerPrefs.focusSkipButton,
+                  onChanged: (val) => prefsNotifier.setFocusSkipButton(val),
+                ),
+                SettingsDropdownTile<int>(
+                  icon: Icons.timer_outlined,
+                  title: 'Hold On Screen',
+                  value: const [4, 6, 8, 10, 15].contains(
+                        playerPrefs.skipButtonHoldSeconds,
+                      )
+                      ? playerPrefs.skipButtonHoldSeconds
+                      : 8,
+                  items: const [4, 6, 8, 10, 15]
+                      .map(
+                        (s) => DropdownMenuItem(value: s, child: Text('${s}s')),
+                      )
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      prefsNotifier.setSkipButtonHoldSeconds(val);
+                    }
+                  },
+                ),
+              ],
+              SettingsSwitchTile(
+                icon: Icons.donut_large_outlined,
+                title: 'Auto-Next Countdown',
+                subtitle: 'Ring the Next Episode button as the countdown runs',
+                value: playerPrefs.showAutoNextCountdown,
+                onChanged: (val) =>
+                    prefsNotifier.setShowAutoNextCountdown(val),
+              ),
+            ],
+          ),
+          SettingsSection(
+            title: 'Controls',
+            children: [
+              SettingsDropdownTile<int>(
+                icon: Icons.swap_horiz_rounded,
+                title: 'Seek Step',
+                value: const [5, 10, 15, 30, 60].contains(
+                      playerPrefs.seekStepSeconds,
+                    )
+                    ? playerPrefs.seekStepSeconds
+                    : 10,
+                items: const [5, 10, 15, 30, 60]
+                    .map((s) => DropdownMenuItem(value: s, child: Text('${s}s')))
+                    .toList(),
+                onChanged: (val) {
+                  if (val != null) prefsNotifier.setSeekStepSeconds(val);
+                },
+              ),
+              SettingsDropdownTile<int>(
+                icon: Icons.visibility_off_outlined,
+                title: 'Hide Controls After',
+                value: const [3, 5, 8, 12, 20].contains(
+                      playerPrefs.controlsTimeoutSeconds,
+                    )
+                    ? playerPrefs.controlsTimeoutSeconds
+                    : 5,
+                items: const [3, 5, 8, 12, 20]
+                    .map((s) => DropdownMenuItem(value: s, child: Text('${s}s')))
+                    .toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    prefsNotifier.setControlsTimeoutSeconds(val);
+                  }
+                },
+              ),
+            ],
+          ),
+          SettingsSection(
+            title: 'Subtitles',
             children: [
               SettingsActionTile(
                 icon: Icons.subtitles_rounded,
@@ -290,46 +377,6 @@ class PlayerSettingsScreen extends ConsumerWidget {
                   );
                 },
               ),
-              SettingsActionTile(
-                icon: Icons.gesture_rounded,
-                title: 'Gesture Area',
-                subtitle: 'Customize active zones for volume and brightness',
-                onTap: () {
-                  showModalBottomSheet(
-                    context: context,
-                    constraints: const BoxConstraints(maxWidth: 1200),
-                    isScrollControlled: true,
-                    builder: (context) => const GestureSettingsSheet(),
-                  );
-                },
-              ),
-              SettingsSwitchTile(
-                icon: Icons.touch_app_rounded,
-                title: 'Enable Gestures',
-                subtitle:
-                    'Allow swiping to seek, change volume, and brightness',
-                value: playerPrefs.gesturePrefs.enableGestures,
-                onChanged: (val) {
-                  prefsNotifier.updateGesturePrefs(
-                    playerPrefs.gesturePrefs.copyWith(enableGestures: val),
-                  );
-                },
-              ),
-              if (playerPrefs.gesturePrefs.enableGestures)
-                SettingsSwitchTile(
-                  icon: Icons.swap_horiz_rounded,
-                  title: 'Swap Volume & Brightness',
-                  subtitle:
-                      'Place Volume on the left and Brightness on the right',
-                  value: playerPrefs.gesturePrefs.swapVolumeAndBrightness,
-                  onChanged: (val) {
-                    prefsNotifier.updateGesturePrefs(
-                      playerPrefs.gesturePrefs.copyWith(
-                        swapVolumeAndBrightness: val,
-                      ),
-                    );
-                  },
-                ),
             ],
           ),
         ],

@@ -69,6 +69,7 @@ class _DiscoveryModeSheetState extends ConsumerState<DiscoveryModeSheet> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 16.0),
                 child: TextField(
+                         keyboardType: TextInputType.none, // TV: never raise the system IME
                   controller: _searchController,
                   decoration: InputDecoration(
                     hintText: 'Search sources...',
@@ -545,13 +546,7 @@ class _SourceConfig extends ConsumerWidget {
                 final animeSources = filteredSources
                     .where((s) => s.mediaType == MediaType.ANIME)
                     .toList();
-                final mangaSources = filteredSources
-                    .where((s) => s.mediaType == MediaType.MANGA)
-                    .toList();
-
-                if (animeSources.isEmpty &&
-                    mangaSources.isEmpty &&
-                    searchQuery.isNotEmpty) {
+                if (animeSources.isEmpty && searchQuery.isNotEmpty) {
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 32.0),
                     child: Center(
@@ -577,22 +572,6 @@ class _SourceConfig extends ConsumerWidget {
                         child: _buildSourceGroup(
                           context: context,
                           sources: animeSources,
-                          ref: ref,
-                        ),
-                      ),
-                    ],
-                    if (mangaSources.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      _CollapsibleSourceGroup(
-                        title: 'MANGA SOURCES',
-                        forceExpand: searchQuery.isNotEmpty,
-                        activeCount: mangaSources
-                            .where((s) => activeSources.contains(s.id))
-                            .length,
-                        totalCount: mangaSources.length,
-                        child: _buildSourceGroup(
-                          context: context,
-                          sources: mangaSources,
                           ref: ref,
                         ),
                       ),

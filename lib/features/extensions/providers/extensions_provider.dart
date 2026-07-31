@@ -88,8 +88,6 @@ class ExtensionsController extends Notifier<Set<String>> {
           final bridgeManager = Get.find<bridge.ExtensionManager>();
           final installed = switch (type) {
             MediaType.ANIME => bridgeManager.installedAnimeExtensions,
-            MediaType.MANGA => bridgeManager.installedMangaExtensions,
-            MediaType.NOVEL => bridgeManager.installedNovelExtensions,
             _ => bridgeManager.installedAnimeExtensions,
           };
           final targetExts = installed
@@ -142,8 +140,6 @@ class ExtensionsController extends Notifier<Set<String>> {
           final bridgeManager = Get.find<bridge.ExtensionManager>();
           final installed = switch (type) {
             MediaType.ANIME => bridgeManager.installedAnimeExtensions,
-            MediaType.MANGA => bridgeManager.installedMangaExtensions,
-            MediaType.NOVEL => bridgeManager.installedNovelExtensions,
             _ => bridgeManager.installedAnimeExtensions,
           };
           final extSource = installed.firstWhere((e) => e.id == source.id);
@@ -177,8 +173,6 @@ class ExtensionsController extends Notifier<Set<String>> {
         final bridgeManager = Get.find<bridge.ExtensionManager>();
         final installed = switch (type) {
           MediaType.ANIME => bridgeManager.installedAnimeExtensions,
-          MediaType.MANGA => bridgeManager.installedMangaExtensions,
-          MediaType.NOVEL => bridgeManager.installedNovelExtensions,
           _ => bridgeManager.installedAnimeExtensions,
         };
         extSource = installed.firstWhereOrNull((e) => e.id == source.id);
@@ -223,8 +217,6 @@ class ExtensionsController extends Notifier<Set<String>> {
       final bridgeManager = Get.find<bridge.ExtensionManager>();
       final installed = switch (type) {
         MediaType.ANIME => bridgeManager.installedAnimeExtensions,
-        MediaType.MANGA => bridgeManager.installedMangaExtensions,
-        MediaType.NOVEL => bridgeManager.installedNovelExtensions,
         _ => bridgeManager.installedAnimeExtensions,
       };
       final variants = installed
@@ -265,8 +257,6 @@ class ExtensionsController extends Notifier<Set<String>> {
       final bridgeManager = Get.find<bridge.ExtensionManager>();
       await bridgeManager.updateAll();
       ref.invalidate(availableAnimeSourcesProvider);
-      ref.invalidate(availableMangaSourcesProvider);
-      ref.invalidate(availableNovelSourcesProvider);
       ref.invalidate(allAvailableSourcesProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -295,8 +285,6 @@ class ExtensionsController extends Notifier<Set<String>> {
       final bridgeManager = Get.find<bridge.ExtensionManager>();
       await bridgeManager.refreshExtensions(refreshAvailableSource: true);
       ref.invalidate(availableAnimeSourcesProvider);
-      ref.invalidate(availableMangaSourcesProvider);
-      ref.invalidate(availableNovelSourcesProvider);
       ref.invalidate(allAvailableSourcesProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -320,17 +308,11 @@ class ExtensionsController extends Notifier<Set<String>> {
   }
 
   Future<void> setDefaultSource(UnifiedSource source, MediaType type) async {
-    final prefKey = type == MediaType.ANIME
-        ? 'source_order_ANIME'
-        : (type == MediaType.MANGA
-              ? 'source_order_MANGA'
-              : 'source_order_NOVEL');
+    const prefKey = 'source_order_ANIME';
     final order = _storage.getStringList(prefKey) ?? [];
     final newOrder = [source.id, ...order.where((id) => id != source.id)];
     await _storage.setStringList(prefKey, newOrder);
     ref.invalidate(availableAnimeSourcesProvider);
-    ref.invalidate(availableMangaSourcesProvider);
-    ref.invalidate(availableNovelSourcesProvider);
   }
 
   bool isDefaultSource(
@@ -338,11 +320,7 @@ class ExtensionsController extends Notifier<Set<String>> {
     MediaType type,
     List<SourceInfo>? availableList,
   ) {
-    final prefKey = type == MediaType.ANIME
-        ? 'source_order_ANIME'
-        : (type == MediaType.MANGA
-              ? 'source_order_MANGA'
-              : 'source_order_NOVEL');
+    const prefKey = 'source_order_ANIME';
     final order = _storage.getStringList(prefKey) ?? [];
     if (order.isNotEmpty) {
       return order.first == source.id;
@@ -389,14 +367,10 @@ class ExtensionsService {
     if (isInstalled) {
       final sources = switch (type) {
         MediaType.ANIME => animeSources,
-        MediaType.MANGA => mangaSources,
-        MediaType.NOVEL => novelSources,
         _ => animeSources,
       };
       final installedRx = switch (type) {
         MediaType.ANIME => bridgeManager.installedAnimeExtensions,
-        MediaType.MANGA => bridgeManager.installedMangaExtensions,
-        MediaType.NOVEL => bridgeManager.installedNovelExtensions,
         _ => bridgeManager.installedAnimeExtensions,
       };
       final installedMap = {for (final e in installedRx) e.id ?? '': e};
@@ -412,14 +386,10 @@ class ExtensionsService {
     } else {
       final available = switch (type) {
         MediaType.ANIME => bridgeManager.availableAnimeExtensions,
-        MediaType.MANGA => bridgeManager.availableMangaExtensions,
-        MediaType.NOVEL => bridgeManager.availableNovelExtensions,
         _ => bridgeManager.availableAnimeExtensions,
       };
       final installed = switch (type) {
         MediaType.ANIME => bridgeManager.installedAnimeExtensions,
-        MediaType.MANGA => bridgeManager.installedMangaExtensions,
-        MediaType.NOVEL => bridgeManager.installedNovelExtensions,
         _ => bridgeManager.installedAnimeExtensions,
       };
       final installedIds = installed.map((e) => e.id ?? '').toSet();

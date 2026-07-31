@@ -94,10 +94,7 @@ class HomeSettingsScreen extends ConsumerWidget {
                 IconData getSectionIcon() {
                   switch (section.type) {
                     case HomeSectionType.continueMedia:
-                      return (mediaType == MediaType.MANGA ||
-                              mediaType == MediaType.NOVEL)
-                          ? Icons.menu_book_rounded
-                          : Icons.play_circle_outline_rounded;
+                      return Icons.play_circle_outline_rounded;
                     case HomeSectionType.libraryStatus:
                       return Icons.collections_bookmark_outlined;
                     case HomeSectionType.discovery:
@@ -296,11 +293,7 @@ class _EditSectionSheetState extends ConsumerState<_EditSectionSheet> {
         newTitle = '$categoryLabel ${_selectedMediaType.displayName}';
         break;
       case HomeSectionType.continueMedia:
-        newTitle =
-            (_selectedMediaType == MediaType.MANGA ||
-                _selectedMediaType == MediaType.NOVEL)
-            ? 'Continue Reading'
-            : 'Continue Watching';
+        newTitle = 'Continue Watching';
         break;
       case HomeSectionType.libraryStatus:
         newTitle = 'My ${_selectedStatus?.displayName ?? 'Library'}';
@@ -336,8 +329,8 @@ class _EditSectionSheetState extends ConsumerState<_EditSectionSheet> {
     );
     final activeTracker = !isSourceMode ? ref.watch(metadataSourceProvider) : null;
     final availableMediaTypes = isSourceMode 
-        ? [MediaType.ANIME, MediaType.MANGA] 
-        : (activeTracker?.supportedMediaTypes ?? MediaType.values);
+        ? [MediaType.ANIME] 
+        : (activeTracker?.supportedMediaTypes ?? const [MediaType.ANIME]);
     final availableCategories = isSourceMode
         ? [TrackerCategory.trending]
         : (activeTracker?.supportedCategories ?? TrackerCategory.values);
@@ -458,6 +451,7 @@ class _EditSectionSheetState extends ConsumerState<_EditSectionSheet> {
           ],
 
           TextField(
+            keyboardType: TextInputType.none, // TV: never raise the system IME
             controller: _titleController,
             decoration: InputDecoration(
               labelText: 'Section Title',
@@ -573,8 +567,8 @@ class _AddSectionSheetState extends ConsumerState<_AddSectionSheet> {
     final isSourceMode = ref.read(discoveryPrefsProvider).mode == MetadataMode.source;
     final activeTracker = !isSourceMode ? ref.read(metadataSourceProvider) : null;
     final availableMediaTypes = isSourceMode 
-        ? [MediaType.ANIME, MediaType.MANGA] 
-        : (activeTracker?.supportedMediaTypes ?? MediaType.values);
+        ? [MediaType.ANIME] 
+        : (activeTracker?.supportedMediaTypes ?? const [MediaType.ANIME]);
         
     _selectedMediaType = availableMediaTypes.isNotEmpty ? availableMediaTypes.first : MediaType.ANIME;
     _updateFormState();
@@ -621,11 +615,7 @@ class _AddSectionSheetState extends ConsumerState<_AddSectionSheet> {
         newTitle = '$catLabel ${_selectedMediaType.displayName}';
         break;
       case HomeSectionType.continueMedia:
-        newTitle =
-            (_selectedMediaType == MediaType.MANGA ||
-                _selectedMediaType == MediaType.NOVEL)
-            ? 'Continue Reading'
-            : 'Continue Watching';
+        newTitle = 'Continue Watching';
         break;
       case HomeSectionType.libraryStatus:
         newTitle = _selectedStatus != null
@@ -726,8 +716,8 @@ class _AddSectionSheetState extends ConsumerState<_AddSectionSheet> {
               final isSourceMode = ref.watch(discoveryPrefsProvider).mode == MetadataMode.source;
               final activeTracker = !isSourceMode ? ref.watch(metadataSourceProvider) : null;
               final availableMediaTypes = isSourceMode 
-                  ? [MediaType.ANIME, MediaType.MANGA] 
-                  : (activeTracker?.supportedMediaTypes ?? MediaType.values);
+                  ? [MediaType.ANIME] 
+                  : (activeTracker?.supportedMediaTypes ?? const [MediaType.ANIME]);
               return availableMediaTypes;
             })()
                 .map(
@@ -869,6 +859,7 @@ class _AddSectionSheetState extends ConsumerState<_AddSectionSheet> {
 
           if (canAdd) ...[
             TextField(
+              keyboardType: TextInputType.none, // TV: never raise the system IME
               controller: _titleController,
               decoration: InputDecoration(
                 labelText: 'Section Title',

@@ -1,31 +1,36 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:ui';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:screenshot/screenshot.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:window_manager/window_manager.dart';
 
-import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_list_panel.dart';
+import 'package:shonenx/features/discovery/presentation/episodes_screen.dart';
 import 'package:shonenx/features/player/domain/player_mode.dart';
+import 'package:shonenx/shared/models/unified_media.dart';
 import 'package:shonenx/features/player/engine/video_engine.dart';
-import 'package:shonenx/features/player/presentation/widgets/bottom_controls.dart';
-import 'package:shonenx/features/player/presentation/widgets/center_controls.dart';
 import 'package:shonenx/features/player/presentation/widgets/custom_subtitle_overlay.dart';
-import 'package:shonenx/features/player/presentation/widgets/gesture_overlay.dart';
-import 'package:shonenx/features/player/presentation/widgets/keyboard_shortcuts_sheet.dart';
 import 'package:shonenx/features/player/presentation/widgets/player_keyboard_listener.dart';
-import 'package:shonenx/features/player/presentation/widgets/top_controls.dart';
+import 'package:shonenx/features/player/presentation/widgets/tv/player_center_indicator.dart';
+import 'package:shonenx/features/player/presentation/widgets/tv/player_audio_panel.dart';
+import 'package:shonenx/features/player/presentation/widgets/tv/player_settings_panel.dart';
+import 'package:shonenx/features/player/presentation/widgets/tv/player_skip_button.dart';
+import 'package:shonenx/features/player/presentation/widgets/tv/player_top_bar.dart';
+import 'package:shonenx/features/player/presentation/widgets/tv/player_transport_bar.dart';
 import 'package:shonenx/features/player/providers/aniskip_provider.dart';
 import 'package:shonenx/features/player/providers/player_controller.dart';
 import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
+import 'package:shonenx/features/player/providers/scrub_provider.dart';
 import 'package:shonenx/features/player/providers/video_engine_provider.dart';
-import 'package:shonenx/features/comments/presentation/widgets/comments_tab.dart';
-import 'package:shonenx/shared/widgets/app_bottom_sheet.dart';
+import 'package:shonenx/shared/models/unified_episode.dart';
+import 'package:shonenx/shared/models/video_stream.dart';
+import 'package:shonenx/core/utils/extensions.dart';
+import 'package:shonenx/shared/widgets/tv/tv_button.dart';
+import 'package:shonenx/shared/widgets/tv/tv_confirm_dialog.dart';
+import 'package:shonenx/shared/widgets/tv/tv_side_sheet.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   final PlayerMode mode;
@@ -37,39 +42,76 @@ class PlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
-  final ScreenshotController _screenshotController = ScreenshotController();
+  /// Long enough to cross the overlay with a D-pad. Three seconds was tuned
+  /// for a mouse and expires mid-traversal on a remote.
+  Duration get _autoHide => Duration(
+    seconds: ref.read(playerPrefsProvider).controlsTimeoutSeconds,
+  );
+
+  final FocusNode _playPauseFocus = FocusNode(debugLabel: 'playPause');
+
+  /// Way in to the seek bar for presses that land before it is on screen.
+  final SeekBarHandle _seekHandle = SeekBarHandle();
+
+  /// Way in to the skip button for an OK that lands with the controls down.
+  final SkipHandle _skipHandle = SkipHandle();
+
+  /// The video, so the frame under a scrub can be captured off it.
+  final GlobalKey _videoKey = GlobalKey();
+
+  /// A still of the frame the scrub started from.
+  ///
+  /// Scrubbing moves the one open player -- there is no second decoder any
+  /// more -- so without this the whole screen would follow the thumb, which
+  /// reads as having already jumped when nothing has been committed. Held over
+  /// the video, it keeps the scene exactly where the user left it until they
+  /// decide: OK takes the new position, BACK puts playback back on this frame.
+  ui.Image? _frozenFrame;
 
   bool _showControls = false;
-  bool _lockControls = false;
   Timer? _controlsTimer;
+  bool _panelOpen = false;
+  bool _exitPromptOpen = false;
 
-  bool _isFullScreen = false;
-  bool _isEpisodePanelOpen = false;
-  Offset? _lastHoverPosition;
+  /// Remembered so the subtitle toggle can restore what was switched off.
+  SubtitleTrack? _lastSubtitle;
 
-  static const _controlsAutoHideDuration = Duration(seconds: 3);
+  /// The title being played, for the modes that have one.
+  ///
+  /// Auto mode carries the media but resolves the episode itself, so anything
+  /// gated on `is PlayerModeOnline` silently lost the episodes button and the
+  /// skip-intro lookup the moment a play button started using it.
+  UnifiedMedia? get _mediaOrNull => switch (widget.mode) {
+    PlayerModeOnline(:final media) => media,
+    PlayerModeAuto(:final media) => media,
+    PlayerModeOffline() => null,
+  };
 
-  String get _mediaTitle {
-    if (widget.mode is PlayerModeOnline) {
-      return (widget.mode as PlayerModeOnline).media.title.availableTitle;
-    }
-    return (widget.mode as PlayerModeOffline).title ?? 'Local Media';
-  }
+  String get _mediaTitle => switch (widget.mode) {
+    PlayerModeOnline(:final media) => media.title.availableTitle,
+    PlayerModeAuto(:final media) => media.title.availableTitle,
+    PlayerModeOffline(:final title) => title ?? 'Local Media',
+  };
 
-  AniSkipArgs? _getAniSkipArgs(VideoEngine engine) {
-    if (widget.mode is PlayerModeOnline) {
-      final onlineMode = widget.mode as PlayerModeOnline;
-      final idMalStr = onlineMode.media.idMal;
-      if (idMalStr == null || idMalStr.isEmpty) return null;
-      final malId = int.tryParse(idMalStr);
-      if (malId == null) return null;
-      return AniSkipArgs(
-        idMal: malId,
-        episodeNumber: onlineMode.episode.number,
-        episodeLength: engine.currentDuration.inSeconds,
-      );
-    }
-    return null;
+  AniSkipArgs? _aniSkipArgs(VideoEngine engine) {
+    // In auto mode the episode is not known until the controller has resolved
+    // it, so read it from state rather than from the route argument.
+    final media = _mediaOrNull;
+    if (media == null) return null;
+
+    final episode = switch (widget.mode) {
+      PlayerModeOnline(:final episode) => episode,
+      _ => ref.read(playerControllerProvider).activeEpisode,
+    };
+    if (episode == null) return null;
+
+    final malId = int.tryParse(media.idMal ?? '');
+    if (malId == null) return null;
+    return AniSkipArgs(
+      idMal: malId,
+      episodeNumber: episode.number,
+      episodeLength: engine.currentDuration.inSeconds,
+    );
   }
 
   @override
@@ -78,21 +120,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     try {
       WakelockPlus.enable();
     } catch (_) {}
-    _initSystemUI();
-    _initDesktopWindowState();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(playerControllerProvider.notifier)
-          .initialize(widget.mode, screenshot: _screenshotController);
-      _showControlsTemporarily();
-      if (ref.read(playerPrefsProvider).showShortcutsSheetOnStart && mounted) {
-        KeyboardShortcutsSheet.show(context);
-      }
-    });
-  }
-
-  void _initSystemUI() {
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.immersiveSticky,
       overlays: [],
@@ -101,14 +128,18 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-  }
 
-  void _initDesktopWindowState() {
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      windowManager.isFullScreen().then((isFull) {
-        if (mounted) setState(() => _isFullScreen = isFull);
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final controller = ref.read(playerControllerProvider.notifier);
+      controller.setFrameGrabber(_grabVideoFrame);
+      controller.initialize(widget.mode);
+      // Once, here -- not from the transport bar's build, which re-registered
+      // it on every position tick.
+      controller.setupAutoSkipListener(
+        _aniSkipArgs(ref.read(videoEngineProvider)),
+      );
+      _wake();
+    });
   }
 
   @override
@@ -117,16 +148,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       WakelockPlus.disable();
     } catch (_) {}
     _controlsTimer?.cancel();
-    _disposeSystemUI();
-
     try {
-      ref.read(videoEngineProvider).dispose();
+      ref.read(playerControllerProvider.notifier).setFrameGrabber(null);
     } catch (_) {}
-
-    super.dispose();
-  }
-
-  void _disposeSystemUI() {
+    _frozenFrame?.dispose();
+    _playPauseFocus.dispose();
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.edgeToEdge,
       overlays: SystemUiOverlay.values,
@@ -137,386 +163,531 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       DeviceOrientation.landscapeRight,
     ]);
 
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      windowManager.isFullScreen().then((isFull) async {
-        if (isFull) {
-          await windowManager.setFullScreen(false);
-          if (Platform.isWindows) {
-            await windowManager.setTitleBarStyle(TitleBarStyle.normal);
-          }
-        }
-      });
+    // Deliberately not disposing the engine here. videoEngineProvider is
+    // autoDispose and this screen holds the only watch, so its own
+    // ref.onDispose tears the engine down a moment later. Doing it here as
+    // well meant two concurrent teardowns of one mpv context.
+    super.dispose();
+  }
+
+  /// Show the controls, put focus on play/pause, and restart the countdown.
+  void _wake({bool focusTransport = true}) {
+    _controlsTimer?.cancel();
+    if (!_showControls) {
+      setState(() => _showControls = true);
+      if (focusTransport) {
+        // Post-frame: the transport bar is not mounted until this build lands,
+        // so its node cannot take focus any earlier.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _showControls) _playPauseFocus.requestFocus();
+        });
+      }
+    }
+    _controlsTimer = Timer(_autoHide, _hide);
+  }
+
+  /// Keeps the controls up without stealing focus from whatever holds it.
+  void _keepAwake() {
+    if (!_showControls) return;
+    _controlsTimer?.cancel();
+    _controlsTimer = Timer(_autoHide, _hide);
+  }
+
+  /// Reads the frame on screen as PNG bytes, for the continue-watching card.
+  ///
+  /// Sized to roughly card width rather than the panel's: this gets base64'd
+  /// into a history row, and the old mpv path stored full-resolution frames --
+  /// megabytes per entry, re-decoded on every rebuild of the row.
+  Future<Uint8List?> _grabVideoFrame() async {
+    try {
+      final boundary = _videoKey.currentContext?.findRenderObject();
+      if (boundary is! RenderRepaintBoundary) return null;
+      final width = boundary.size.width;
+      if (width <= 0) return null;
+
+      final image = await boundary.toImage(
+        pixelRatio: (360 / width).clamp(0.05, 1.0),
+      );
+      try {
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        return data?.buffer.asUint8List();
+      } finally {
+        image.dispose();
+      }
+    } catch (_) {
+      return null;
     }
   }
 
-  void _showControlsTemporarily() {
-    _controlsTimer?.cancel();
-    if (!_showControls) setState(() => _showControls = true);
-    _controlsTimer = Timer(_controlsAutoHideDuration, () {
-      if (mounted) setState(() => _showControls = false);
+  /// Grabs the on-screen frame at half resolution and holds it.
+  ///
+  /// Half because it is a backdrop behind an overlay, and a full 1080p capture
+  /// is 8MB of RGBA on a device that has not got it to spare. It is released
+  /// the moment the scrub ends.
+  Future<void> _freezeFrame() async {
+    try {
+      final boundary = _videoKey.currentContext?.findRenderObject();
+      if (boundary is! RenderRepaintBoundary) return;
+      final image = await boundary.toImage(pixelRatio: 0.5);
+      // The scrub can end while the capture is in flight, and a still left
+      // over from it would sit frozen over live playback.
+      if (!mounted || !ref.read(isScrubbingProvider)) {
+        image.dispose();
+        return;
+      }
+      setState(() => _frozenFrame = image);
+    } catch (_) {
+      // No capture: the scene follows the scrub, which is the old behaviour
+      // rather than a broken screen.
+    }
+  }
+
+  void _releaseFrame() {
+    final image = _frozenFrame;
+    if (image == null) return;
+    setState(() => _frozenFrame = null);
+    image.dispose();
+  }
+
+  void _hide() {
+    if (!mounted || !_showControls) return;
+    // A panel, the exit prompt or an open scrub all mean the user is
+    // mid-decision; hiding the controls under them would drop focus into
+    // nothing. Check back rather than returning, or the countdown is lost and
+    // the overlay stays up for the rest of the episode.
+    if (_panelOpen || _exitPromptOpen || ref.read(isScrubbingProvider)) {
+      _controlsTimer = Timer(_autoHide, _hide);
+      return;
+    }
+    setState(() => _showControls = false);
+  }
+
+  /// Drops the overlay now, without waiting out the countdown. Used when the
+  /// user has just committed a seek and wants to watch the result.
+  /// Raises the overlay onto the timeline and takes the press with it.
+  ///
+  /// Focus goes to the seek bar rather than play/pause, so the press that
+  /// started this and every one after it drive the same control.
+  void _scrubFromHidden(bool forward) {
+    _wake(focusTransport: false);
+    // The bar is mounted by this build, not before it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _seekHandle.step(forward: forward);
     });
   }
 
-  void _toggleControls() {
-    if (_showControls) {
-      _controlsTimer?.cancel();
-      setState(() => _showControls = false);
-    } else {
-      _showControlsTemporarily();
-    }
-  }
-
-  void _hideControls() {
-    if (_showControls) {
-      _controlsTimer?.cancel();
-      if (mounted) setState(() => _showControls = false);
-    }
-  }
-
-  Future<void> _toggleFullScreen() async {
-    if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) return;
-
-    final isFull = await windowManager.isFullScreen();
-    if (isFull) {
-      await windowManager.setFullScreen(false);
-      if (Platform.isWindows) {
-        await windowManager.setTitleBarStyle(TitleBarStyle.normal);
-      }
-      if (mounted) setState(() => _isFullScreen = false);
-    } else {
-      if (Platform.isWindows) {
-        await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-      }
-      await windowManager.setFullScreen(true);
-      if (mounted) setState(() => _isFullScreen = true);
-    }
-  }
-
-  void _onMouseHover(PointerHoverEvent event) {
-    if (event.kind == PointerDeviceKind.touch) return;
-    if (_lastHoverPosition == event.position) return;
-    _lastHoverPosition = event.position;
-    _showControlsTemporarily();
+  void _hideNow() {
+    _controlsTimer?.cancel();
+    if (mounted && _showControls) setState(() => _showControls = false);
   }
 
   void _toggleEpisodePanel() {
-    if (widget.mode is! PlayerModeOnline) return;
-    if (_isEpisodePanelOpen) {
+    final media = _mediaOrNull;
+    if (media == null) return;
+    if (_panelOpen) {
       Navigator.of(context).pop();
       return;
     }
-    _isEpisodePanelOpen = true;
-    showGeneralDialog(
+    _openPanel(
+      label: 'Episodes',
+      // The episodes screen itself, over the whole player. Not a copy of it:
+      // a side panel a third of the screen wide squeezed the grid to four
+      // columns, and the list that replaced it lost the range tabs. This is
+      // the same widget the route builds, so the two cannot diverge.
+      widthFactor: 1.0,
+      builder: (sheetContext) => EpisodesScreen(
+        media: media,
+        onPlay: (episode, _) {
+          Navigator.of(sheetContext).pop();
+          ref.read(playerControllerProvider.notifier).loadEpisode(episode);
+        },
+      ),
+    );
+  }
+
+  void _openSettingsPanel() {
+    _openPanel(
+      label: 'Settings',
+      builder: (_) => PlayerSettingsPanel(
+        engine: ref.read(videoEngineProvider),
+        controller: ref.read(playerControllerProvider.notifier),
+      ),
+    );
+  }
+
+  void _openAudioPanel() {
+    _openPanel(
+      label: 'Audio',
+      builder: (_) => PlayerAudioPanel(
+        controller: ref.read(playerControllerProvider.notifier),
+      ),
+    );
+  }
+
+  /// Flips subtitles without opening anything.
+  ///
+  /// Turning them back on returns to the last track that was actually chosen,
+  /// falling back to the preferred language and then to whatever the source
+  /// offers first -- so the toggle is symmetrical rather than "off, then go
+  /// hunting in a menu".
+  void _toggleSubtitles() {
+    final controller = ref.read(playerControllerProvider.notifier);
+    final state = ref.read(playerControllerProvider);
+    final active = state.activeSubtitle;
+
+    if (active != null && active.url.isNotEmpty) {
+      _lastSubtitle = active;
+      controller.changeSubtitle(SubtitleTrack.none);
+      return;
+    }
+
+    final tracks = state.subtitles.where((s) => s.url.isNotEmpty).toList();
+    if (tracks.isEmpty) return;
+
+    final preferred = ref.read(playerPrefsProvider).defaultSubtitleLang;
+    final restored =
+        _lastSubtitle ??
+        tracks.firstWhereOrNull(
+          (s) => s.language.toLowerCase().contains(preferred.toLowerCase()),
+        ) ??
+        tracks.first;
+    controller.changeSubtitle(restored);
+  }
+
+  void _openPanel({
+    required String label,
+    required WidgetBuilder builder,
+    double? widthFactor,
+  }) {
+    setState(() => _panelOpen = true);
+    _controlsTimer?.cancel();
+    TvSideSheet.show(
       context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Episodes',
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) => Align(
-        alignment: Alignment.centerRight,
-        child: SizedBox(
-          width: MediaQuery.of(context).size.width * 0.38,
-          height: double.infinity,
-          child: Material(
-            color: Theme.of(context).colorScheme.surface,
-            child: Column(
-              children: [
-                Expanded(
-                  child: Consumer(
-                    builder: (context, ref, child) {
-                      final currentEpisode = ref.watch(
-                        playerControllerProvider.select((s) => s.activeEpisode),
-                      );
-                      if (currentEpisode == null) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      return EpisodeListPanel(
-                        media: (widget.mode as PlayerModeOnline).media,
-                        currentEpisodeNumber: currentEpisode.number,
-                        onEpisodeTap: (episode, sourceInfo) {
-                          Navigator.of(context).pop();
-                          ref
-                              .read(playerControllerProvider.notifier)
-                              .loadEpisode(episode);
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      transitionBuilder: (_, anim, __, child) => SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(1, 0),
-          end: Offset.zero,
-        ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
-        child: child,
-      ),
+      label: label,
+      builder: builder,
+      widthFactor: widthFactor,
     ).then((_) {
-      if (mounted) setState(() => _isEpisodePanelOpen = false);
+      if (!mounted) return;
+      setState(() => _panelOpen = false);
+      // Do not grab focus: it belongs to whichever control opened the panel.
+      _wake(focusTransport: false);
     });
   }
 
-  void _showCommentsSheet() {
-    if (widget.mode is! PlayerModeOnline) return;
-    final media = (widget.mode as PlayerModeOnline).media;
-    final activeEpisode = ref.read(playerControllerProvider).activeEpisode;
+  /// BACK unwinds one layer at a time -- open panel, then the overlay, then
+  /// the screen. Leaving always asks first: a mis-press on a remote is cheap,
+  /// and losing your place is not.
+  /// Guards against BACK arriving again while the previous one is still
+  /// unwinding. This method awaits a dialog, so without it a held BACK ran a
+  /// second pass that popped the player out from under the panel it was in
+  /// the middle of closing.
+  bool _backInFlight = false;
 
-    AppBottomSheet.show(
-      context: context,
-      title: 'Episode ${activeEpisode?.number ?? 1} Discussion',
-      contentPadding: EdgeInsets.zero,
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.78,
-        child: CommentsTabWidget(
-          media: media,
-          initialEpisodeNumber: activeEpisode?.number.toInt(),
-          forceEpisodeFilter: true,
-        ),
-      ),
-    );
-  }
-
-  void _handlePop(
-    bool didPop,
-    VideoEngine engine,
-    PlayerController controller,
-  ) {
-    if (!didPop) {
-      try {
-        engine.pause();
-      } catch (_) {}
-      controller.captureExitThumbnail();
-      context.pop();
+  Future<void> _handleBack() async {
+    if (_backInFlight) return;
+    _backInFlight = true;
+    try {
+      await _handleBackInner();
+    } finally {
+      _backInFlight = false;
     }
   }
 
-  Widget _buildVideoLayer(VideoEngine engine, PlayerState playerState) {
-    return Center(
-      child: Offstage(
-        offstage: playerState.isLoading,
-        child: Screenshot(
-          controller: _screenshotController,
-          child: engine.buildVideoView(),
-        ),
-      ),
-    );
-  }
+  Future<void> _handleBackInner() async {
+    if (_panelOpen) {
+      Navigator.of(context).pop();
+      return;
+    }
+    if (_exitPromptOpen) return;
 
-  Widget _buildLockedOverlay() {
-    return Center(
-      child: IconButton.filled(
-        padding: const EdgeInsets.all(15),
-        icon: const Icon(
-          Icons.lock_open_rounded,
-          color: Colors.white,
-          size: 50,
-        ),
-        onPressed: () => setState(() => _lockControls = false),
-      ),
-    );
-  }
+    // BACK asks about leaving, whatever the overlay happens to be doing.
+    //
+    // It used to spend the first press dismissing the controls, so leaving
+    // took two presses whenever the bar was up -- and the first one looked
+    // like nothing had happened. The controls come down with it instead, so
+    // the prompt is the only thing on screen.
+    _controlsTimer?.cancel();
+    setState(() {
+      _showControls = false;
+      _exitPromptOpen = true;
+    });
+    final engine = ref.read(videoEngineProvider);
+    final wasPlaying = ref.read(videoEngineStateProvider).isPlaying;
+    try {
+      engine.pause();
+    } catch (_) {}
 
-  List<Widget> _buildControlsLayer({
-    required ThemeData theme,
-    required VideoEngine engine,
-    required PlayerState playerState,
-    required PlayerController controller,
-    required AniSkipArgs? aniSkipArgs,
-  }) {
-    return [
-      TopControls(
-        showControls: _showControls,
-        engine: engine,
-        mode: widget.mode,
-        playerState: playerState,
-        controller: controller,
-        onBack: context.pop,
-        onComments: _showCommentsSheet,
-      ),
-      CenterControls(
-        showControls: _showControls,
-        playerState: playerState,
-        controller: controller,
-        mediaTitle: _mediaTitle,
-        engine: engine,
-      ),
-      BottomControls(
-        aniskipArgs: aniSkipArgs,
-        showControls: _showControls,
-        engine: engine,
-        playerState: playerState,
-        controller: controller,
-        theme: theme,
-        mode: widget.mode,
-        isFullScreen: _isFullScreen,
-        onToggleFullScreen: _toggleFullScreen,
-        onShowEpisodePanel: _toggleEpisodePanel,
-        onToggleLockControls: () =>
-            setState(() => _lockControls = !_lockControls),
-      ),
-    ];
+    // Let the press that got us here finish being dispatched before pushing a
+    // route onto it.
+    //
+    // BACK arrives as a platform pop, and putting the dialog up inside that
+    // same dispatch meant the tail of it reached the route we had just pushed
+    // and popped it again: the prompt flashed and vanished, leaving a paused
+    // player and no explanation. One frame is enough to separate them.
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      // Never leave playback stopped for a prompt that never appeared.
+      if (wasPlaying) {
+        try {
+          engine.play();
+        } catch (_) {}
+      }
+      return;
+    }
+
+    final confirmed = await TvConfirmDialog.show(
+      context: context,
+      message: 'Do you want to close the player?',
+    );
+    if (!mounted) return;
+    setState(() => _exitPromptOpen = false);
+
+    if (confirmed == true) {
+      ref.read(playerControllerProvider.notifier).captureExitThumbnail();
+      if (mounted) context.pop();
+    } else if (wasPlaying) {
+      // Covers every way out that is not "yes": No, the barrier, and BACK
+      // again. Any of them leaves the player where it was, still playing.
+      try {
+        engine.play();
+      } catch (_) {}
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final playerState = ref.watch(playerControllerProvider);
+
+    ref.listen<bool>(isScrubbingProvider, (_, scrubbing) {
+      if (scrubbing) {
+        if (_frozenFrame == null) unawaited(_freezeFrame());
+        // An open scrub holds the overlay up outright.
+        //
+        // _hide used to re-arm its own countdown when it found a scrub in
+        // progress, which meant the bar could still go on sitting still --
+        // and a scrub whose bar has slid off screen is unusable: the picture
+        // is frozen and dimmed with nothing to say why. Cancelling the timer
+        // is the only state where the overlay is guaranteed to stay.
+        _controlsTimer?.cancel();
+        if (!_showControls) setState(() => _showControls = true);
+      } else {
+        _releaseFrame();
+        // Back to the ordinary countdown.
+        _controlsTimer?.cancel();
+        if (_showControls) _controlsTimer = Timer(_autoHide, _hide);
+      }
+    });
     final controller = ref.read(playerControllerProvider.notifier);
     final engine = ref.watch(videoEngineProvider);
-    final aniSkipArgs = _getAniSkipArgs(engine);
+    final activeEpisode = ref.watch(
+      playerControllerProvider.select((s) => s.activeEpisode),
+    );
 
     ref.listen(playerControllerProvider.select((s) => s.error), (prev, next) {
-      if (next != null && next != prev && mounted) {
-        AppBottomSheet.show(
-          context: context,
-          title: 'Playback Error',
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.error_outline_rounded,
-                      color: Colors.redAccent,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Failed to load media stream',
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.black26,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: Text(
-                  next,
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'We recommend selecting a different video server, changing the extension source, or trying another episode.',
-                style: TextStyle(color: Colors.white54, fontSize: 13),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.white24),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: const Text(
-                        'Dismiss',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                  if (widget.mode is PlayerModeOnline) ...[
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: FilledButton.icon(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          _toggleEpisodePanel();
-                        },
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        icon: const Icon(Icons.playlist_play_rounded),
-                        label: const Text('Change Source / Episode'),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        );
-      }
+      if (next != null && next != prev && mounted) _showPlaybackError(next);
     });
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, _) =>
-          _handlePop(didPop, engine, controller),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
       child: Scaffold(
         backgroundColor: Colors.black,
         body: PlayerKeyboardListener(
           engine: engine,
           controller: controller,
-          onUserInteraction: () {},
-          onToggleFullScreen: _toggleFullScreen,
+          controlsVisible: _showControls,
+          onWake: _wake,
+          onScrub: _scrubFromHidden,
+          onConfirmSkip: _skipHandle.skip,
+          onUserInteraction: _keepAwake,
           onToggleEpisodePanel: _toggleEpisodePanel,
-          onShowShortcutsGuide: () => KeyboardShortcutsSheet.show(context),
-          onExit: () {
-            if (_isEpisodePanelOpen) {
-              Navigator.of(context).pop();
-            } else if (_isFullScreen) {
-              _toggleFullScreen();
-            } else {
-              context.pop();
-            }
-          },
-          child: MouseRegion(
-            cursor: _showControls
-                ? SystemMouseCursors.basic
-                : SystemMouseCursors.none,
-            onHover: _onMouseHover,
-            child: Stack(
-              children: [
-                _buildVideoLayer(engine, playerState),
-                if (playerState.activeSubtitle != null)
-                  const CustomSubtitleOverlay(),
-                Positioned.fill(
-                  child: PlayerGestureOverlay(
-                    onToggleControls: _toggleControls,
-                    onHideControls: _hideControls,
-                    onRightClick: _toggleEpisodePanel,
-                    onSeek: engine.seekRelative,
-                    onSetSpeed: engine.setSpeed,
+          onBack: _handleBack,
+          child: Stack(
+            children: [
+              Center(
+                child: Offstage(
+                  offstage: playerState.isLoading,
+                  child: RepaintBoundary(
+                    key: _videoKey,
+                    child: engine.buildVideoView(),
                   ),
                 ),
-                if (_lockControls)
-                  _buildLockedOverlay()
-                else
-                  ..._buildControlsLayer(
-                    theme: theme,
-                    engine: engine,
-                    playerState: playerState,
-                    controller: controller,
-                    aniSkipArgs: aniSkipArgs,
+              ),
+              // Holds the scene still for the length of a scrub. Above the
+              // video so the player can move underneath it.
+              if (_frozenFrame != null)
+                Positioned.fill(
+                  child: RawImage(image: _frozenFrame, fit: BoxFit.contain),
+                ),
+              // Pulls the held frame back so the preview card reads against it
+              // instead of competing with it.
+              const _ScrubScrim(),
+              if (playerState.activeSubtitle != null)
+                const CustomSubtitleOverlay(),
+              const PlayerCenterIndicator(),
+              PlayerTopBar(
+                visible: _showControls,
+                title: _mediaTitle,
+                subtitle: _episodeLabel(activeEpisode),
+                onBack: _handleBack,
+                onEpisodes: _mediaOrNull != null
+                    ? _toggleEpisodePanel
+                    : null,
+                onAudio: _openAudioPanel,
+                onToggleSubtitles: _toggleSubtitles,
+                onSettings: _openSettingsPanel,
+                subtitlesOn:
+                    playerState.activeSubtitle != null &&
+                    playerState.activeSubtitle!.url.isNotEmpty,
+              ),
+              PlayerSkipButton(
+                engine: engine,
+                aniskipArgs: _aniSkipArgs(engine),
+                handle: _skipHandle,
+              ),
+              PlayerTransportBar(
+                visible: _showControls,
+                engine: engine,
+                controller: controller,
+                aniskipArgs: _aniSkipArgs(engine),
+                playPauseFocus: _playPauseFocus,
+                seekHandle: _seekHandle,
+                onInteraction: _keepAwake,
+                onSeekCommitted: _hideNow,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// `E01 "Cruelty"`, falling back to `E01 "Episode 1"`.
+  ///
+  /// Sources frequently fill the title field with a restatement of the number
+  /// -- `Episode 58`, `Ep. 58`, or just `58` -- which the quotes then present
+  /// as if it were the episode's name. Those are treated as no title at all,
+  /// so the fallback is used consistently whether the field was empty or
+  /// merely unhelpful.
+  static String? _episodeLabel(UnifiedEpisode? episode) {
+    if (episode == null) return null;
+    final number = episode.number;
+    final asText = number == number.roundToDouble()
+        ? number.toInt().toString()
+        : number.toString();
+    final label = 'E${asText.padLeft(2, '0')}';
+
+    final title = episode.title?.trim();
+    final hasRealTitle = title != null &&
+        title.isNotEmpty &&
+        !RegExp(
+          r'^(episode|ep\.?|e)?\s*0*' + RegExp.escape(asText) + r'$',
+          caseSensitive: false,
+        ).hasMatch(title);
+
+    return '$label "${hasRealTitle ? title : 'Episode $asText'}"';
+  }
+
+  void _showPlaybackError(String message) {
+    final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Center(
+        child: Material(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 760,
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.error_outline_rounded, color: cs.error),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Failed to load media stream',
+                        style: textTheme.titleLarge,
+                      ),
+                    ],
                   ),
-              ],
+                  const SizedBox(height: 16),
+                  Text(
+                    message,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Try a different server, source or episode.',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  Row(
+                    children: [
+                      TvButton(
+                        label: 'Change server',
+                        icon: Icons.playlist_play_rounded,
+                        autofocus: true,
+                        height: 56,
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          _openSettingsPanel();
+                        },
+                      ),
+                      const SizedBox(width: 16),
+                      TvButton(
+                        label: 'Dismiss',
+                        height: 56,
+                        variant: TvButtonVariant.filledSurface,
+                        onPressed: () => Navigator.of(ctx).pop(),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dims the video for the duration of a scrub.
+///
+/// Dims the held frame for the length of a scrub.
+///
+/// What is behind the overlay is where the user came from, not where they are
+/// going. At full brightness it competes with the preview card and invites
+/// being read as the destination.
+class _ScrubScrim extends ConsumerWidget {
+  const _ScrubScrim();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scrubbing = ref.watch(isScrubbingProvider);
+
+    return IgnorePointer(
+      child: AnimatedOpacity(
+        duration: Durations.medium1,
+        curve: Curves.easeOut,
+        opacity: scrubbing ? 1 : 0,
+        child: const ColoredBox(
+          color: Colors.black54,
+          child: SizedBox.expand(),
         ),
       ),
     );

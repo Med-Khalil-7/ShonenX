@@ -6,7 +6,6 @@ import 'package:shonenx/shared/models/unified_media.dart';
 import 'package:shonenx/source_engine/models/source_info.dart';
 import 'package:shonenx/source_engine/models/source_setting.dart';
 import 'package:shonenx/source_engine/source_engine_provider.dart';
-import 'package:shonenx/source_engine/utils/media_type_extensions.dart';
 
 class SourceSelectorList extends ConsumerWidget {
   final List<SourceInfo> availableSources;
@@ -71,9 +70,7 @@ class SourceSelectorList extends ConsumerWidget {
           String? parentIconUrl,
         ) {
           final selected = currentSource == sourceInfo;
-          final sourceImpl = mediaType.usesAnimeSources
-              ? ref.read(animeSourceProvider(sourceInfo))
-              : ref.read(mangaSourceProvider(sourceInfo));
+          final sourceImpl = ref.read(animeSourceProvider(sourceInfo));
 
           final iconUrlToUse = sourceInfo.iconUrl?.isNotEmpty == true
               ? sourceInfo.iconUrl

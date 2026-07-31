@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -32,15 +30,11 @@ class SettingsScreen extends ConsumerWidget {
               SettingsNavTile(
                 icon: Icons.video_settings_outlined,
                 title: 'Player',
-                subtitle: 'Gestures, default quality, skips',
+                subtitle: 'Default quality, audio, skips',
                 onTap: () => context.push('/settings/player'),
               ),
-              SettingsNavTile(
-                icon: Icons.chrome_reader_mode_outlined,
-                title: 'Reader',
-                subtitle: 'Reading mode, background, scale',
-                onTap: () => context.push('/settings/reader'),
-              ),
+              // The Reader tile used to sit here. Its route was deleted with
+              // the manga reader, so tapping it hit the router's errorBuilder.
               SettingsNavTile(
                 icon: Icons.extension_outlined,
                 title: 'Extensions',
@@ -50,25 +44,11 @@ class SettingsScreen extends ConsumerWidget {
                     context.push('/settings/remote_config_editor'),
               ),
               SettingsNavTile(
-                icon: Icons.download_outlined,
-                title: 'Downloads',
-                subtitle: 'Download location, file naming',
-                onTap: () => context.push('/settings/downloads'),
-              ),
-              SettingsNavTile(
                 icon: Icons.filter_alt_outlined,
                 title: 'Content',
                 subtitle: 'Content filters, 18+ toggle',
                 onTap: () => context.push('/settings/content'),
               ),
-              if (Platform.isAndroid) ...[
-                SettingsNavTile(
-                  icon: Icons.security_outlined,
-                  title: 'Permissions',
-                  subtitle: 'Manage app permissions',
-                  onTap: () => context.push('/settings/permissions'),
-                ),
-              ],
             ],
           ),
 
@@ -108,19 +88,6 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
 
-          if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS)
-            SettingsSection(
-              title: 'Notifications',
-              children: [
-                SettingsNavTile(
-                  icon: Icons.notifications_active_outlined,
-                  title: 'Manage Notifications',
-                  subtitle: 'Manage your active subscriptions and reminders',
-                  onTap: () => context.push('/settings/notifications'),
-                ),
-              ],
-            ),
-
           SettingsSection(
             title: 'Misc',
             children: [
@@ -157,7 +124,7 @@ class SettingsScreen extends ConsumerWidget {
               SettingsNavTile(
                 icon: Icons.bug_report_outlined,
                 title: 'Debug',
-                subtitle: 'Test notifications and UI components',
+                subtitle: 'UI components and diagnostics',
                 onTap: () => context.push('/settings/debug'),
               ),
               SettingsNavTile(

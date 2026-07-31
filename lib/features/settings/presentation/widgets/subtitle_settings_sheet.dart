@@ -651,6 +651,7 @@ class _SubtitleSettingsSheetState extends ConsumerState<SubtitleSettingsSheet> {
                   ),
                   const SizedBox(height: 24),
                   TextField(
+                    keyboardType: TextInputType.none, // TV: never raise the system IME
                     controller: textController,
                     decoration: InputDecoration(
                       labelText: 'Custom Hex (AARRGGBB)',

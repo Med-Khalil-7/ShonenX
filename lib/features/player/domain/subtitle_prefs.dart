@@ -27,7 +27,9 @@ class SubtitlePrefs {
     this.fontColor = 0xFFFFFFFF, // White
     this.backgroundColor = 0x80000000, // Semi-transparent black
     this.outlineColor = 0xFF000000, // Black
-    this.bottomPadding = 20.0,
+    // Clears the transport bar, so subtitles are not hidden behind the
+    // controls the moment they appear.
+    this.bottomPadding = 140.0,
     this.bold = true,
     this.outlineSize = 1.5,
     this.shadowColor = 0x00000000, // Transparent
@@ -138,8 +140,10 @@ class SubtitlePrefs {
 }
 
 double getResponsiveSubtitleSize(double screenWidth, double multiplier) {
-  // Base size starts at a readable 16px and scales gently with screen width, clamped at 26px for 1.0x scale.
-  final baseSize = (14.0 + (screenWidth * 0.012)).clamp(16.0, 26.0);
+  // Scales with screen width, clamped to a range that stays legible across a
+  // room. The old ceiling of 26px was set for a phone held at arm's length and
+  // is roughly half what a 1080p panel needs at typical sofa distance.
+  final baseSize = (14.0 + (screenWidth * 0.016)).clamp(24.0, 44.0);
   return baseSize * multiplier;
 }
 

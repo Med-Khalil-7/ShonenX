@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shonenx/app_init.dart';
 import 'package:shonenx/features/player/engine/media_kit/media_kit_engine.dart';
 import 'package:shonenx/features/player/engine/video_engine.dart';
 import 'package:shonenx/features/player/engine/video_player/video_player_engine.dart';
@@ -17,6 +18,11 @@ class EngineState {
   final List<AudioTrack> audioTracks;
   final AudioTrack? activeAudioTrack;
 
+  /// Subtitles muxed into the container, as reported by the engine. Separate
+  /// from PlayerState.subtitles, which holds the external files the *source*
+  /// supplied.
+  final List<SubtitleTrack> embeddedSubtitles;
+
   const EngineState({
     this.position = Duration.zero,
     this.duration = Duration.zero,
@@ -26,6 +32,7 @@ class EngineState {
     this.fit = BoxFit.contain,
     this.audioTracks = const [AudioTrack.auto],
     this.activeAudioTrack = AudioTrack.auto,
+    this.embeddedSubtitles = const [],
   });
 
   EngineState copyWith({
@@ -37,6 +44,7 @@ class EngineState {
     BoxFit? fit,
     List<AudioTrack>? audioTracks,
     AudioTrack? activeAudioTrack,
+    List<SubtitleTrack>? embeddedSubtitles,
   }) {
     return EngineState(
       position: position ?? this.position,
@@ -47,6 +55,7 @@ class EngineState {
       fit: fit ?? this.fit,
       audioTracks: audioTracks ?? this.audioTracks,
       activeAudioTrack: activeAudioTrack ?? this.activeAudioTrack,
+      embeddedSubtitles: embeddedSubtitles ?? this.embeddedSubtitles,
     );
   }
 }
@@ -64,6 +73,7 @@ class EngineStateNotifier extends Notifier<EngineState> {
     BoxFit? fit,
     List<AudioTrack>? audioTracks,
     AudioTrack? activeAudioTrack,
+    List<SubtitleTrack>? embeddedSubtitles,
   }) {
     state = state.copyWith(
       position: position,
@@ -74,6 +84,7 @@ class EngineStateNotifier extends Notifier<EngineState> {
       fit: fit,
       audioTracks: audioTracks,
       activeAudioTrack: activeAudioTrack,
+      embeddedSubtitles: embeddedSubtitles,
     );
   }
 
@@ -101,6 +112,10 @@ final videoEngineProvider = Provider.autoDispose<VideoEngine>((ref) {
 
   switch (playerType) {
     case PlayerType.mediakit:
+      // libmpv is mapped here and nowhere else, so an ExoPlayer session never
+      // loads it at all -- tens of megabytes that a 1 GB box keeps for the
+      // video decoder instead.
+      AppInit.ensureVideoEnginesReady();
       final prefs = ref.read(mediaKitPrefsProvider);
       final engine = MediaKitEngine(prefs, ref);
 

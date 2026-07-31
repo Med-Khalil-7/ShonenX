@@ -1,17 +1,16 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shonenx/shared/providers/ui_prefs_provider.dart';
-import 'package:shonenx/core/utils/image_headers.dart';
+import 'package:shonenx/shared/widgets/app_network_image.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/continue/continue_media_mixin.dart';
 import 'package:shonenx/features/history/domain/models/watch_history_entry.dart';
-import 'package:shonenx/features/history/providers/continue_watching_resolver.dart';
 import 'package:shonenx/features/history/providers/watch_history_provider.dart';
+import 'package:shonenx/features/player/domain/player_mode.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
-import 'package:shonenx/source_engine/source_registry.dart';
 import 'continue_card_layout.dart';
 
 class ContinueWatchingItem extends ConsumerStatefulWidget {
@@ -19,11 +18,16 @@ class ContinueWatchingItem extends ConsumerStatefulWidget {
   final double progress;
   final ContinueWatchingStyle style;
 
+  /// Multiplier on the style's own size, so a row can bring the card down to
+  /// the height of whatever sits beside it. 1 leaves the style untouched.
+  final double scale;
+
   const ContinueWatchingItem({
     super.key,
     required this.entry,
     required this.progress,
     required this.style,
+    this.scale = 1,
   });
 
   @override
@@ -45,25 +49,31 @@ class _ContinueWatchingItemState extends ConsumerState<ContinueWatchingItem>
     ),
   };
 
-  Future<void> _resumeEpisode() async {
-    await handleResumeMedia(
-      resolveAndPlay: () async {
-        final result = await ref
-            .read(continueWatchingResolverProvider)
-            .resolve(widget.entry);
-        if (!mounted) return;
-        context.push(
-          '/details/${result.mode.media.type.id}',
-          extra: {
-            'media': result.mode.media,
-            'initialTabIndex': 1,
-            'autoPlayMode': result.mode,
-          },
-        );
-      },
-      mediaType: MediaType.ANIME,
-      mediaTitle: widget.entry.animeTitle,
-      availableSourcesProvider: availableAnimeSourcesProvider,
+  /// Straight to the player, at the episode and position this card shows.
+  ///
+  /// It used to resolve the source first and then route via the detail screen
+  /// with an autoplay flag, so pressing a card that already says "EP 7, 12 min
+  /// left" sat spinning through a source lookup and a screen the user never
+  /// wanted to see. Everything needed is on the history entry; the player
+  /// resolves the rest against its own loading state.
+  void _resumeEpisode() {
+    final entry = widget.entry;
+    context.push(
+      '/player',
+      extra: PlayerModeAuto(
+        media: UnifiedMedia(
+          id: entry.animeId,
+          idMal: entry.animeIdMal,
+          title: MediaTitle(english: entry.animeTitle),
+          type: MediaType.ANIME,
+          cover: entry.cover ?? entry.thumbnailUrl,
+          banner: entry.banner,
+        ),
+        episodeNumber: entry.episodeNumber,
+        startPosition: entry.positionInMilliseconds > 0
+            ? Duration(milliseconds: entry.positionInMilliseconds)
+            : null,
+      ),
     );
   }
 
@@ -145,7 +155,7 @@ class _ContinueWatchingItemState extends ConsumerState<ContinueWatchingItem>
       isLoading: isLoading,
       isWideMode: isWideMode,
       title: widget.entry.animeTitle,
-      subtitle: style == ContinueWatchingStyle.wideBanner
+      subtitle: style == ContinueWatchingStyle.cinematic
           ? (widget.entry.episodeTitle ?? 'Continue watching')
           : subtitleText,
       progress: widget.progress,
@@ -158,7 +168,7 @@ class _ContinueWatchingItemState extends ConsumerState<ContinueWatchingItem>
     );
 
     final currentTextScale = MediaQuery.of(context).textScaler.scale(1.0);
-    final scaleFactor = layout.width / baseLayout.width;
+    final scaleFactor = (layout.width * widget.scale) / baseLayout.width;
     final normalizedCard = MediaQuery(
       data: MediaQuery.of(
         context,
@@ -166,9 +176,12 @@ class _ContinueWatchingItemState extends ConsumerState<ContinueWatchingItem>
       child: card,
     );
 
+    final width = layout.width * widget.scale;
+    final height = layout.height * widget.scale;
+
     return SizedBox(
-      width: layout.width,
-      height: layout.height,
+      width: width,
+      height: height,
       child: FittedBox(
         fit: BoxFit.fill,
         child: SizedBox(
@@ -190,6 +203,25 @@ class _ContinueWatchingItemState extends ConsumerState<ContinueWatchingItem>
     return '$remainingMins min left';
   }
 
+  /// Decoded frames, keyed by the base64 they came from.
+  ///
+  /// `base64Decode` used to run inside `build`, which minted a fresh list every
+  /// frame. `MemoryImage` keys its cache entry on the list's *identity*, so no
+  /// two builds ever hit the cache and a full-resolution screenshot was decoded
+  /// from scratch on every rebuild of the card.
+  static final _frames = <String, Uint8List>{};
+  static const _maxFrames = 12;
+
+  static Uint8List _frameBytes(String base64) {
+    final hit = _frames[base64];
+    if (hit != null) return hit;
+    final bytes = base64Decode(base64);
+    if (_frames.length >= _maxFrames) {
+      _frames.remove(_frames.keys.first);
+    }
+    return _frames[base64] = bytes;
+  }
+
   Widget _buildThumbnail(String? thumbnail, ColorScheme cs) {
     if (thumbnail == null || thumbnail.isEmpty) {
       return Container(
@@ -198,36 +230,31 @@ class _ContinueWatchingItemState extends ConsumerState<ContinueWatchingItem>
       );
     }
 
+    final broken = Container(
+      color: cs.surfaceContainerHighest,
+      child: Icon(Icons.broken_image_rounded, color: cs.onSurfaceVariant),
+    );
+
     try {
       if (thumbnail.startsWith('http')) {
-        final imageUrl = thumbnail.split('#').first;
-        final headers = decodeUrlHeaders(thumbnail);
-
-        return CachedNetworkImage(
-          imageUrl: imageUrl,
-          httpHeaders: headers.isEmpty ? null : headers,
-          fit: BoxFit.cover,
-          errorWidget: (_, __, ___) => Container(
-            color: cs.surfaceContainerHighest,
-            child: Icon(Icons.broken_image_rounded, color: cs.onSurfaceVariant),
-          ),
-        );
+        return AppNetworkImage(url: thumbnail, error: broken);
       }
 
-      return Image.memory(
-        base64Decode(thumbnail),
-        fit: BoxFit.cover,
-        gaplessPlayback: true,
-        errorBuilder: (_, __, ___) => Container(
-          color: cs.surfaceContainerHighest,
-          child: Icon(Icons.broken_image_rounded, color: cs.onSurfaceVariant),
+      // A screenshot straight off the video, so it is frame-sized: 1920x1080
+      // is 8 MB decoded for a card a couple of hundred pixels wide.
+      return LayoutBuilder(
+        builder: (context, constraints) => Image.memory(
+          _frameBytes(thumbnail),
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          cacheWidth: constraints.hasBoundedWidth
+              ? AppNetworkImage.decodeBudget(context, constraints.maxWidth)
+              : null,
+          errorBuilder: (_, __, ___) => broken,
         ),
       );
     } catch (_) {
-      return Container(
-        color: cs.surfaceContainerHighest,
-        child: Icon(Icons.broken_image_rounded, color: cs.onSurfaceVariant),
-      );
+      return broken;
     }
   }
 }

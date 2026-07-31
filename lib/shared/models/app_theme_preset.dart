@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_list_panel.dart';
 import 'package:shonenx/shared/providers/theme_prefs_provider.dart';
 import 'package:shonenx/shared/providers/ui_prefs_provider.dart';
 
@@ -42,8 +41,6 @@ class AppThemePreset {
 
   final MediaCardStyle cardStyle;
   final ContinueWatchingStyle continueWatchingStyle;
-  final ContinueReadingStyle continueReadingStyle;
-  final EpisodeViewMode episodeViewMode;
   final NavBarStyle navBarStyle;
   final Map<String, dynamic> experimentalConfig;
   final Map<String, bool> cardStyleWideModes;
@@ -83,8 +80,6 @@ class AppThemePreset {
     this.surfaceColor,
     this.cardStyle = MediaCardStyle.classic,
     this.continueWatchingStyle = ContinueWatchingStyle.classic,
-    this.continueReadingStyle = ContinueReadingStyle.classic,
-    this.episodeViewMode = EpisodeViewMode.classic,
     this.navBarStyle = NavBarStyle.classic,
     this.experimentalConfig = UiPrefState.defaultExperimentalConfig,
     this.cardStyleWideModes = const {},
@@ -131,8 +126,6 @@ class AppThemePreset {
       surfaceColor: themePrefs.surfaceColor,
       cardStyle: uiPrefs.cardStyle,
       continueWatchingStyle: uiPrefs.continueWatchingStyle,
-      continueReadingStyle: uiPrefs.continueReadingStyle,
-      episodeViewMode: uiPrefs.episodeViewMode,
       navBarStyle: uiPrefs.navBarStyle,
       experimentalConfig: uiPrefs.experimentalConfig,
       cardStyleWideModes: uiPrefs.cardStyleWideModes,
@@ -185,8 +178,6 @@ class AppThemePreset {
     return current.copyWith(
       cardStyle: cardStyle,
       continueWatchingStyle: continueWatchingStyle,
-      continueReadingStyle: continueReadingStyle,
-      episodeViewMode: episodeViewMode,
       navBarStyle: navBarStyle,
       experimentalConfig: {
         ...current.experimentalConfig,
@@ -235,8 +226,6 @@ class AppThemePreset {
       if (surfaceColor != null) 'surfaceColor': surfaceColor,
       'cardStyle': cardStyle.name,
       'continueWatchingStyle': continueWatchingStyle.name,
-      'continueReadingStyle': continueReadingStyle.name,
-      'episodeViewMode': episodeViewMode.name,
       'navBarStyle': navBarStyle.name,
       'experimentalConfig': experimentalConfig,
       'cardStyleWideModes': cardStyleWideModes,
@@ -341,14 +330,6 @@ class AppThemePreset {
       continueWatchingStyle: ContinueWatchingStyle.values.firstWhere(
         (e) => e.name == map['continueWatchingStyle'],
         orElse: () => ContinueWatchingStyle.classic,
-      ),
-      continueReadingStyle: ContinueReadingStyle.values.firstWhere(
-        (e) => e.name == map['continueReadingStyle'],
-        orElse: () => ContinueReadingStyle.classic,
-      ),
-      episodeViewMode: EpisodeViewMode.values.firstWhere(
-        (e) => e.name == map['episodeViewMode'],
-        orElse: () => EpisodeViewMode.classic,
       ),
       navBarStyle: NavBarStyle.values.firstWhere(
         (e) => e.name == map['navBarStyle'],

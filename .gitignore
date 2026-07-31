@@ -94,3 +94,6 @@ android/app/build/
 
 *.js
 *.zip
+
+# Machine-specific Flutter/Android SDK paths
+android/local.properties

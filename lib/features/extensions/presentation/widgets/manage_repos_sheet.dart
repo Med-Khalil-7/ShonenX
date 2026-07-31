@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:get/get.dart';
+import 'package:shonenx/core/tv/tv_focusable.dart';
 import 'package:shonenx/core/utils/snackbar_utils.dart';
 import 'package:shonenx/features/extensions/providers/extension_service_provider.dart';
+import 'package:shonenx/features/discovery/presentation/widgets/search/tv_onscreen_keyboard.dart';
 import 'package:shonenx/shared/widgets/app_bottom_sheet.dart';
 import 'package:shonenx/source_engine/source_registry.dart';
 
@@ -33,16 +35,11 @@ class _ManageReposSheetState extends ConsumerState<ManageReposSheet> {
   final _controller = TextEditingController();
   bool _isLoading = false;
   String? _clipboardText;
-  late String _selectedCategory;
   late String _selectedEngineId;
 
   @override
   void initState() {
     super.initState();
-    _selectedCategory = widget.autoAddType?.toLowerCase() ?? 'both';
-    if (!['both', 'anime', 'manga', 'novel'].contains(_selectedCategory)) {
-      _selectedCategory = 'both';
-    }
 
     if (widget.autoAddManager != null &&
         [
@@ -137,6 +134,21 @@ class _ManageReposSheetState extends ConsumerState<ManageReposSheet> {
     );
   }
 
+  /// Opens the in-app keyboard so a remote can type a URL without the
+  /// system IME. Returns focus to the sheet when dismissed.
+  Future<void> _editUrl() async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (_) => _UrlEntryDialog(initial: _controller.text),
+    );
+    if (result != null) {
+      _controller.text = result;
+      _controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: result.length),
+      );
+    }
+  }
+
   Future<void> _addRepo() async {
     final url = _controller.text.trim();
     if (url.isEmpty) return;
@@ -152,32 +164,13 @@ class _ManageReposSheetState extends ConsumerState<ManageReposSheet> {
       final adapter = ref.read(extensionAdapterProvider);
       bool added = false;
 
-      if (_selectedCategory == 'both' || _selectedCategory == 'anime') {
-        if (await adapter.addRepo(
-          parsedUrl,
-          _selectedEngineId,
-          bridge.ItemType.anime,
-        )) {
-          added = true;
-        }
-      }
-      if (_selectedCategory == 'both' || _selectedCategory == 'manga') {
-        if (await adapter.addRepo(
-          parsedUrl,
-          _selectedEngineId,
-          bridge.ItemType.manga,
-        )) {
-          added = true;
-        }
-      }
-      if (_selectedCategory == 'both' || _selectedCategory == 'novel') {
-        if (await adapter.addRepo(
-          parsedUrl,
-          _selectedEngineId,
-          bridge.ItemType.novel,
-        )) {
-          added = true;
-        }
+      // Anime only: there is no manga or novel side to this app any more.
+      if (await adapter.addRepo(
+        parsedUrl,
+        _selectedEngineId,
+        bridge.ItemType.anime,
+      )) {
+        added = true;
       }
 
       if (mounted) {
@@ -186,8 +179,6 @@ class _ManageReposSheetState extends ConsumerState<ManageReposSheet> {
           // Invalidate so the UI rebuilds with fresh data
           ref.invalidate(activeExtReposProvider);
           ref.invalidate(availableAnimeSourcesProvider);
-          ref.invalidate(availableMangaSourcesProvider);
-          ref.invalidate(availableNovelSourcesProvider);
           _showSnackBar(
             'Repository added to ${_getEngineName(_selectedEngineId)} successfully!',
             isSuccess: true,
@@ -213,8 +204,6 @@ class _ManageReposSheetState extends ConsumerState<ManageReposSheet> {
       if (removed) {
         ref.invalidate(activeExtReposProvider);
         ref.invalidate(availableAnimeSourcesProvider);
-        ref.invalidate(availableMangaSourcesProvider);
-        ref.invalidate(availableNovelSourcesProvider);
         if (mounted) _showSnackBar('Repository removed');
       } else {
         if (mounted) {
@@ -316,91 +305,65 @@ class _ManageReposSheetState extends ConsumerState<ManageReposSheet> {
             const SizedBox(height: 12),
 
             // URL TEXT FIELD
-            TextField(
-              controller: _controller,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.3),
-                labelText: 'Repository URL',
-                labelStyle: TextStyle(color: cs.onSurfaceVariant),
-                prefixIcon: Icon(
-                  Icons.link_rounded,
-                  color: cs.onSurfaceVariant,
-                ),
-                suffixIcon: ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _controller,
-                  builder: (context, value, _) {
-                    return value.text.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(
-                              Icons.clear_rounded,
-                              color: cs.onSurfaceVariant,
-                            ),
-                            onPressed: _controller.clear,
-                          )
-                        : const SizedBox.shrink();
-                  },
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
+            //
+            // readOnly keeps Android TV's leanback IME from ever opening. It
+            // takes over the whole screen and hands focus back unpredictably:
+            // dismissing it left this field still holding Flutter focus, so
+            // every later activation anywhere in the app re-summoned the
+            // keyboard. Text is entered through the in-app D-pad keyboard
+            // instead, which is what the rest of the TV UI already uses.
+            // onTap never fires from a D-pad, so the field itself cannot open
+            // the editor. TvFocusable maps ENTER to onTap, and the field is
+            // taken out of the focus order so there is exactly one focus stop.
+            TvFocusable(
+              onTap: _isLoading ? null : _editUrl,
+              borderRadius: BorderRadius.circular(16),
+              child: IgnorePointer(
+                child: ExcludeFocus(
+                  child: TextField(
+                    keyboardType:
+                        TextInputType.none, // TV: never raise the system IME
+                    controller: _controller,
+                    readOnly: true,
+                    showCursor: false,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: cs.surfaceContainerHighest.withValues(
+                        alpha: 0.3,
+                      ),
+                      labelText: 'Repository URL',
+                      labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                      prefixIcon: Icon(
+                        Icons.link_rounded,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: _controller,
+                        builder: (context, value, _) {
+                          return value.text.isNotEmpty
+                              ? IconButton(
+                                  icon: Icon(
+                                    Icons.clear_rounded,
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                  onPressed: _controller.clear,
+                                )
+                              : const SizedBox.shrink();
+                        },
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
+                    ),
+                    enabled: !_isLoading,
+                  ),
                 ),
               ),
-              enabled: !_isLoading,
-              onSubmitted: (_) => _addRepo(),
-            ),
-            const SizedBox(height: 12),
-
-            // CATEGORY SEGMENTS
-            SegmentedButton<String>(
-              style: SegmentedButton.styleFrom(
-                backgroundColor: cs.surfaceContainerHighest.withValues(
-                  alpha: 0.1,
-                ),
-                selectedForegroundColor: cs.onPrimary,
-                selectedBackgroundColor: cs.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              segments: const [
-                ButtonSegment(
-                  value: 'both',
-                  label: Text(
-                    'All',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                ButtonSegment(
-                  value: 'anime',
-                  label: Text(
-                    'Anime',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                ButtonSegment(
-                  value: 'manga',
-                  label: Text(
-                    'Manga',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                ButtonSegment(
-                  value: 'novel',
-                  label: Text(
-                    'Novel',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-              selected: {_selectedCategory},
-              onSelectionChanged: _isLoading
-                  ? null
-                  : (sel) => setState(() => _selectedCategory = sel.first),
             ),
             const SizedBox(height: 12),
 
@@ -648,6 +611,113 @@ class _ManageReposSheetState extends ConsumerState<ManageReposSheet> {
           letterSpacing: 0.5,
         ),
       ),
+    );
+  }
+}
+
+/// D-pad text entry for the repository URL.
+///
+/// Uses the app's own on-screen keyboard rather than the platform IME, plus a
+/// row of the characters a URL needs that a plain alphanumeric keyboard has no
+/// keys for.
+class _UrlEntryDialog extends StatefulWidget {
+  final String initial;
+
+  const _UrlEntryDialog({required this.initial});
+
+  @override
+  State<_UrlEntryDialog> createState() => _UrlEntryDialogState();
+}
+
+class _UrlEntryDialogState extends State<_UrlEntryDialog> {
+  late String _text = widget.initial;
+  final _firstKeyFocus = FocusNode(debugLabel: 'urlFirstKey');
+
+  static const _symbols = ['.', '/', ':', '-', '_', '~', '?', '='];
+
+  @override
+  void dispose() {
+    _firstKeyFocus.dispose();
+    super.dispose();
+  }
+
+  void _append(String s) => setState(() => _text += s);
+
+  void _backspace() {
+    if (_text.isEmpty) return;
+    setState(() => _text = _text.substring(0, _text.length - 1));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    // The keyboard sizes its keys from the height it is actually given;
+    // devices report very different logical viewports for the same panel.
+    final keyHeight =
+        (MediaQuery.sizeOf(context).height * 0.42) /
+        TvOnScreenKeyboard.rowCount;
+
+    return AlertDialog(
+      title: const Text('Repository URL'),
+      content: SizedBox(
+        width: 900,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                _text.isEmpty ? 'https://…' : _text,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: _text.isEmpty ? cs.onSurfaceVariant : cs.onSurface,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final sym in _symbols)
+                  OutlinedButton(
+                    onPressed: () => _append(sym),
+                    child: Text(sym),
+                  ),
+                OutlinedButton(
+                  onPressed: () => _append('https://'),
+                  child: const Text('https://'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TvOnScreenKeyboard(
+              keyHeight: keyHeight,
+              firstKeyFocus: _firstKeyFocus,
+              onChar: _append,
+              onBackspace: _backspace,
+              onSpace: () => _append(' '),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_text.trim()),
+          child: const Text('Done'),
+        ),
+      ],
     );
   }
 }

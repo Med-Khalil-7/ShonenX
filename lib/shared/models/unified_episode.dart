@@ -1,5 +1,3 @@
-import 'package:shonenx/shared/models/unified_chapter.dart';
-
 class UnifiedEpisode {
   final String id;
   final double number;
@@ -22,18 +20,6 @@ class UnifiedEpisode {
     this.airDate,
     this.uploadDate,
   });
-
-  factory UnifiedEpisode.fromChapter(UnifiedChapter chapter) {
-    return UnifiedEpisode(
-      id: chapter.id,
-      number: chapter.number,
-      season: null,
-      title: chapter.title,
-      scanlator: chapter.scanlator,
-      airDate: chapter.airDate,
-      uploadDate: chapter.uploadDate,
-    );
-  }
 
   Map<String, dynamic> toJson() {
     return {

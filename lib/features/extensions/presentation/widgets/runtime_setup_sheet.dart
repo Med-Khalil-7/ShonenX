@@ -402,7 +402,6 @@ class _RuntimeSetupSheetState extends ConsumerState<RuntimeSetupSheet> {
                               );
                               ref.invalidate(extensionManagerProvider);
                               ref.invalidate(availableAnimeSourcesProvider);
-                              ref.invalidate(availableMangaSourcesProvider);
                               widget.onComplete?.call();
                             }
                           },

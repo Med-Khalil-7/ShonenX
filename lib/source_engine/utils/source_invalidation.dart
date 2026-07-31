@@ -5,8 +5,6 @@ extension SourceInvalidation on Ref {
   void invalidateAllSources() {
     invalidate(extensionManagerProvider);
     invalidate(availableAnimeSourcesProvider);
-    invalidate(availableMangaSourcesProvider);
-    invalidate(availableNovelSourcesProvider);
     invalidate(allAvailableSourcesProvider);
   }
 }
@@ -15,8 +13,6 @@ extension WidgetSourceInvalidation on WidgetRef {
   void invalidateAllSources() {
     invalidate(extensionManagerProvider);
     invalidate(availableAnimeSourcesProvider);
-    invalidate(availableMangaSourcesProvider);
-    invalidate(availableNovelSourcesProvider);
     invalidate(allAvailableSourcesProvider);
   }
 }

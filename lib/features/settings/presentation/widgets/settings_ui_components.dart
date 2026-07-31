@@ -366,20 +366,100 @@ class SettingsDropdownTile<T> extends StatelessWidget {
     this.onChanged,
   });
 
+  /// The label of the currently selected item, reused for the collapsed row.
+  Widget? get _currentLabel {
+    for (final item in items) {
+      if (item.value == value) return item.child;
+    }
+    return null;
+  }
+
+  Future<void> _openPicker(BuildContext context) async {
+    if (onChanged == null) return;
+    final selected = await showDialog<T>(
+      context: context,
+      builder: (context) => _DropdownPickerDialog<T>(
+        title: title,
+        value: value,
+        items: items,
+      ),
+    );
+    if (selected != null) onChanged!(selected);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // A raw DropdownButton is a focus trap on a remote: with
+    // NavigationMode.directional a focused DropdownButton swallows up/down to
+    // change its own selection, so you cannot scroll past it -- and simply
+    // passing over it silently rewrites the setting. The row is now an
+    // ordinary focus stop that opens a picker on ENTER.
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 10.0),
       leading: Icon(icon, color: theme.colorScheme.primary),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      trailing: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: value,
-          items: items,
-          onChanged: onChanged,
-          borderRadius: BorderRadius.circular(12),
+      enabled: onChanged != null,
+      onTap: onChanged == null ? null : () => _openPicker(context),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DefaultTextStyle.merge(
+            style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+            child: _currentLabel ?? const SizedBox.shrink(),
+          ),
+          const SizedBox(width: 8),
+          Icon(
+            Icons.arrow_drop_down_rounded,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DropdownPickerDialog<T> extends StatelessWidget {
+  final String title;
+  final T value;
+  final List<DropdownMenuItem<T>> items;
+
+  const _DropdownPickerDialog({
+    required this.title,
+    required this.value,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return AlertDialog(
+      title: Text(title),
+      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+      content: SizedBox(
+        width: 560,
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final item in items)
+              ListTile(
+                // Autofocus the current value so the remote starts where the
+                // user already is rather than at the top of the list.
+                autofocus: item.value == value,
+                selected: item.value == value,
+                selectedTileColor: cs.primary.withValues(alpha: 0.18),
+                leading: Icon(
+                  item.value == value
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  color: item.value == value ? cs.primary : cs.onSurfaceVariant,
+                ),
+                title: item.child,
+                onTap: () => Navigator.of(context).pop(item.value),
+              ),
+          ],
         ),
       ),
     );

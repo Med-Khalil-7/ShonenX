@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shonenx/core/tv/tv_focusable.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
 
 class MediaSwitcherOverlay extends StatelessWidget {
@@ -12,7 +13,7 @@ class MediaSwitcherOverlay extends StatelessWidget {
     required this.controller,
     this.onSearchTap,
     this.isSearchActive = false,
-    this.supportedTypes = const [MediaType.ANIME, MediaType.MANGA],
+    this.supportedTypes = const [MediaType.ANIME],
   });
 
   @override
@@ -63,14 +64,6 @@ class MediaSwitcherOverlay extends StatelessWidget {
                               label = 'Anime';
                               icon = Icons.movie_outlined;
                               break;
-                            case MediaType.MANGA:
-                              label = 'Manga';
-                              icon = Icons.menu_book_outlined;
-                              break;
-                            case MediaType.NOVEL:
-                              label = 'Novel';
-                              icon = Icons.menu_book_rounded;
-                              break;
                             case MediaType.TV:
                               label = 'TV';
                               icon = Icons.tv_outlined;
@@ -95,8 +88,9 @@ class MediaSwitcherOverlay extends StatelessWidget {
               ),
               if (hasSearch) ...[
                 const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: onSearchTap,
+                TvFocusable(
+                  onTap: onSearchTap ?? () {},
+                  borderRadius: BorderRadius.circular(24),
                   child: Container(
                     width: 48,
                     height: 48,
@@ -148,9 +142,11 @@ class _MediaTabPill extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return GestureDetector(
+    // Was a bare GestureDetector, so a remote could not reach the Library
+    // tabs at all. TvFocusable makes it a focus stop with a visible ring.
+    return TvFocusable(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      borderRadius: BorderRadius.circular(20),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,

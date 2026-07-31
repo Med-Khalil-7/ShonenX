@@ -1,5 +1,4 @@
 import 'dart:developer';
-import 'dart:io';
 import 'package:shonenx/core/network/http_client.dart';
 import 'package:shonenx/features/tracking/domain/models/tracker_category.dart';
 import 'package:shonenx/shared/providers/content_prefs_provider.dart';
@@ -23,9 +22,7 @@ mixin MalMetadata on BaseTracker implements RemoteTracker {
   TrackerCredentials? get customCredentials => null;
 
   static const String _baseUrl = 'https://api.myanimelist.net/v2';
-  static String get defaultClientId => Platform.isWindows || Platform.isLinux
-      ? Env.MAL_CLIENT_ID_LIST.last
-      : Env.MAL_CLIENT_ID_LIST.first;
+  static String get defaultClientId => Env.MAL_CLIENT_ID_LIST.first;
 
   String get clientId => customCredentials?.clientId ?? defaultClientId;
 
@@ -368,11 +365,7 @@ mixin MalMetadata on BaseTracker implements RemoteTracker {
             final relTypeFormatted =
                 e['relation_type_formatted']?.toString() ??
                 e['relation_type']?.toString();
-            final nodeType =
-                (e['relation_type'] == 'related_manga' ||
-                    relatedManga?.contains(e) == true)
-                ? MediaType.MANGA
-                : MediaType.ANIME;
+            const nodeType = MediaType.ANIME;
             return _mapToUnified(
               node,
               nodeType,

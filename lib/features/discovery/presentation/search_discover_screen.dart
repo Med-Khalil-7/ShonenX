@@ -1,19 +1,23 @@
 import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
+import 'package:shonenx/features/discovery/presentation/widgets/search/search_query_field.dart';
+import 'package:shonenx/features/discovery/presentation/widgets/search/tv_onscreen_keyboard.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
 import 'package:shonenx/shared/widgets/app_scaffold.dart';
-import 'package:shonenx/shared/widgets/media_switcher_overlay.dart';
-import 'package:shonenx/shared/widgets/unified_search_bar.dart';
-import 'package:shonenx/shared/providers/navbar_action_provider.dart';
-import 'package:shonenx/features/discovery/providers/metadata_tags_provider.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/sheets/advanced_search_sheet.dart';
 import 'package:shonenx/source_engine/source_engine_provider.dart';
-import 'package:shonenx/source_engine/source_registry.dart';
 
 import 'widgets/discover/discover_tab_feed.dart';
 
+/// Split search: query box and keyboard on the left, results on the right.
+///
+/// The previous version floated a `TextField` over a grid and relied on
+/// hardware key characters being injected into it. That works with a keyboard
+/// plugged in and not at all with a remote, and the autofocused field summoned
+/// the leanback IME on arrival.
 class SearchDiscoverScreen extends ConsumerStatefulWidget {
   final String? initialQuery;
   final MediaType type;
@@ -35,374 +39,155 @@ class SearchDiscoverScreen extends ConsumerStatefulWidget {
       _SearchDiscoverScreenState();
 }
 
-class _SearchDiscoverScreenState extends ConsumerState<SearchDiscoverScreen>
-    with TickerProviderStateMixin {
-  late final TextEditingController _searchController;
-  late TabController _tabController;
+class _SearchDiscoverScreenState extends ConsumerState<SearchDiscoverScreen> {
+  static const _debounce = Duration(milliseconds: 500);
+
+  final FocusNode _firstKeyFocus = FocusNode(debugLabel: 'searchFirstKey');
+
   Timer? _debounceTimer;
 
+  /// What the user has typed. [_query] lags it by [_debounce] and is what the
+  /// search provider actually sees.
+  String _text = '';
   String _query = '';
+
   List<String> _genres = [];
   List<String> _tags = [];
   String? _source;
 
-  late final FocusNode _searchFocusNode;
-  late final FocusNode _keyboardFocusNode;
-
-  List<MediaType> _supportedMediaTypes = [];
-
   @override
   void initState() {
     super.initState();
-    _query = widget.initialQuery?.trim() ?? '';
-    _searchController = TextEditingController(text: _query)
-      ..addListener(_onSearchTextChanged);
+    _text = widget.initialQuery?.trim() ?? '';
+    _query = _text;
     _genres = List.from(widget.initialGenres);
     _tags = List.from(widget.initialTags);
     _source = widget.source;
-
-    _searchFocusNode = FocusNode();
-    _keyboardFocusNode = FocusNode();
-    _searchFocusNode.addListener(() {
-      if (mounted) setState(() {});
-    });
-
-    _supportedMediaTypes = ref.read(metadataSourceProvider).supportedMediaTypes;
-    int initIndex = _supportedMediaTypes.indexOf(widget.type);
-    if (initIndex == -1) initIndex = 0;
-
-    _tabController = TabController(
-      length: _supportedMediaTypes.length,
-      vsync: this,
-      initialIndex: initIndex,
-    );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _attachOverlay();
-      }
-    });
-  }
-
-  void _rebuildTabController(List<MediaType> newTypes) {
-    if (!mounted) return;
-    _tabController.dispose();
-    setState(() {
-      _supportedMediaTypes = newTypes;
-      _tabController = TabController(length: newTypes.length, vsync: this);
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _attachOverlay();
-    });
   }
 
   @override
   void didUpdateWidget(SearchDiscoverScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.source != widget.source) {
-      _source = widget.source;
-    }
+    if (oldWidget.source != widget.source) _source = widget.source;
     if (oldWidget.initialQuery != widget.initialQuery) {
-      _query = widget.initialQuery?.trim() ?? '';
-      _searchController.text = _query;
+      _text = widget.initialQuery?.trim() ?? '';
+      _query = _text;
     }
-
-    final oldGenresStr = oldWidget.initialGenres.join(',');
-    final newGenresStr = widget.initialGenres.join(',');
-    if (oldGenresStr != newGenresStr) {
+    if (oldWidget.initialGenres.join(',') != widget.initialGenres.join(',')) {
       _genres = List.from(widget.initialGenres);
     }
-
-    final oldTagsStr = oldWidget.initialTags.join(',');
-    final newTagsStr = widget.initialTags.join(',');
-    if (oldTagsStr != newTagsStr) {
+    if (oldWidget.initialTags.join(',') != widget.initialTags.join(',')) {
       _tags = List.from(widget.initialTags);
     }
-  }
-
-  void _attachOverlay() {
-    Future.microtask(() {
-      try {
-        ref
-            .read(navBarProvider.notifier)
-            .attachTop(
-              MediaSwitcherOverlay(
-                controller: _tabController,
-                onSearchTap: null,
-                supportedTypes: _supportedMediaTypes,
-              ),
-              branchIndex: 1,
-            );
-      } catch (_) {}
-    });
   }
 
   @override
   void dispose() {
     _debounceTimer?.cancel();
-    _searchController.removeListener(_onSearchTextChanged);
-    Future.microtask(() {
-      try {
-        ref.read(navBarProvider.notifier).clearTop(branchIndex: 1);
-      } catch (_) {}
-    });
-    _searchFocusNode.dispose();
-    _keyboardFocusNode.dispose();
-    _searchController.dispose();
-    _tabController.dispose();
+    _firstKeyFocus.dispose();
     super.dispose();
   }
 
-  void _onSearchTextChanged() {
+  void _setText(String next) {
+    setState(() => _text = next);
     _debounceTimer?.cancel();
-    final text = _searchController.text.trim();
 
-    if (text.isEmpty) {
-      if (_query.isNotEmpty) {
-        setState(() {
-          _query = '';
-        });
-      }
-    } else {
-      setState(() {});
-      _debounceTimer = Timer(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          setState(() {
-            _query = text;
-          });
-        }
-      });
+    final trimmed = next.trim();
+    if (trimmed.isEmpty) {
+      // Clearing should feel instant -- there is no request to coalesce.
+      if (_query.isNotEmpty) setState(() => _query = '');
+      return;
     }
-  }
-
-  void _submitSearch(String text) {
-    _debounceTimer?.cancel();
-    final trimmedText = text.trim();
-    if (trimmedText.isNotEmpty) {
-      setState(() {
-        _query = trimmedText;
-      });
-    }
-  }
-
-  void _cancelSearch() {
-    _debounceTimer?.cancel();
-    setState(() {
-      _query = '';
-      _searchController.clear();
+    _debounceTimer = Timer(_debounce, () {
+      if (mounted) setState(() => _query = trimmed);
     });
-    _searchFocusNode.unfocus();
   }
 
-  void _openAdvancedSearch(BuildContext context) {
-    final currentType =
-        (_tabController.index >= 0 &&
-            _tabController.index < _supportedMediaTypes.length)
-        ? _supportedMediaTypes[_tabController.index]
-        : MediaType.ANIME;
-    final filtersState = ref.read(
-      discoveryFiltersProvider((type: currentType, sourceId: widget.source)),
-    );
-    final hasFilters =
-        filtersState.value != null &&
-        (filtersState.value!.genres.isNotEmpty ||
-            filtersState.value!.tags.isNotEmpty);
-    if (!hasFilters) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      useRootNavigator: true,
-      constraints: const BoxConstraints(maxWidth: 800),
-      builder: (context) {
-        return AdvancedSearchSheet(
-          initialQuery: _query,
-          type: currentType,
-          initialGenres: _genres,
-          initialTags: _tags,
-          sourceId: widget.source,
-          onApply: (query, genres, tags) {
-            setState(() {
-              _query = query.trim();
-              _searchController.text = _query;
-              _genres = genres;
-              _tags = tags;
-            });
-          },
-        );
-      },
-    );
+  MediaType get _currentType {
+    final supported = ref.read(metadataSourceProvider).supportedMediaTypes;
+    if (supported.contains(widget.type)) return widget.type;
+    return supported.isEmpty ? MediaType.ANIME : supported.first;
   }
 
   @override
   Widget build(BuildContext context) {
-    Theme.of(context);
-    final currentType =
-        (_tabController.index >= 0 &&
-            _tabController.index < _supportedMediaTypes.length)
-        ? _supportedMediaTypes[_tabController.index]
-        : MediaType.ANIME;
+    final m = ShonenXMetrics.of(context);
+    final gutter = m.shellGutter(MediaQuery.sizeOf(context));
 
-    final filtersState = ref.watch(
-      discoveryFiltersProvider((type: currentType, sourceId: widget.source)),
-    );
-    final hasFilters =
-        filtersState.value != null &&
-        (filtersState.value!.genres.isNotEmpty ||
-            filtersState.value!.tags.isNotEmpty);
-
-    String pageTitle = 'Discover';
-    String pageSubtitle = 'Find your next anime or manga';
-
-    if (widget.source != null && widget.source!.isNotEmpty) {
-      final allAnimeSources =
-          ref.watch(availableAnimeSourcesProvider).value ?? [];
-      final allMangaSources =
-          ref.watch(availableMangaSourcesProvider).value ?? [];
-      final allSources = [...allAnimeSources, ...allMangaSources];
-      final sourceObj = allSources
-          .where((s) => s.id == widget.source)
-          .firstOrNull;
-      final sourceName =
-          sourceObj?.name ??
-          (widget.source![0].toUpperCase() + widget.source!.substring(1));
-      pageTitle = sourceName;
-      pageSubtitle = 'Browsing ${currentType.name.toLowerCase()} catalog';
-    } else if (_genres.isNotEmpty && _tags.isNotEmpty) {
-      pageTitle = _genres.join(', ');
-      pageSubtitle = _tags.join(', ');
-    } else if (_genres.isNotEmpty) {
-      pageTitle = _genres.join(', ');
-      pageSubtitle = 'Browsing ${currentType.name.toLowerCase()} by genre';
-    } else if (_tags.isNotEmpty) {
-      pageTitle = _tags.join(', ');
-      pageSubtitle = 'Browsing ${currentType.name.toLowerCase()} by tag';
-    }
-
-    final showBackButton = widget.source != null && widget.source!.isNotEmpty;
-
-    return KeyboardListener(
-      focusNode: _keyboardFocusNode,
-      autofocus: true,
-      onKeyEvent: (KeyEvent event) {
-        if (event is KeyDownEvent) {
-          if (HardwareKeyboard.instance.isControlPressed ||
-              HardwareKeyboard.instance.isAltPressed ||
-              HardwareKeyboard.instance.isMetaPressed) {
-            return;
-          }
-          if (event.logicalKey == LogicalKeyboardKey.escape) {
-            if (_searchFocusNode.hasFocus) {
-              _searchFocusNode.unfocus();
-            }
-            return;
-          }
-          final character = event.character;
-          if (character != null && character.isNotEmpty) {
-            final isAlphanumeric = RegExp(r'^[a-zA-Z0-9]$').hasMatch(character);
-            if (isAlphanumeric) {
-              final primaryFocus = FocusManager.instance.primaryFocus;
-              final isAnyTextFieldFocused =
-                  primaryFocus != null &&
-                  (primaryFocus.context?.widget is EditableText ||
-                      primaryFocus.context
-                              ?.findAncestorWidgetOfExactType<EditableText>() !=
-                          null);
-
-              if (!isAnyTextFieldFocused) {
-                setState(() {
-                  _searchController.text = character;
-                  _searchController.selection = TextSelection.fromPosition(
-                    TextPosition(offset: character.length),
+    return AppScaffold(
+      // No app bar: the reference has none, and on a screen where the whole
+      // left column is already a control surface a title row is dead space.
+      fullBleed: true,
+      body: Padding(
+        // The right edge uses the full gutter, not the rail-adjusted one:
+        // nothing has eaten into that side, and at the shell gutter the result
+        // descriptions ran within a few pixels of the screen edge.
+        padding: EdgeInsets.fromLTRB(
+          gutter,
+          gutter * 0.5,
+          m.gutter(MediaQuery.sizeOf(context)),
+          0,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              // Never more than 40% of the width: the results column has to
+              // stay wide enough for a title plus its badges.
+              width: m.searchColumn,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final gap = m.searchField * 0.4;
+                  final fieldHeight = math.min(
+                    m.searchField,
+                    constraints.maxHeight * 0.12,
                   );
-                });
-                _searchFocusNode.requestFocus();
-              }
-            }
-          }
-        }
-      },
-      child: AppScaffold(
-        title: pageTitle,
-        subtitle: pageSubtitle,
-        showBackButton: showBackButton,
-        body: SizedBox.expand(
-          child: Stack(
-            children: [
-              Consumer(
-                builder: (context, ref, child) {
-                  ref.listen(metadataSourceProvider, (previous, next) {
-                    if (previous?.supportedMediaTypes !=
-                        next.supportedMediaTypes) {
-                      _rebuildTabController(next.supportedMediaTypes);
-                    }
-                  });
-                  return const SizedBox.shrink();
-                },
-              ),
-              Positioned.fill(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  // Devices disagree wildly about the logical viewport for the
+                  // same panel, so derive the key height from what is actually
+                  // available rather than trusting a constant to fit.
+                  final keyHeight =
+                      ((constraints.maxHeight - fieldHeight - gap - 8) /
+                              TvOnScreenKeyboard.rowCount)
+                          .clamp(20.0, m.keyHeight);
+
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const SizedBox(height: 4),
-                      Expanded(
-                        child: TabBarView(
-                          controller: _tabController,
-                          children: _supportedMediaTypes.map((type) {
-                            return DiscoverTabFeed(
-                              type: type,
-                              query: _query,
-                              genres: _genres,
-                              tags: _tags,
-                              source: _source,
-                              onGenreSelect: (g) {
-                                setState(() {
-                                  _genres = [g];
-                                });
-                              },
-                              onSourceSelect: (sId) {
-                                setState(() {
-                                  _source = sId;
-                                });
-                              },
-                            );
-                          }).toList(),
-                        ),
+                      SearchQueryField(text: _text, height: fieldHeight),
+                      SizedBox(height: gap),
+                      TvOnScreenKeyboard(
+                        firstKeyFocus: _firstKeyFocus,
+                        keyHeight: keyHeight,
+                        onChar: (c) => _setText(_text + c),
+                        onSpace: () => _setText('$_text '),
+                        onBackspace: () {
+                          if (_text.isEmpty) return;
+                          _setText(_text.substring(0, _text.length - 1));
+                        },
                       ),
                     ],
-                  ),
-                ),
+                  );
+                },
               ),
-              Positioned(
-                top: 10,
-                left: 10,
-                right: 10,
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: UnifiedSearchBar(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      onBackPressed: _cancelSearch,
-                      onClearPressed: () => _searchController.clear(),
-                      onSubmitted: _submitSearch,
-                      hasFilters: hasFilters,
-                      onFilterPressed: () => _openAdvancedSearch(context),
-                      leading:
-                          _searchController.text.isEmpty &&
-                              !_searchFocusNode.hasFocus
-                          ? const Icon(Icons.search_rounded)
-                          : null,
-                    ),
-                  ),
-                ),
+            ),
+            SizedBox(width: gutter),
+            Expanded(
+              child: DiscoverTabFeed(
+                // Rebuild the feed from scratch when the query changes so the
+                // results list scrolls back to the top rather than holding a
+                // stale offset into a different result set.
+                key: ValueKey('$_query|${_genres.join(",")}|$_source'),
+                type: _currentType,
+                query: _query,
+                genres: _genres,
+                tags: _tags,
+                source: _source,
+                listMode: true,
+                onGenreSelect: (g) => setState(() => _genres = [g]),
+                onSourceSelect: (s) => setState(() => _source = s),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

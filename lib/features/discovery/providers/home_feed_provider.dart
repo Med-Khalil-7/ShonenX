@@ -33,9 +33,7 @@ final singleSourceFeedProvider =
       final mediaType = arg.$2;
 
       try {
-        final source = mediaType == MediaType.ANIME
-            ? ref.read(animeSourceProvider(info))
-            : ref.read(mangaSourceProvider(info));
+        final source = ref.read(animeSourceProvider(info));
 
         var items = await source.getTrending();
         if (items.isEmpty) {
@@ -44,9 +42,7 @@ final singleSourceFeedProvider =
         return items;
       } catch (e) {
         try {
-          final source = mediaType == MediaType.ANIME
-              ? ref.read(animeSourceProvider(info))
-              : ref.read(mangaSourceProvider(info));
+          final source = ref.read(animeSourceProvider(info));
           return await source.search('', mediaType);
         } catch (_) {
           return const [];
@@ -89,7 +85,7 @@ class HomeFeedNotifier extends AsyncNotifier<HomeFeedState> {
           if (result.items.isNotEmpty) {
             groups.add(
               FeedGroup(
-                title: '${category.label} (${mediaType.displayName})',
+                title: category.label,
                 items: result.items,
               ),
             );
@@ -105,18 +101,12 @@ class HomeFeedNotifier extends AsyncNotifier<HomeFeedState> {
     final allAnimeSources = await ref.watch(
       availableAnimeSourcesProvider.future,
     );
-    final allMangaSources = await ref.watch(
-      availableMangaSourcesProvider.future,
-    );
 
     final activeAnimeSources = allAnimeSources
         .where((s) => prefs.activeSources.contains(s.id))
         .toList();
-    final activeMangaSources = allMangaSources
-        .where((s) => prefs.activeSources.contains(s.id))
-        .toList();
 
-    if (activeAnimeSources.isEmpty && activeMangaSources.isEmpty) {
+    if (activeAnimeSources.isEmpty) {
       return const HomeFeedState(groups: []);
     }
 
@@ -128,39 +118,19 @@ class HomeFeedNotifier extends AsyncNotifier<HomeFeedState> {
         if (items.isEmpty) {
           items = await source.search('', MediaType.ANIME);
         }
-        return FeedGroup(title: '${info.name} (Anime)', items: items);
+        return FeedGroup(title: info.name, items: items);
       } catch (_) {
         try {
           final source = ref.read(animeSourceProvider(info));
           final items = await source.search('', MediaType.ANIME);
-          return FeedGroup(title: '${info.name} (Anime)', items: items);
+          return FeedGroup(title: info.name, items: items);
         } catch (_) {
           return FeedGroup(title: info.name, items: const []);
         }
       }
     });
 
-    // Fetch trending from each manga source concurrently.
-    final mangaFutures = activeMangaSources.map((info) async {
-      try {
-        final source = ref.read(mangaSourceProvider(info));
-        var items = await source.getTrending();
-        if (items.isEmpty) {
-          items = await source.search('', MediaType.MANGA);
-        }
-        return FeedGroup(title: '${info.name} (Manga)', items: items);
-      } catch (_) {
-        try {
-          final source = ref.read(mangaSourceProvider(info));
-          final items = await source.search('', MediaType.MANGA);
-          return FeedGroup(title: '${info.name} (Manga)', items: items);
-        } catch (_) {
-          return FeedGroup(title: info.name, items: const []);
-        }
-      }
-    });
-
-    final groups = await Future.wait([...animeFutures, ...mangaFutures]);
+    final groups = await Future.wait(animeFutures);
     // Remove empty groups.
     final nonEmpty = groups.where((g) => g.items.isNotEmpty).toList();
 

@@ -1,161 +1,197 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:volume_controller/volume_controller.dart';
 import 'package:shonenx/features/player/engine/video_engine.dart';
 import 'package:shonenx/features/player/providers/player_controller.dart';
 import 'package:shonenx/features/player/providers/video_engine_provider.dart';
 
-class PlayerKeyboardListener extends ConsumerStatefulWidget {
+/// Remote and keyboard handling for the player.
+///
+/// Two modes, driven by [controlsVisible]:
+///
+/// * **Hidden** -- this node holds focus and swallows the arrow keys, so any
+///   direction press simply reveals the controls. Nothing on screen is
+///   focusable yet, so letting traversal run would send focus somewhere
+///   invisible.
+/// * **Visible** -- this node stops requesting focus and ignores arrows, and
+///   ordinary directional traversal drives the real buttons.
+///
+/// The previous version was permanently in the first mode: one autofocused
+/// `Focus` mapping arrows to seek and volume. That is a keyboard model, and it
+/// meant no control in the overlay could ever be reached by D-pad.
+class PlayerKeyboardListener extends ConsumerWidget {
   final Widget child;
   final VideoEngine engine;
   final PlayerController controller;
+
+  final bool controlsVisible;
+
+  /// Starts a scrub from a left/right press that arrived with the controls
+  /// down. Without it that press only wakes the buttons, and reaching the
+  /// timeline costs a second press and a traversal -- no TV player does that.
+  final void Function(bool forward)? onScrub;
+
+  /// Takes OK when a skip is being offered. Returns whether it used it.
+  final bool Function()? onConfirmSkip;
+
+  /// Reveal the controls and hand focus to play/pause.
+  final VoidCallback onWake;
+
+  /// Any accepted key restarts the auto-hide countdown.
   final VoidCallback onUserInteraction;
-  final VoidCallback onToggleFullScreen;
+
   final VoidCallback onToggleEpisodePanel;
-  final VoidCallback onShowShortcutsGuide;
-  final VoidCallback? onExit;
+  final VoidCallback onBack;
 
   const PlayerKeyboardListener({
     super.key,
     required this.child,
     required this.engine,
     required this.controller,
+    required this.controlsVisible,
+    this.onScrub,
+    this.onConfirmSkip,
+    required this.onWake,
     required this.onUserInteraction,
-    required this.onToggleFullScreen,
     required this.onToggleEpisodePanel,
-    required this.onShowShortcutsGuide,
-    this.onExit,
+    required this.onBack,
   });
 
-  @override
-  ConsumerState<PlayerKeyboardListener> createState() =>
-      _PlayerKeyboardListenerState();
-}
+  // Not const: LogicalKeyboardKey overrides ==, which a const set forbids.
+  static final _directional = <LogicalKeyboardKey>{
+    LogicalKeyboardKey.arrowUp,
+    LogicalKeyboardKey.arrowDown,
+    LogicalKeyboardKey.arrowLeft,
+    LogicalKeyboardKey.arrowRight,
+    LogicalKeyboardKey.select,
+    LogicalKeyboardKey.enter,
+    LogicalKeyboardKey.numpadEnter,
+    LogicalKeyboardKey.gameButtonA,
+  };
 
-class _PlayerKeyboardListenerState
-    extends ConsumerState<PlayerKeyboardListener> {
-  double _currentPlaybackSpeed = 1.0;
-
-  Future<void> _adjustVolume(double delta) async {
-    try {
-      final current = await VolumeController.instance.getVolume();
-      final newVal = (current + delta).clamp(0.0, 1.0);
-      VolumeController.instance.setVolume(newVal);
-    } catch (_) {}
-  }
-
-  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+  KeyEventResult _handleKeyEvent(WidgetRef ref, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
-
-    final isPlaying = ref.read(videoEngineStateProvider).isPlaying;
     final key = event.logicalKey;
+    final isDown = event is KeyDownEvent;
 
-    if (key == LogicalKeyboardKey.space || key == LogicalKeyboardKey.keyK) {
-      if (event is KeyDownEvent) {
-        isPlaying ? widget.engine.pause() : widget.engine.play();
-        widget.onUserInteraction();
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.arrowRight ||
-        key == LogicalKeyboardKey.keyL) {
-      widget.engine.seekRelative(const Duration(seconds: 10));
-      widget.onUserInteraction();
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.arrowLeft ||
-        key == LogicalKeyboardKey.keyJ) {
-      widget.engine.seekRelative(const Duration(seconds: -10));
-      widget.onUserInteraction();
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.arrowUp) {
-      _adjustVolume(0.05);
-      widget.onUserInteraction();
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.arrowDown) {
-      _adjustVolume(-0.05);
-      widget.onUserInteraction();
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.keyF ||
-        key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.numpadEnter) {
-      if (event is KeyDownEvent) {
-        widget.onToggleFullScreen();
-        widget.onUserInteraction();
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.keyN ||
-        key == LogicalKeyboardKey.pageDown) {
-      if (event is KeyDownEvent) {
-        widget.controller.skipEpisode(forward: true);
-        widget.onUserInteraction();
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.keyP ||
-        key == LogicalKeyboardKey.pageUp) {
-      if (event is KeyDownEvent) {
-        widget.controller.skipEpisode(forward: false);
-        widget.onUserInteraction();
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.keyE) {
-      if (event is KeyDownEvent) {
-        widget.onToggleEpisodePanel();
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.keyS) {
-      if (event is KeyDownEvent) {
-        ref.read(videoEngineStateProvider.notifier).cycleFit();
-        widget.onUserInteraction();
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.bracketRight) {
-      if (event is KeyDownEvent) {
-        _currentPlaybackSpeed = (_currentPlaybackSpeed + 0.25).clamp(0.25, 3.0);
-        widget.engine.setSpeed(_currentPlaybackSpeed);
-        widget.onUserInteraction();
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.bracketLeft) {
-      if (event is KeyDownEvent) {
-        _currentPlaybackSpeed = (_currentPlaybackSpeed - 0.25).clamp(0.25, 3.0);
-        widget.engine.setSpeed(_currentPlaybackSpeed);
-        widget.onUserInteraction();
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.backspace) {
-      if (event is KeyDownEvent) {
-        _currentPlaybackSpeed = 1.0;
-        widget.engine.setSpeed(1.0);
-        widget.onUserInteraction();
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.question ||
-        key == LogicalKeyboardKey.slash ||
-        key == LogicalKeyboardKey.f1) {
-      if (event is KeyDownEvent) {
-        widget.onShowShortcutsGuide();
-      }
-      return KeyEventResult.handled;
-    } else if (key == LogicalKeyboardKey.escape) {
-      if (event is KeyDownEvent) {
-        if (widget.onExit != null) {
-          widget.onExit!();
+    // Transport keys work in both modes: a remote with dedicated media buttons
+    // should not have to open the overlay first.
+    switch (key) {
+      case LogicalKeyboardKey.mediaPlayPause:
+      case LogicalKeyboardKey.space:
+      case LogicalKeyboardKey.keyK:
+        if (isDown) {
+          onUserInteraction();
+          ref.read(videoEngineStateProvider).isPlaying
+              ? engine.pause()
+              : engine.play();
         }
+        return KeyEventResult.handled;
+
+      case LogicalKeyboardKey.mediaPlay:
+        if (isDown) engine.play();
+        return KeyEventResult.handled;
+
+      case LogicalKeyboardKey.mediaPause:
+      case LogicalKeyboardKey.mediaStop:
+        if (isDown) engine.pause();
+        return KeyEventResult.handled;
+
+      case LogicalKeyboardKey.mediaFastForward:
+      case LogicalKeyboardKey.keyL:
+        onUserInteraction();
+        engine.seekRelative(const Duration(seconds: 10));
+        return KeyEventResult.handled;
+
+      case LogicalKeyboardKey.mediaRewind:
+      case LogicalKeyboardKey.keyJ:
+        onUserInteraction();
+        engine.seekRelative(const Duration(seconds: -10));
+        return KeyEventResult.handled;
+
+      case LogicalKeyboardKey.mediaTrackNext:
+      case LogicalKeyboardKey.keyN:
+      case LogicalKeyboardKey.pageDown:
+      case LogicalKeyboardKey.channelDown:
+        if (isDown) controller.skipEpisode();
+        return KeyEventResult.handled;
+
+      case LogicalKeyboardKey.mediaTrackPrevious:
+      case LogicalKeyboardKey.keyP:
+      case LogicalKeyboardKey.pageUp:
+      case LogicalKeyboardKey.channelUp:
+        if (isDown) controller.skipEpisode(forward: false);
+        return KeyEventResult.handled;
+
+      case LogicalKeyboardKey.keyE:
+        if (isDown) onToggleEpisodePanel();
+        return KeyEventResult.handled;
+
+      case LogicalKeyboardKey.keyS:
+        if (isDown) {
+          onUserInteraction();
+          ref.read(videoEngineStateProvider.notifier).cycleFit();
+        }
+        return KeyEventResult.handled;
+
+      case LogicalKeyboardKey.escape:
+      case LogicalKeyboardKey.goBack:
+        if (isDown) onBack();
+        return KeyEventResult.handled;
+    }
+
+    if (!controlsVisible && _directional.contains(key)) {
+      // OK belongs to the skip button whenever one is on screen. With the
+      // controls down this handler is the focus stop, so the button cannot
+      // take the press itself -- and a skip button you have to raise the
+      // overlay to use is not a skip button.
+      final isConfirm =
+          key == LogicalKeyboardKey.select ||
+          key == LogicalKeyboardKey.enter ||
+          key == LogicalKeyboardKey.numpadEnter ||
+          key == LogicalKeyboardKey.gameButtonA;
+      if (isDown && isConfirm && (onConfirmSkip?.call() ?? false)) {
+        return KeyEventResult.handled;
+      }
+
+      final scrub = onScrub;
+      final horizontal =
+          key == LogicalKeyboardKey.arrowLeft ||
+          key == LogicalKeyboardKey.arrowRight;
+
+      // Left and right go straight to the timeline, the way a TV player is
+      // expected to behave. Up and down still just raise the overlay.
+      if (isDown && horizontal && scrub != null) {
+        scrub(key == LogicalKeyboardKey.arrowRight);
+      } else if (isDown) {
+        // The first press only wakes the overlay. It must not also activate
+        // whatever button focus happens to land on.
+        onWake();
       }
       return KeyEventResult.handled;
     }
 
+    if (controlsVisible) {
+      // Traversal gets the key, but the overlay stays alive while the user is
+      // still moving around it.
+      onUserInteraction();
+    }
     return KeyEventResult.ignored;
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Focus(
       autofocus: true,
-      onKeyEvent: _handleKeyEvent,
-      child: widget.child,
+      // Only a focus stop while the controls are hidden. Once they are up the
+      // real buttons have to be reachable, and a node that keeps claiming
+      // focus would fight every traversal attempt.
+      canRequestFocus: !controlsVisible,
+      skipTraversal: true,
+      onKeyEvent: (_, event) => _handleKeyEvent(ref, event),
+      child: child,
     );
   }
 }

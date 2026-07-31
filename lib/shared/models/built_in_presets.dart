@@ -1,6 +1,5 @@
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_list_panel.dart';
 import 'package:shonenx/shared/models/app_theme_preset.dart';
 import 'package:shonenx/shared/providers/theme_prefs_provider.dart';
 import 'package:shonenx/shared/providers/ui_prefs_provider.dart';
@@ -30,15 +29,13 @@ class BuiltInPresets {
       useNoiseOverlay: true,
       noiseOpacity: 0.09,
       uiRoundness: 16.0,
-      cardStyle: MediaCardStyle.expressive,
-      continueWatchingStyle: ContinueWatchingStyle.expressive,
-      continueReadingStyle: ContinueReadingStyle.expressive,
+      cardStyle: MediaCardStyle.classic,
+      continueWatchingStyle: ContinueWatchingStyle.classic,
       cardStyleWideModes: const {
         "cw_expressive": true,
         "media_expressive": false,
         "cr_expressive": true,
       },
-      episodeViewMode: EpisodeViewMode.classic,
     ),
     AppThemePreset(
       id: '2',
@@ -59,10 +56,8 @@ class BuiltInPresets {
       gradientIntensity: 0.35,
       useNoiseOverlay: false,
       uiRoundness: 18.0,
-      cardStyle: MediaCardStyle.expressive,
-      continueWatchingStyle: ContinueWatchingStyle.editorial,
-      continueReadingStyle: ContinueReadingStyle.editorial,
-      episodeViewMode: EpisodeViewMode.classic,
+      cardStyle: MediaCardStyle.classic,
+      continueWatchingStyle: ContinueWatchingStyle.classic,
     ),
     AppThemePreset(
       id: '3',
@@ -84,10 +79,8 @@ class BuiltInPresets {
       gradientIntensity: 0.4,
       useNoiseOverlay: false,
       uiRoundness: 16.0,
-      cardStyle: MediaCardStyle.material,
-      continueWatchingStyle: ContinueWatchingStyle.material,
-      continueReadingStyle: ContinueReadingStyle.material,
-      episodeViewMode: EpisodeViewMode.classic,
+      cardStyle: MediaCardStyle.classic,
+      continueWatchingStyle: ContinueWatchingStyle.classic,
     ),
     AppThemePreset(
       id: '4',
@@ -107,10 +100,8 @@ class BuiltInPresets {
       gradientColorPair: BackgroundGradientColorPair.secondaryInfused,
       gradientIntensity: 0.35,
       uiRoundness: 20.0,
-      cardStyle: MediaCardStyle.expressive,
-      continueWatchingStyle: ContinueWatchingStyle.expressive,
-      continueReadingStyle: ContinueReadingStyle.expressive,
-      episodeViewMode: EpisodeViewMode.classic,
+      cardStyle: MediaCardStyle.classic,
+      continueWatchingStyle: ContinueWatchingStyle.classic,
     ),
     AppThemePreset(
       id: '5',
@@ -131,10 +122,8 @@ class BuiltInPresets {
       gradientIntensity: 0.3,
       useNoiseOverlay: false,
       uiRoundness: 16.0,
-      cardStyle: MediaCardStyle.wideBanner,
-      continueWatchingStyle: ContinueWatchingStyle.wideBanner,
-      continueReadingStyle: ContinueReadingStyle.wideBanner,
-      episodeViewMode: EpisodeViewMode.classic,
+      cardStyle: MediaCardStyle.cinematic,
+      continueWatchingStyle: ContinueWatchingStyle.cinematic,
       navBarStyle: NavBarStyle.minimal,
     ),
   ];

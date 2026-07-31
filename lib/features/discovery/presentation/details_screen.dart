@@ -1,36 +1,40 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:math' as math;
+
+import 'package:shonenx/shared/widgets/app_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
+import 'package:shonenx/core/tv/tv_focusable.dart';
+import 'package:shonenx/core/tv/tv_metrics.dart';
 import 'package:shonenx/features/auth/providers/auth_provider.dart';
-import 'package:shonenx/features/comments/presentation/widgets/comments_tab.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/tabs/about_tab.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/tabs/episodes_tab.dart';
+import 'package:shonenx/features/discovery/domain/media_actions.dart';
+import 'package:shonenx/features/discovery/presentation/widgets/details/detail_media_row.dart';
 import 'package:shonenx/features/discovery/providers/details_provider.dart';
-import 'package:shonenx/features/downloads/domain/models/download_task.dart';
-import 'package:shonenx/features/downloads/providers/download_provider.dart';
 import 'package:shonenx/features/player/domain/player_mode.dart';
-import 'package:shonenx/features/reader/domain/reader_mode.dart';
 import 'package:shonenx/features/tracking/domain/isar_tracker_link.dart';
-import 'package:shonenx/features/tracking/domain/models/tracked_list_item.dart';
 import 'package:shonenx/features/tracking/domain/models/tracker_type.dart';
 import 'package:shonenx/features/tracking/engine/remote_tracker.dart';
-import 'package:shonenx/features/tracking/engine/tracking_service.dart';
-import 'package:shonenx/features/tracking/presentation/widgets/edit_tracker_sheet.dart';
-import 'package:shonenx/features/tracking/presentation/widgets/tracker_manager_sheet.dart';
 import 'package:shonenx/features/tracking/providers/media_tracking_provider.dart';
 import 'package:shonenx/features/tracking/providers/tracker_link_provider.dart';
 import 'package:shonenx/features/tracking/providers/tracker_registry.dart';
 import 'package:shonenx/features/tracking/providers/tracking_prefs_provider.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
-import 'package:shonenx/shared/providers/theme_prefs_provider.dart';
-import 'package:shonenx/shared/widgets/app_bottom_sheet.dart';
-import 'package:shonenx/shared/widgets/app_icon_button.dart';
+import 'package:shonenx/shared/models/video_server.dart';
 import 'package:shonenx/shared/widgets/app_scaffold.dart';
+import 'package:shonenx/shared/widgets/tv/tv_badge.dart';
+import 'package:shonenx/shared/widgets/tv/tv_button.dart';
 
+/// Single-page detail view.
+///
+/// The previous version was a collapsing header over About/Episodes tabs.
+/// Tabs are an awkward control on a remote -- reaching episode 3 meant
+/// scrolling to the bottom of the screen, moving to a tab strip, switching,
+/// then scrolling back up -- and the tab strip carried an autofocusing
+/// KeyboardListener that stole the screen's first focus. Playback is now one
+/// press away and the episode list opens as a side sheet.
 class DetailsScreen extends ConsumerStatefulWidget {
   final String tag;
   final MediaType mediaType;
@@ -51,78 +55,19 @@ class DetailsScreen extends ConsumerStatefulWidget {
   ConsumerState<DetailsScreen> createState() => _DetailsScreenState();
 }
 
-class _DetailsScreenState extends ConsumerState<DetailsScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
-  late final FocusNode _keyboardFocusNode;
-  double _pullProgress = 0.0;
-  double _accumulatedOverscroll = 0.0;
-
-  bool _onScrollNotification(ScrollNotification notification) {
-    if (notification.metrics.axis != Axis.vertical) return false;
-
-    final pixels = notification.metrics.pixels;
-
-    if (notification is OverscrollNotification &&
-        notification.metrics.extentBefore == 0 &&
-        notification.overscroll < 0) {
-      _accumulatedOverscroll += -notification.overscroll;
-      final progress = (_accumulatedOverscroll / 180.0).clamp(0.0, 1.0);
-      if (progress != _pullProgress) {
-        setState(() => _pullProgress = progress);
-      }
-    } else if (notification is ScrollUpdateNotification) {
-      if (pixels < 0) {
-        final progress = (-pixels / 180.0).clamp(0.0, 1.0);
-        if (progress != _pullProgress) {
-          setState(() => _pullProgress = progress);
-        }
-      } else if (_pullProgress > 0 || _accumulatedOverscroll > 0) {
-        _accumulatedOverscroll = 0.0;
-        if (_pullProgress != 0.0) setState(() => _pullProgress = 0.0);
-      }
-    } else if (notification is ScrollEndNotification) {
-      final shouldTrigger = _pullProgress >= 1.0;
-      _accumulatedOverscroll = 0.0;
-      if (_pullProgress != 0.0) {
-        setState(() => _pullProgress = 0.0);
-      }
-      if (shouldTrigger) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showCommentsSheet(context, widget.media);
-        });
-      }
-    }
-    return false;
-  }
+class _DetailsScreenState extends ConsumerState<DetailsScreen> {
+  bool _resolving = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(
-      length: 2,
-      vsync: this,
-      initialIndex: widget.initialTabIndex.clamp(0, 1),
-    );
-    _keyboardFocusNode = FocusNode();
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _autoLinkPrimaryTracker();
       if (!mounted) return;
       if (widget.autoPlayMode is PlayerMode) {
         context.push('/player', extra: widget.autoPlayMode);
-      } else if (widget.autoPlayMode is ReaderModeOnline) {
-        context.push('/reader', extra: widget.autoPlayMode);
       }
     });
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _keyboardFocusNode.dispose();
-
-    super.dispose();
   }
 
   Future<void> _autoLinkPrimaryTracker() async {
@@ -133,21 +78,15 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
     if (primaryType == TrackerType.local) return;
 
     final media = widget.media;
-
-    // Only auto-link if it's tracker-based metadata
-    final isTrackerMedia = media.sourceId == null;
-
-    if (!isTrackerMedia) return;
-
-    String? trackingId;
-    trackingId = media.id;
+    // Only tracker-sourced metadata carries an id the tracker will recognise.
+    if (media.sourceId != null) return;
 
     final linksMap = await ref.read(trackerLinkProvider(media.id).future);
     if (linksMap.containsKey(primaryType)) return;
 
     final mapping = TrackerMapping()
       ..trackerId = primaryType.id
-      ..trackingId = trackingId
+      ..trackingId = media.id
       ..trackingTitle = media.title.availableTitle;
 
     ref
@@ -155,11 +94,53 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         .saveLink(primaryType, mapping);
   }
 
+  /// Resumes the part-watched episode if there is one, otherwise starts the
+  /// one after the last finished episode, otherwise episode one.
+  ///
+  /// [serverType] is applied as the player's preference rather than resolved
+  /// here: PlayerController already picks a sub or dub server from that
+  /// preference, and pre-resolving would run the whole source pipeline on a
+  /// screen the user may never play from.
+  Future<void> _play(UnifiedMedia media, {ServerType? serverType}) async {
+    if (_resolving) return;
+    setState(() => _resolving = true);
+    try {
+      await MediaActions.play(context, ref, media, serverType: serverType);
+    } finally {
+      if (mounted) setState(() => _resolving = false);
+    }
+  }
+
+  /// Episodes live on their own page now. A remote needs the whole screen to
+  /// show a hundred numbered squares; a 38%-wide sheet showed a list.
+  void _openEpisodes(UnifiedMedia media) =>
+      context.push('/episodes', extra: media);
+
+  Future<void> _addToWatchList(UnifiedMedia media) =>
+      MediaActions.addToWatchList(context, ref, media);
+
+  void _openTrackerManager(UnifiedMedia media) =>
+      MediaActions.openTrackerManager(context, media);
+
+  void _share(UnifiedMedia media) {
+    final providerId = media.providerId ?? 'anilist';
+    final url = switch (providerId) {
+      'myanimelist' || 'mal' => 'https://myanimelist.net/anime/${media.id}',
+      'kitsu' => 'https://kitsu.io/anime/${media.id}',
+      _ => 'https://anilist.co/anime/${media.id}',
+    };
+    SharePlus.instance.share(ShareParams(uri: Uri.parse(url)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
-    final colorScheme = theme.colorScheme;
+    final cs = theme.colorScheme;
+    final size = MediaQuery.sizeOf(context);
+    final m = ShonenXMetrics.of(context);
+    final gutter = m.gutter(size);
+    final topInset = TvMetrics.verticalOfSize(size);
+
     final detailsState = ref.watch(
       detailsProvider(
         DetailsArgs(
@@ -170,706 +151,403 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen>
         ),
       ),
     );
-    final uiRoundness = ref.watch(
-      themePrefsProvider.select((s) => s.uiRoundness),
-    );
+    final media = detailsState.value?.merge(widget.media) ?? widget.media;
 
-    final displayMedia =
-        detailsState.value?.merge(widget.media) ?? widget.media;
+    final relations = media.relations ?? const <UnifiedMedia>[];
+    final recommendations = media.recommendations ?? const <UnifiedMedia>[];
+    final characters = media.characters ?? const <MediaCharacter>[];
 
     return AppScaffold(
-      body: NotificationListener<ScrollNotification>(
-        onNotification: _onScrollNotification,
-        child: Stack(
-          children: [
-            NestedScrollView(
-              headerSliverBuilder: (context, innerBoxIsScrolled) => [
-                SliverAppBar(
-                  backgroundColor: Colors.transparent,
-                  automaticallyImplyLeading: false,
-                  expandedHeight: 350.0,
-                  leading: AppIconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new),
-                    onPressed: () => context.pop(),
+      fullBleed: true,
+      body: Stack(
+        children: [
+          _Backdrop(url: media.banner ?? media.cover),
+          CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  // Starts at the back arrow's inset, not the content gutter:
+                  // the arrow lives in the margin to the left of the text
+                  // column, so it must not push the column inward.
+                  padding: EdgeInsets.fromLTRB(
+                    m.backArrowInset,
+                    topInset + 16,
+                    gutter,
+                    m.body * 3,
                   ),
-                  actions: [
-                    const _DownloadAppBarButton(),
-                    AppIconButton(
-                      tooltip: 'Share',
-                      backgroundColor: theme.colorScheme.secondaryContainer,
-                      foregroundColor: theme.colorScheme.onSecondaryContainer,
-                      radius: uiRoundness,
-                      icon: const Icon(Icons.share, size: 18),
-                      onPressed: () {
-                        final providerId = displayMedia.providerId ?? 'anilist';
-                        final id = displayMedia.id;
-                        final type = widget.mediaType == MediaType.ANIME
-                            ? 'anime'
-                            : 'manga';
-                        String url;
-                        if (providerId == 'myanimelist' ||
-                            providerId == 'mal') {
-                          url = 'https://myanimelist.net/$type/$id';
-                        } else if (providerId == 'kitsu') {
-                          url = 'https://kitsu.io/$type/$id';
-                        } else {
-                          url = 'https://anilist.co/$type/$id';
-                        }
-                        SharePlus.instance.share(
-                          ShareParams(uri: Uri.parse(url)),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 5),
-                    _CommentsAppBarButton(
-                      media: displayMedia,
-                      uiRoundness: uiRoundness,
-                    ),
-                    const SizedBox(width: 5),
-                    _TrackerAppBarButton(
-                      media: displayMedia,
-                      uiRoundness: uiRoundness,
-                    ),
-                  ],
-                  flexibleSpace: FlexibleSpaceBar(
-                    titlePadding: EdgeInsets.zero,
-                    background: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: ShaderMask(
-                            shaderCallback: (Rect bounds) {
-                              return LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.white,
-                                  Colors.white,
-                                  Colors.transparent,
-                                ],
-                                stops: const [0.0, 0.3, 1.0],
-                              ).createShader(bounds);
-                            },
-                            blendMode: BlendMode.dstIn,
-                            child: CachedNetworkImage(
-                              imageUrl:
-                                  displayMedia.banner ??
-                                  displayMedia.cover ??
-                                  '',
-                              fit: BoxFit.cover,
-                              placeholder: (_, __) => const Center(
-                                child: CircularProgressIndicator(),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Every dimension here is derived, not fixed. Devices
+                      // report very different logical widths for the same
+                      // panel, and a hardcoded poster plus two hardcoded
+                      // buttons overflow the narrow ones.
+                      final posterWidth = math.min(
+                        m.detailPoster,
+                        size.height * 0.72 * ShonenX.posterAspect,
+                      );
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // The margin between the arrow's inset and the
+                          // content gutter is narrower than the button itself,
+                          // so the slot has to be the larger of the two --
+                          // sizing it to the margin alone squashed the icon.
+                          SizedBox(
+                            width: math.max(
+                              gutter - m.backArrowInset,
+                              m.iconButton * 1.5,
+                            ),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: _IconButton(
+                                icon: Icons.arrow_back,
+                                onPressed: () => context.pop(),
+                                tooltip: 'Back',
                               ),
-                              errorWidget: (_, __, ___) =>
-                                  const Center(child: Icon(Icons.error)),
                             ),
                           ),
-                        ),
-                        Positioned.fill(
-                          child: Container(
-                            padding: const EdgeInsets.only(bottom: 5),
-                            margin: const EdgeInsets.only(top: 10),
-                            alignment: Alignment.bottomLeft,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(10.0),
-                                  child: SizedBox(
-                                    width: 112,
-                                    child: AspectRatio(
-                                      aspectRatio: 2 / 3,
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(
-                                          uiRoundness,
-                                        ),
-                                        child: Hero(
-                                          tag: widget.tag,
-                                          child: CachedNetworkImage(
-                                            imageUrl: displayMedia.cover ?? '',
-                                            fit: BoxFit.cover,
-                                            placeholder: (context, url) =>
-                                                Container(
-                                                  color: colorScheme
-                                                      .surfaceContainerHighest,
-                                                ),
-                                            errorWidget: (_, __, ___) =>
-                                                const Icon(Icons.error),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(
-                                      bottom: 10.0,
-                                      right: 10.0,
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          displayMedia.title.availableTitle,
-                                          style: textTheme.titleLarge,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        if (displayMedia.title.native != null ||
-                                            displayMedia.title.romaji != null)
-                                          Text(
-                                            displayMedia.title.native ??
-                                                displayMedia.title.romaji ??
-                                                '',
-                                            style: textTheme.labelLarge
-                                                ?.copyWith(
-                                                  color: colorScheme
-                                                      .onSurfaceVariant,
-                                                ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        const SizedBox(height: 10),
-                                        Wrap(
-                                          spacing: 4.0,
-                                          runSpacing: 4.0,
-                                          alignment: WrapAlignment.start,
-                                          children: [
-                                            if (displayMedia.score != null &&
-                                                displayMedia.score! > 0)
-                                              Chip(
-                                                materialTapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                                side: BorderSide.none,
-                                                color: WidgetStatePropertyAll(
-                                                  colorScheme
-                                                      .surfaceContainerHighest,
-                                                ),
-                                                avatar: Icon(
-                                                  Icons.star_rounded,
-                                                  size: 14,
-                                                  color: colorScheme.primary,
-                                                ),
-                                                label: Text(
-                                                  displayMedia.score!
-                                                      .toStringAsFixed(1),
-                                                  style: textTheme.bodySmall
-                                                      ?.copyWith(
-                                                        color: colorScheme
-                                                            .onSurfaceVariant,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                      ),
-                                                ),
-                                              ),
-                                            if (displayMedia.format != null &&
-                                                displayMedia.format!.isNotEmpty)
-                                              Chip(
-                                                materialTapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                                side: BorderSide.none,
-                                                color: WidgetStatePropertyAll(
-                                                  colorScheme
-                                                      .surfaceContainerHighest,
-                                                ),
-                                                avatar: Icon(
-                                                  Icons.tv_rounded,
-                                                  size: 14,
-                                                  color: colorScheme.primary,
-                                                ),
-                                                label: Text(
-                                                  displayMedia.format!,
-                                                  style: textTheme.bodySmall
-                                                      ?.copyWith(
-                                                        color: colorScheme
-                                                            .onSurfaceVariant,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                      ),
-                                                ),
-                                              ),
-                                            if (displayMedia.status != null &&
-                                                displayMedia.status!.isNotEmpty)
-                                              Chip(
-                                                materialTapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                                side: BorderSide.none,
-                                                color: WidgetStatePropertyAll(
-                                                  colorScheme
-                                                      .surfaceContainerHighest,
-                                                ),
-                                                avatar: Icon(
-                                                  Icons
-                                                      .fiber_manual_record_rounded,
-                                                  size: 14,
-                                                  color:
-                                                      displayMedia.status!
-                                                              .toLowerCase() ==
-                                                          'releasing'
-                                                      ? Colors.greenAccent
-                                                      : colorScheme.primary,
-                                                ),
-                                                label: Text(
-                                                  displayMedia.status!
-                                                      .toUpperCase()
-                                                      .replaceAll('_', ' '),
-                                                  style: textTheme.bodySmall
-                                                      ?.copyWith(
-                                                        color: colorScheme
-                                                            .onSurfaceVariant,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                      ),
-                                                ),
-                                              ),
-                                            Chip(
-                                              materialTapTargetSize:
-                                                  MaterialTapTargetSize
-                                                      .shrinkWrap,
-                                              side: BorderSide.none,
-                                              color: WidgetStatePropertyAll(
-                                                colorScheme
-                                                    .surfaceContainerHighest,
-                                              ),
-                                              avatar: Icon(
-                                                displayMedia.type ==
-                                                        MediaType.MANGA
-                                                    ? Icons.menu_book_rounded
-                                                    : Icons
-                                                          .video_library_rounded,
-                                                size: 14,
-                                                color: colorScheme.primary,
-                                              ),
-                                              label: Text(
-                                                displayMedia.type ==
-                                                        MediaType.MANGA
-                                                    ? '${displayMedia.chapters ?? '?'} chs'
-                                                    : '${displayMedia.episodes ?? '?'} eps',
-                                                style: textTheme.bodySmall
-                                                    ?.copyWith(
-                                                      color: colorScheme
-                                                          .onSurfaceVariant,
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
-                                              ),
-                                            ),
-                                            if (displayMedia.season != null &&
-                                                displayMedia.season!.isNotEmpty)
-                                              Chip(
-                                                materialTapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                                side: BorderSide.none,
-                                                color: WidgetStatePropertyAll(
-                                                  colorScheme
-                                                      .surfaceContainerHighest,
-                                                ),
-                                                avatar: Icon(
-                                                  Icons.calendar_today_rounded,
-                                                  size: 14,
-                                                  color: colorScheme.primary,
-                                                ),
-                                                label: Text(
-                                                  displayMedia.season!,
-                                                  style: textTheme.bodySmall
-                                                      ?.copyWith(
-                                                        color: colorScheme
-                                                            .onSurfaceVariant,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                      ),
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                          // Clear space, so the arrow does not read as the
+                          // first item of the metadata line next to it.
+                          SizedBox(width: m.backArrowGap),
+                          Expanded(child: _buildInfoColumn(media, theme, cs)),
+                          SizedBox(width: gutter * 0.5),
+                          _Poster(
+                            media: media,
+                            tag: widget.tag,
+                            width: posterWidth,
+                            height: posterWidth / ShonenX.posterAspect,
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      );
+                    },
                   ),
+                ),
+              ),
+              if (relations.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: DetailMediaRow(
+                    title: 'Related Anime',
+                    items: relations,
+                    tagPrefix: 'details-rel',
+                  ),
+                ),
+              if (characters.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: DetailCharacterRow(characters: characters),
+                ),
+              if (recommendations.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: DetailMediaRow(
+                    title: 'Recommendations',
+                    items: recommendations,
+                    tagPrefix: 'details-rec',
+                  ),
+                ),
+              SliverToBoxAdapter(child: SizedBox(height: topInset + 40)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoColumn(UnifiedMedia media, ThemeData theme, ColorScheme cs) {
+    final genres = media.genres ?? const <String>[];
+    final description = media.description;
+    final m = ShonenXMetrics.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // A Wrap, not a Row: on a narrow viewport the badges and the two
+        // action icons cannot share a line, and a Row would just clip them.
+        Wrap(
+          spacing: m.meta * 1.6,
+          runSpacing: m.meta * 0.5,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            TvMetaRow(media: media),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _IconButton(
+                  icon: Icons.share_outlined,
+                  tooltip: 'Share',
+                  onPressed: () => _share(media),
+                ),
+                SizedBox(width: m.meta),
+                _TrackerButton(
+                  media: media,
+                  onOpenManager: () => _openTrackerManager(media),
                 ),
               ],
-              body: TabBarView(
-                controller: _tabController,
-                children: [
-                  AboutTabWidget(
-                    media: displayMedia,
-                    onEpisodesTabRequested: () => _tabController.animateTo(1),
-                    uiRoundness: uiRoundness,
-                  ),
-                  EpisodesTabWidget(media: displayMedia),
-                ],
-              ),
-            ),
-            Positioned(
-              top: MediaQuery.paddingOf(context).top + 12,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: AnimatedSlide(
-                  duration: const Duration(milliseconds: 200),
-                  offset: Offset(0, _pullProgress > 0.05 ? 0.0 : -3.0),
-                  child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 150),
-                    opacity: _pullProgress > 0.05 ? 1.0 : 0.0,
-                    child: IgnorePointer(
-                      child: Container(
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHighest,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            SizedBox(
-                              width: 40,
-                              height: 40,
-                              child: CircularProgressIndicator(
-                                value: _pullProgress,
-                                strokeWidth: 3.5,
-                                backgroundColor: theme
-                                    .colorScheme
-                                    .onSurfaceVariant
-                                    .withValues(alpha: 0.2),
-                                valueColor: AlwaysStoppedAnimation(
-                                  _pullProgress >= 1.0
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                            Icon(
-                              _pullProgress >= 1.0
-                                  ? Icons.forum_rounded
-                                  : Icons.chat_bubble_outline_rounded,
-                              color: _pullProgress >= 1.0
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.onSurface,
-                              size: 22,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: KeyboardListener(
-          focusNode: _keyboardFocusNode,
-          autofocus: true,
-          onKeyEvent: (event) {
-            if (event is! KeyDownEvent) {
-              return;
-            }
-
-            switch (event.logicalKey) {
-              case LogicalKeyboardKey.digit1:
-                _tabController.animateTo(0);
-                break;
-              case LogicalKeyboardKey.digit2:
-                _tabController.animateTo(1);
-                break;
-              case LogicalKeyboardKey.digit3:
-                _showCommentsSheet(context, displayMedia);
-                break;
-            }
-          },
-          child: TabBar(
-            dividerHeight: 0,
-            controller: _tabController,
-            dividerColor: Colors.transparent,
-            indicatorSize: TabBarIndicatorSize.tab,
-            textScaler: const TextScaler.linear(1.15),
-            tabs: [
-              const Tab(text: 'About'),
-              Tab(
-                text: widget.mediaType == MediaType.MANGA
-                    ? 'Chapters'
-                    : 'Episodes',
+        SizedBox(height: m.titlePage * 0.6),
+        Text(
+          media.title.availableTitle,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.displaySmall?.copyWith(
+            fontSize: m.titlePage,
+            fontWeight: FontWeight.w800,
+            height: 1.1,
+          ),
+        ),
+        SizedBox(height: m.titlePage * 0.7),
+        if (description != null && description.isNotEmpty)
+          Text(
+            _plainText(description),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              fontSize: m.body,
+              color: cs.onSurfaceVariant,
+              height: 1.5,
+            ),
+          ),
+        SizedBox(height: m.body * 1.6),
+        Text(
+          'Genres: ${genres.join(', ')}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontSize: m.body,
+            color: cs.onSurfaceVariant,
+          ),
+        ),
+        SizedBox(height: m.body * 2.6),
+        FocusTraversalGroup(
+          // Every button sizes to its own label. A shared fixed width computed
+          // from the remaining column was always a little short of the longest
+          // one, so "More episodes" and "Add to watch list" came out clipped.
+          child: Wrap(
+            spacing: m.label * 1.3,
+            runSpacing: m.label,
+            children: [
+              TvButton(
+                label: 'Play now',
+                icon: Icons.play_arrow_rounded,
+                height: m.buttonHeight,
+                loading: _resolving,
+                ensureVisible: false,
+                // The reason the screen exists. Land here on arrival so
+                // watching something is a single press.
+                autofocus: true,
+                onPressed: () => _play(media),
+              ),
+              TvButton(
+                label: 'More episodes',
+                icon: Icons.layers_outlined,
+                height: m.buttonHeight,
+                variant: TvButtonVariant.filledWhite,
+                ensureVisible: false,
+                onPressed: () => _openEpisodes(media),
+              ),
+              TvButton(
+                label: 'Watch',
+                emphasis: 'Dubbed',
+                icon: Icons.mic_none_rounded,
+                height: m.buttonHeight * 0.9,
+                variant: TvButtonVariant.bare,
+                ensureVisible: false,
+                onPressed: () => _play(media, serverType: ServerType.dub),
+              ),
+              TvButton(
+                label: 'Add to watch list',
+                icon: Icons.add_circle_outline,
+                height: m.buttonHeight * 0.9,
+                variant: TvButtonVariant.bare,
+                ensureVisible: false,
+                onPressed: () => _addToWatchList(media),
+              ),
+              TvButton(
+                label: 'Watch',
+                emphasis: 'Subbed',
+                icon: Icons.closed_caption_off_rounded,
+                height: m.buttonHeight * 0.9,
+                variant: TvButtonVariant.bare,
+                ensureVisible: false,
+                onPressed: () => _play(media, serverType: ServerType.sub),
               ),
             ],
           ),
+        ),
+      ],
+    );
+  }
+
+  /// Descriptions arrive as fragments of HTML from every tracker.
+  static String _plainText(String raw) => raw
+      .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), ' ')
+      .replaceAll(RegExp(r'<[^>]*>'), '')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+
+class _Backdrop extends StatelessWidget {
+  final String? url;
+
+  const _Backdrop({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    if (url == null || url!.isEmpty) return const SizedBox.shrink();
+
+    return Positioned.fill(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          AppNetworkImage(
+            url: url,
+            alignment: Alignment.topCenter,
+            placeholder: const SizedBox.shrink(),
+            error: const SizedBox.shrink(),
+          ),
+          // Heavy enough that white body text stays legible over any artwork.
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: cs.surface.withValues(alpha: 0.94),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Poster extends StatelessWidget {
+  final UnifiedMedia media;
+  final String tag;
+  final double width;
+  final double height;
+
+  const _Poster({
+    required this.media,
+    required this.tag,
+    required this.width,
+    required this.height,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final url = media.cover ?? media.banner;
+
+    // Not focusable: it is an illustration, and a focus stop here would sit
+    // between the action buttons and the rows below for no gain.
+    return SizedBox(
+      width: width,
+      height: height,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(ShonenX.posterRadius),
+        child: Hero(
+          tag: tag,
+          child: (url == null || url.isEmpty)
+              ? ColoredBox(color: cs.surfaceContainer)
+              : AppNetworkImage(
+                  url: url,
+                  width: width,
+                  placeholder: ColoredBox(color: cs.surfaceContainer),
+                ),
         ),
       ),
     );
   }
 }
 
-class _TrackerAppBarButton extends ConsumerWidget {
-  final UnifiedMedia media;
-  final double uiRoundness;
+class _IconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onPressed;
+  final String tooltip;
 
-  const _TrackerAppBarButton({required this.media, required this.uiRoundness});
+  const _IconButton({
+    required this.icon,
+    required this.onPressed,
+    required this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final m = ShonenXMetrics.of(context);
+
+    return TvFocusable(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(10),
+      scaleOnFocus: false,
+      // Same treatment as the player's back arrow: over a backdrop image a
+      // white ring competes with whatever is behind it, so focus tints the
+      // glyph instead. It also keeps the arrow reading as a bare icon rather
+      // than as a boxed button.
+      ringColor: Colors.transparent,
+      builder: (context, isFocused) => SizedBox(
+        width: m.iconButton * 1.5,
+        height: m.iconButton * 1.5,
+        child: Icon(
+          icon,
+          size: m.iconButton,
+          semanticLabel: tooltip,
+          color: isFocused ? cs.primary : cs.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
+/// Tracker state as a single icon.
+///
+/// The old version was a labelled button whose only route to editing an entry
+/// was a long-press -- a gesture no remote can produce. Everything now goes
+/// through the manager sheet.
+class _TrackerButton extends ConsumerWidget {
+  final UnifiedMedia media;
+  final VoidCallback onOpenManager;
+
+  const _TrackerButton({required this.media, required this.onOpenManager});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-
     final activeTrackers = ref.watch(activeTrackersProvider(media.type));
-
     if (activeTrackers.isEmpty) return const SizedBox.shrink();
 
-    final trackerLinksAsync = ref.watch(trackerLinkProvider(media.id));
     final tracker = ref.watch(primaryTrackerProvider);
-
+    final links = ref.watch(trackerLinkProvider(media.id)).value ?? {};
     final trackingState = ref.watch(
       mediaTrackingProvider(TrackingQuery(tracker.type, media.id, media.type)),
     );
 
-    return _buildUI(
-      context,
-      ref,
-      theme,
-      tracker,
-      trackingState,
-      trackerLinksAsync,
-      uiRoundness,
-    );
-  }
+    final isAuthenticated = tracker.type.isAuthenticated(ref);
+    final isLinked =
+        links.containsKey(tracker.type) || tracker.type == TrackerType.local;
 
-  Widget _buildUI(
-    BuildContext context,
-    WidgetRef ref,
-    ThemeData theme,
-    TrackingService tracker,
-    AsyncValue<TrackedListItem?> trackingState,
-    AsyncValue<Map<TrackerType, TrackerMapping>> trackerLinksAsync,
-    double uiRoundness,
-  ) {
-    return trackingState.when(
-      loading: () => _buildButton(
-        theme,
-        label: 'Loading...',
-        icon: Icons.hourglass_empty,
-        isEnabled: false,
-        uiRoundness: uiRoundness,
-      ),
-      error: (err, stack) => _buildButton(
-        theme,
-        label: 'Sync Error',
-        icon: Icons.sync_problem,
-        onPressed: () => _openManager(context),
-        uiRoundness: uiRoundness,
-      ),
-      data: (listItem) {
-        final links = trackerLinksAsync.value ?? {};
-        final isTrackerLinked = links.containsKey(tracker.type);
-        final isAuthenticated = tracker.type.isAuthenticated(ref);
+    final IconData icon;
+    final String tooltip;
+    if (!isAuthenticated) {
+      icon = Icons.login;
+      tooltip = 'Log in to ${tracker.type.displayName}';
+    } else if (isLinked && trackingState.value != null) {
+      icon = Icons.bookmark_added;
+      tooltip =
+          'Ep ${trackingState.value!.progress.toInt()} • '
+          '${trackingState.value!.status.getLabelForMedia(media.type)}';
+    } else {
+      icon = Icons.bookmark_add_outlined;
+      tooltip = 'Add to ${tracker.type.displayName}';
+    }
 
-        String label = 'Add Tracker';
-        IconData icon = Icons.add;
-
-        if (!isAuthenticated) {
-          label = 'Login to ${tracker.type.displayName}';
-          icon = Icons.login;
-        } else if (isTrackerLinked || tracker.type == TrackerType.local) {
-          if (listItem != null) {
-            label =
-                '${media.type == MediaType.MANGA ? "Ch" : "Ep"} ${listItem.progress.toInt()} • ${listItem.status.getLabelForMedia(media.type)}';
-            icon = Icons.bookmark_added;
-          } else {
-            label = 'Add to ${tracker.type.displayName}';
-            icon = Icons.add_to_photos;
-          }
-        } else if (links.isNotEmpty) {
-          label = 'Manage Trackers';
-          icon = Icons.bookmarks;
+    return _IconButton(
+      icon: icon,
+      tooltip: tooltip,
+      onPressed: () {
+        if (tracker is RemoteTracker && !isAuthenticated) {
+          ref.read(authTokensProvider.notifier).login(tracker);
+          return;
         }
-
-        return _buildButton(
-          theme,
-          label: label,
-          icon: icon,
-          onPressed: () {
-            if (tracker is RemoteTracker && !isAuthenticated) {
-              ref.read(authTokensProvider.notifier).login(tracker);
-              return;
-            }
-            _openManager(context);
-          },
-          onLongPress: (isTrackerLinked && listItem != null)
-              ? () => showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  useSafeArea: true,
-                  builder: (_) => EditTrackerSheet(
-                    media: media,
-                    initialItem: listItem,
-                    tracker: tracker,
-                  ),
-                )
-              : null,
-          uiRoundness: uiRoundness,
-        );
+        onOpenManager();
       },
     );
   }
-
-  Widget _buildButton(
-    ThemeData theme, {
-    required String label,
-    required IconData icon,
-    required double uiRoundness,
-    bool isEnabled = true,
-    VoidCallback? onPressed,
-    VoidCallback? onLongPress,
-  }) {
-    return TextButton.icon(
-      style: TextButton.styleFrom(
-        backgroundColor: theme.colorScheme.primary,
-        foregroundColor: theme.colorScheme.onPrimary,
-        visualDensity: VisualDensity.compact,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.horizontal(
-            left: Radius.circular(uiRoundness),
-          ),
-        ),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      onPressed: isEnabled ? onPressed : null,
-      onLongPress: isEnabled ? onLongPress : null,
-      icon: Icon(icon, size: 18, color: theme.colorScheme.onPrimary),
-      label: Text(
-        label,
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: theme.colorScheme.onPrimary,
-        ),
-      ),
-    );
-  }
-
-  void _openManager(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => TrackerManagerSheet(media: media),
-    );
-  }
-}
-
-class _DownloadAppBarButton extends ConsumerWidget {
-  const _DownloadAppBarButton();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tasksAsync = ref.watch(downloadTasksProvider);
-    final activeTasks =
-        tasksAsync.value
-            ?.where(
-              (t) =>
-                  t.status == DownloadStatus.downloading ||
-                  t.status == DownloadStatus.pending,
-            )
-            .toList() ??
-        [];
-    final activeCount = activeTasks.length;
-
-    if (activeCount == 0) return const SizedBox.shrink();
-
-    double? averageProgress;
-    double totalProgress = 0.0;
-    int validCount = 0;
-    for (final t in activeTasks) {
-      if (t.progress >= 0.0) {
-        totalProgress += t.progress;
-        validCount++;
-      }
-    }
-    averageProgress = validCount > 0 ? totalProgress / validCount : null;
-
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: Badge(
-        isLabelVisible: activeCount > 0,
-        label: Text(activeCount.toString()),
-        offset: const Offset(2, -2),
-        child: AppIconButton(
-          onPressed: () => context.push('/downloads'),
-          backgroundColor: colorScheme.primaryContainer,
-          foregroundColor: colorScheme.onPrimaryContainer,
-          icon: Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  value: averageProgress,
-                  strokeWidth: 2.0,
-                  strokeCap: StrokeCap.round,
-                  backgroundColor: colorScheme.primaryContainer.withValues(
-                    alpha: 0.12,
-                  ),
-                  color: colorScheme.onPrimaryContainer,
-                ),
-              ),
-              const Icon(Icons.download_rounded, size: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CommentsAppBarButton extends StatelessWidget {
-  final UnifiedMedia media;
-  final double uiRoundness;
-
-  const _CommentsAppBarButton({required this.media, required this.uiRoundness});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return AppIconButton(
-      tooltip: 'Discussion',
-      backgroundColor: theme.colorScheme.secondaryContainer,
-      foregroundColor: theme.colorScheme.onSecondaryContainer,
-      radius: uiRoundness,
-      icon: const Icon(Icons.forum_rounded, size: 18),
-      onPressed: () => _showCommentsSheet(context, media),
-    );
-  }
-}
-
-void _showCommentsSheet(BuildContext context, UnifiedMedia media) {
-  AppBottomSheet.show(
-    context: context,
-    title: 'Discussion',
-    contentPadding: EdgeInsets.zero,
-    child: SizedBox(
-      height: MediaQuery.of(context).size.height * 0.78,
-      child: CommentsTabWidget(media: media),
-    ),
-  );
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/features/discovery/providers/discovery_prefs_provider.dart';
 import 'package:shonenx/features/discovery/providers/search_provider.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
@@ -7,6 +8,7 @@ import 'package:shonenx/shared/models/unified_media.dart';
 import 'dynamic_genre_feed.dart';
 import 'dynamic_source_feed.dart';
 import 'paginated_media_grid.dart';
+import 'paginated_media_list.dart';
 
 class DiscoverTabFeed extends ConsumerStatefulWidget {
   final MediaType type;
@@ -17,6 +19,10 @@ class DiscoverTabFeed extends ConsumerStatefulWidget {
   final ValueChanged<String>? onGenreSelect;
   final ValueChanged<String>? onSourceSelect;
 
+  /// Render hits as full-width rows instead of a grid. The search screen sets
+  /// this because the keyboard already claims half the width.
+  final bool listMode;
+
   const DiscoverTabFeed({
     super.key,
     required this.type,
@@ -26,6 +32,7 @@ class DiscoverTabFeed extends ConsumerStatefulWidget {
     this.source,
     this.onGenreSelect,
     this.onSourceSelect,
+    this.listMode = false,
   });
 
   @override
@@ -99,6 +106,22 @@ class _DiscoverTabFeedState extends ConsumerState<DiscoverTabFeed> {
   @override
   Widget build(BuildContext context) {
     if (!_hasActiveFilters) {
+      if (widget.listMode) {
+        // The search screen's right pane stays empty until something is typed.
+        // The browse feeds render through MediaCard at its own much larger
+        // size, which next to the keyboard column reads as a different app.
+        final theme = Theme.of(context);
+        return Center(
+          child: Text(
+            'Search for an anime',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontSize: ShonenXMetrics.of(context).meta,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        );
+      }
+
       final discoveryMode = ref.watch(
         discoveryPrefsProvider.select((p) => p.mode),
       );
@@ -115,6 +138,15 @@ class _DiscoverTabFeedState extends ConsumerState<DiscoverTabFeed> {
     }
 
     final state = ref.watch(searchProvider(_args));
+
+    if (widget.listMode) {
+      return PaginatedMediaList(
+        state: state,
+        scrollController: _scrollController,
+        isLoadingMore: _isLoadingMore,
+        onAutoLoad: _loadNextPage,
+      );
+    }
 
     return PaginatedMediaGrid(
       state: state,

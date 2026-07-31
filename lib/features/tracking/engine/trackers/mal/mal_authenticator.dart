@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -17,7 +16,6 @@ class MalAuthenticator implements Authenticator {
   MalAuthenticator({this.customCredentials});
 
   static final HTTP _http = HTTP();
-  static final _isDesktop = Platform.isWindows || Platform.isLinux;
   static final FlutterSecureStorage _secureStorage =
       const FlutterSecureStorage();
 
@@ -26,22 +24,17 @@ class MalAuthenticator implements Authenticator {
 
   String get _clientId =>
       customCredentials?.clientId ??
-      (_isDesktop ? Env.MAL_CLIENT_ID_LIST.last : Env.MAL_CLIENT_ID_LIST.first);
+      Env.MAL_CLIENT_ID_LIST.first;
 
   String get _clientSecret =>
       customCredentials?.clientSecret ??
-      (_isDesktop
-          ? Env.MAL_CLIENT_SECRET_LIST.last
-          : Env.MAL_CLIENT_SECRET_LIST.first);
+      Env.MAL_CLIENT_SECRET_LIST.first;
 
   @override
-  String get redirectUri => _isDesktop
-      ? 'http://localhost:43824/success?code=1337'
-      : 'shonenx://callback';
+  String get redirectUri => 'shonenx://callback';
 
   @override
-  String get callbackScheme =>
-      _isDesktop ? 'http://localhost:43824' : 'shonenx';
+  String get callbackScheme => 'shonenx';
 
   @override
   String get providerName => TrackerType.myanimelist.name;
@@ -97,7 +90,7 @@ class MalAuthenticator implements Authenticator {
       final result = await FlutterWebAuth2.authenticate(
         url: authUri.toString(),
         callbackUrlScheme: callbackScheme,
-        options: FlutterWebAuth2Options(useWebview: !_isDesktop),
+        options: const FlutterWebAuth2Options(useWebview: true),
       );
 
       final parsedUrl = Uri.parse(result);

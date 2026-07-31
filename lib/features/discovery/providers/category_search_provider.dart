@@ -117,9 +117,7 @@ class CategorySearchNotifier
 
       if (targetSourceInfo != null) {
         try {
-          final source = arg.type.usesAnimeSources
-              ? ref.read(animeSourceProvider(targetSourceInfo))
-              : ref.read(mangaSourceProvider(targetSourceInfo));
+          final source = ref.read(animeSourceProvider(targetSourceInfo));
           List<UnifiedMedia> items = [];
           try {
             items = await source.getTrending(page: page);
@@ -139,9 +137,7 @@ class CategorySearchNotifier
       // Fallback: Perform an actual text search across all active sources
       final futures = activeSources.map((info) async {
         try {
-          final source = arg.type.usesAnimeSources
-              ? ref.read(animeSourceProvider(info))
-              : ref.read(mangaSourceProvider(info));
+          final source = ref.read(animeSourceProvider(info));
           return await source.search(arg.category, arg.type, page: page);
         } catch (_) {
           return <UnifiedMedia>[];

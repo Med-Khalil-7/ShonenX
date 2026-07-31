@@ -1,13 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:screenshot/screenshot.dart';
-import 'package:share_plus/share_plus.dart';
 
+import 'package:shonenx/features/player/domain/stream_catalog.dart';
 import 'package:shonenx/core/network/http_client.dart';
 import 'package:shonenx/core/utils/extensions.dart';
 import 'package:shonenx/core/utils/http_x.dart';
@@ -97,7 +94,6 @@ class PlayerController extends Notifier<PlayerState> {
   UnifiedMedia? _media;
   UnifiedMedia? get media => _media;
   AnimeSource? _source;
-  late ScreenshotController _screenshot;
 
   // Thumbnail caching
   String? _cachedThumbnail;
@@ -106,6 +102,8 @@ class PlayerController extends Notifier<PlayerState> {
   static const _thumbnailRefreshInterval = Duration(minutes: 2);
 
   final Set<SkipType> _alreadyAutoSkipped = {};
+  AniSkipArgs? _autoSkipArgs;
+  bool _autoNextTriggered = false;
 
   // Subscriptions
   ProviderSubscription<Duration>? _positionSubscription;
@@ -178,7 +176,11 @@ class PlayerController extends Notifier<PlayerState> {
   Future<void> _applyNativeSubtitle(SubtitleTrack? subtitle) async {
     final prefs = ref.read(subtitlePrefsProvider);
     try {
-      if (prefs.useCustomSubtitle || subtitle?.url.isEmpty == true) {
+      // Embedded tracks always go native: the custom overlay renders cues it
+      // parsed from a URL, and a muxed track has none to parse.
+      if (subtitle != null && subtitle.isEmbedded) {
+        await ref.read(videoEngineProvider).setSubtitle(subtitle);
+      } else if (prefs.useCustomSubtitle || subtitle?.url.isEmpty == true) {
         await ref.read(videoEngineProvider).setSubtitle(null);
       } else {
         await ref.read(videoEngineProvider).setSubtitle(subtitle);
@@ -188,21 +190,91 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
-  Future<void> initialize(
-    PlayerMode mode, {
-    required ScreenshotController screenshot,
-  }) async {
-    _screenshot = screenshot;
+  Future<void> initialize(PlayerMode mode) async {
 
     if (mode is PlayerModeOnline) {
       _source = ref.read(animeSourceProvider(mode.sourceInfo));
       _media = mode.media;
 
       await _loadData(mode.episode, startPosition: mode.startPosition);
+    } else if (mode is PlayerModeAuto) {
+      await _resolveAndLoad(mode);
     } else if (mode is PlayerModeOffline) {
       _source = null;
       _media = null;
       await _loadOfflineData(mode);
+    }
+  }
+
+  /// Works out which episode to play, then plays it.
+  ///
+  /// This is the work the callers used to do before navigating -- fetching the
+  /// episode list is a network round trip, and doing it up front meant the play
+  /// button sat spinning on the previous screen. Done here the player is
+  /// already on screen, so the wait happens against the surface it is about to
+  /// fill instead of against a list the user has finished with.
+  Future<void> _resolveAndLoad(PlayerModeAuto mode) async {
+    state = state.copyWith(isLoading: true, error: null);
+    _media = mode.media;
+
+    try {
+      final listState = await ref.read(
+        episodesListProvider(MediaArgs.fromMedia(mode.media)).future,
+      );
+      final episodes = listState.episodes;
+      if (episodes.isEmpty) {
+        state = state.copyWith(
+          isLoading: false,
+          error: 'No episodes found for this source.',
+        );
+        return;
+      }
+
+      _source = ref.read(animeSourceProvider(listState.source));
+
+      // An explicit episode from the caller wins -- continue-watching knows
+      // exactly where it left off.
+      UnifiedEpisode? target;
+      Duration? startPosition = mode.startPosition;
+
+      if (mode.episodeNumber != null) {
+        target = episodes.firstWhereOrNull(
+          (e) => e.number == mode.episodeNumber,
+        );
+      }
+
+      if (target == null) {
+        // Resume the part-watched episode, else the one after the last
+        // finished, else the first.
+        final history =
+            ref.read(historyEpisodesProvider(mode.media.id)).value ?? [];
+        final last = history.firstOrNull;
+        if (last != null) {
+          final partway =
+              last.positionInMilliseconds > 0 &&
+              last.positionInMilliseconds < last.durationInMilliseconds;
+          if (partway) {
+            target = episodes.firstWhereOrNull(
+              (e) => e.number == last.episodeNumber,
+            );
+            startPosition ??= Duration(
+              milliseconds: last.positionInMilliseconds,
+            );
+          } else {
+            target = episodes.firstWhereOrNull(
+              (e) => e.number == last.episodeNumber + 1,
+            );
+          }
+        }
+      }
+      target ??= episodes.first;
+
+      await _loadData(target, startPosition: startPosition);
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Could not start playback: $e',
+      );
     }
   }
 
@@ -311,6 +383,7 @@ class PlayerController extends Notifier<PlayerState> {
     bool force = false,
   }) async {
     _alreadyAutoSkipped.clear();
+    _autoNextTriggered = false;
     _cachedThumbnail = null;
     _lastThumbnailTime = null;
     _initialCaptureDone = false;
@@ -381,6 +454,7 @@ class PlayerController extends Notifier<PlayerState> {
     if (_source == null) return;
     if (state.activeEpisode?.id != episode.id) {
       _alreadyAutoSkipped.clear();
+    _autoNextTriggered = false;
     }
     state = state.copyWith(
       isLoading: true,
@@ -539,6 +613,22 @@ class PlayerController extends Notifier<PlayerState> {
     final engine = ref.read(videoEngineProvider);
     final currentPos = engine.currentPosition;
 
+    // Remember the language this mirror represents.
+    //
+    // For these sources the mirror list *is* the language picker -- one label
+    // carries both axes, `Japanese - 1080p`. changeQuality and changeAudioTrack
+    // both persisted their choice; this one did not, so picking a language here
+    // was forgotten the moment the next episode loaded and the mirror was
+    // chosen from defaults again. _preferredAudioLang is what _loadData filters
+    // the mirror list by, so writing it here is what makes the choice stick.
+    final language = StreamCatalog.from(
+      state.streams,
+    ).facetFor(newStream)?.language;
+    if (language != null && language.isNotEmpty) {
+      _preferredAudioLang = language;
+      ref.read(playerPrefsProvider.notifier).setDefaultAudioLang(language);
+    }
+
     state = state.copyWith(
       isLoading: true,
       activeStream: newStream,
@@ -672,36 +762,67 @@ class PlayerController extends Notifier<PlayerState> {
     await ref.read(videoEngineProvider).setSpeed(speed);
   }
 
+  /// Watches playback for auto-skip and auto-next.
+  ///
+  /// Registered once per episode. It used to snapshot prefs and stamps at
+  /// registration, which is why the transport bar re-ran it on every position
+  /// tick -- closing and reopening a subscription roughly once a second for
+  /// the whole episode. Both inputs are read live instead.
   void setupAutoSkipListener(AniSkipArgs? args) {
     _positionSubscription?.close();
-
-    final prefs = ref.read(aniskipPrefsProvider);
-    final skips = ref.read(aniSkipProvider(args)).value ?? [];
+    _autoSkipArgs = args;
 
     _positionSubscription = ref.listen(
       videoEngineStateProvider.select((s) => s.position),
-      (previous, current) {
-        final seconds = current.inSeconds;
-
-        for (final skip in skips) {
-          final mode = prefs.mode(skip.type);
-
-          if (mode != SkipMode.auto) continue;
-
-          final isInside = seconds >= skip.startTime && seconds < skip.endTime;
-
-          if (isInside) {
-            if (_alreadyAutoSkipped.add(skip.type)) {
-              ref
-                  .read(videoEngineProvider)
-                  .seekTo(Duration(seconds: skip.endTime.ceil()));
-            }
-          }
-        }
-      },
+      (previous, current) => _onPositionTick(current),
     );
   }
 
+  void _onPositionTick(Duration position) {
+    final seconds = position.inSeconds;
+    if (seconds <= 0) return;
+
+    final prefs = ref.read(aniskipPrefsProvider);
+    final skips = ref.read(aniSkipProvider(_autoSkipArgs)).value ?? const [];
+
+    for (final skip in skips) {
+      if (prefs.mode(skip.type) != SkipMode.auto) continue;
+      if (seconds < skip.startTime || seconds >= skip.endTime) continue;
+      if (_alreadyAutoSkipped.add(skip.type)) {
+        ref
+            .read(videoEngineProvider)
+            .seekTo(Duration(seconds: skip.endTime.ceil()));
+      }
+    }
+
+    _maybeAutoNext(position);
+  }
+
+  /// Rolls into the next episode as this one runs out.
+  ///
+  /// This lived in the skip button before, so moving that button onto its own
+  /// layer would have quietly taken auto-next with it. It belongs here: it is
+  /// playback behaviour, not a piece of the overlay.
+  void _maybeAutoNext(Duration position) {
+    if (_autoNextTriggered) return;
+
+    final playerPrefs = ref.read(playerPrefsProvider);
+    if (!playerPrefs.autoNext || !hasNextEpisode) return;
+
+    final duration = ref.read(videoEngineStateProvider).duration;
+    if (duration.inSeconds <= 0) return;
+
+    final remaining = duration.inSeconds - position.inSeconds;
+    if (remaining > 0 && remaining > playerPrefs.nextEpisodeThreshold) return;
+
+    _autoNextTriggered = true;
+    skipEpisode();
+  }
+
+  /// Aims the scrub preview at the smallest rendition of the current episode.
+  ///
+  /// Safe to call whenever the quality list changes; a null result leaves the
+  /// engine previewing whatever is playing, which is the old behaviour.
   Future<void> _startProgressTracker() async {
     _progressTimer?.cancel();
     _progressTimer = Timer.periodic(
@@ -710,61 +831,38 @@ class PlayerController extends Notifier<PlayerState> {
     );
   }
 
+  /// Grabs the frame for the continue-watching row.
+  ///
+  /// Asks the engine rather than screenshotting the Flutter tree: on Android
+  /// the video is a platform texture, so a RepaintBoundary capture of it comes
+  /// back black.
+  /// Supplied by the player screen. See [setFrameGrabber].
+  Future<Uint8List?> Function()? _frameGrabber;
+
+  /// Registers a way to read the frame currently on screen.
+  ///
+  /// ExoPlayer renders straight to a Surface and hands back no pixels, so
+  /// grabCurrentFrame returns null on it -- and since it became the default
+  /// engine, nothing was ever captured and every continue-watching card fell
+  /// back to its placeholder. The screen can read the frame off its own
+  /// RepaintBoundary, which is the only place those pixels are reachable.
+  void setFrameGrabber(Future<Uint8List?> Function()? grab) {
+    _frameGrabber = grab;
+  }
+
   Future<String?> _captureThumbnail() async {
     try {
-      final image = await _screenshot.capture(pixelRatio: 0.5);
+      // The engine first: mpv can screenshot itself, and its frame is the
+      // decoded one rather than a readback of the composited surface.
+      final image =
+          await ref.read(videoEngineProvider).grabCurrentFrame() ??
+          await _frameGrabber?.call();
       if (image != null) {
         _cachedThumbnail = base64Encode(image);
         _lastThumbnailTime = DateTime.now();
       }
     } catch (_) {}
     return _cachedThumbnail;
-  }
-
-  Future<({bool success, String message})> takeAndShareScreenshot() async {
-    try {
-      ref.read(videoEngineProvider).pause();
-      final image = await _screenshot.capture(pixelRatio: 1.5);
-      if (image == null) {
-        return (success: false, message: 'Failed to capture screenshot.');
-      }
-
-      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-        final now = DateTime.now();
-        final timestamp =
-            '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
-        final defaultFileName = 'ShonenX_$timestamp.png';
-
-        final savePath = await FilePicker.platform.saveFile(
-          dialogTitle: 'Save Screenshot',
-          fileName: defaultFileName,
-          type: FileType.custom,
-          allowedExtensions: ['png'],
-        );
-
-        if (savePath == null) {
-          return (success: false, message: 'Save cancelled');
-        }
-
-        final file = File(savePath);
-        await file.writeAsBytes(image);
-
-        return (success: true, message: 'Screenshot saved to ${file.path}');
-      } else {
-        final tempDir = await getTemporaryDirectory();
-        final file = File(
-          '${tempDir.path}/screenshot_${DateTime.now().millisecondsSinceEpoch}.png',
-        );
-        await file.writeAsBytes(image);
-        await Share.shareXFiles(
-          [XFile(file.path)],
-          text: 'Screenshot from ${_media?.title.availableTitle ?? "ShonenX"}',
-        );
-        return (success: true, message: 'Screenshot captured');
-      }
-    } catch (e) {
-      return (success: false, message: 'Screenshot error: $e');
-    }
   }
 
   bool get _shouldCaptureThumbnail {

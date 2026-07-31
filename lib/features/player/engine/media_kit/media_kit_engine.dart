@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -24,6 +25,11 @@ class MediaKitEngine implements VideoEngine {
   bool _disposed = false;
 
   StreamSubscription<Duration>? _positionSubscription;
+
+
+  /// Set by the controller once the quality list is known. Preferred over
+  /// [_current] for frame grabs -- see [setPreviewSource].
+
 
   Future<void> updatePrefs(MediaKitPrefs newPrefs) async {
     if (_disposed) return;
@@ -115,9 +121,19 @@ class MediaKitEngine implements VideoEngine {
       _player.stream.tracks.listen((tracks) {
         if (!_disposed) {
           final audioList = tracks.audio.map((t) => _mapAudioTrack(t)).toList();
+          // Subtitles muxed into the container. These were read for audio
+          // only, so any file carrying its own subtitle tracks looked like it
+          // had none.
+          final subtitleList = tracks.subtitle
+              .where((t) => t.id != 'auto' && t.id != 'no')
+              .map(_mapSubtitleTrack)
+              .toList();
           ref
               .read(videoEngineStateProvider.notifier)
-              .updateState(audioTracks: audioList);
+              .updateState(
+                audioTracks: audioList,
+                embeddedSubtitles: subtitleList,
+              );
         }
       }),
       _player.stream.track.listen((track) {
@@ -144,6 +160,22 @@ class MediaKitEngine implements VideoEngine {
     });
   }
 
+  /// How long to wait for the first frame before calling it a failure.
+  ///
+  /// Generous, because a cold seek into an unbuffered HLS stream on a slow
+  /// connection is legitimately slow. The point is not to be strict, it is to
+  /// be finite.
+  static const _readyTimeout = Duration(seconds: 25);
+
+  /// Waits for playback to actually start, then runs [onReady].
+  ///
+  /// Readiness is "position moved past zero", which only the listener below
+  /// can observe -- so if the stream never starts decoding, that listener
+  /// never fires. Without a timeout the future here never completed and
+  /// `initialize` never returned, which is what left the player spinning at
+  /// 0:00 with no error: the caller's `isLoading = false` was on the next
+  /// line and was never reached. A stream the device cannot decode has to
+  /// fail, not hang.
   Future<void> _waitUntilReady(Future<void> Function() onReady) async {
     await _positionSubscription?.cancel();
     _positionSubscription = null;
@@ -165,7 +197,13 @@ class MediaKitEngine implements VideoEngine {
       }
     });
 
-    await completer.future;
+    try {
+      await completer.future.timeout(_readyTimeout);
+    } on TimeoutException {
+      await _positionSubscription?.cancel();
+      _positionSubscription = null;
+      throw PlaybackDidNotStartException(_readyTimeout);
+    }
   }
 
   @override
@@ -247,14 +285,61 @@ class MediaKitEngine implements VideoEngine {
   }
 
   @override
-  Future<void> setSubtitle(stream.SubtitleTrack? subtitle) async {
-    if (subtitle == null || subtitle.url.isEmpty) {
-      await _player.setSubtitleTrack(SubtitleTrack.no());
-    } else {
-      await _player.setSubtitleTrack(
-        SubtitleTrack.uri(subtitle.url, language: subtitle.language),
-      );
+  Future<Uint8List?> grabCurrentFrame() async {
+    if (_disposed) return null;
+    try {
+      return await _player.safeScreenshot(format: 'image/jpeg');
+    } catch (_) {
+      return null;
     }
+  }
+
+
+  @override
+  Future<void> setSubtitle(stream.SubtitleTrack? subtitle) async {
+    if (subtitle == null) {
+      await _player.setSubtitleTrack(SubtitleTrack.no());
+      return;
+    }
+    final embeddedId = subtitle.embeddedId;
+    if (embeddedId != null) {
+      // Selected by track id; an embedded track has no URI to load.
+      await _player.setSubtitleTrack(
+        SubtitleTrack(embeddedId, null, subtitle.language),
+      );
+      return;
+    }
+    if (subtitle.url.isEmpty) {
+      await _player.setSubtitleTrack(SubtitleTrack.no());
+      return;
+    }
+    await _player.setSubtitleTrack(
+      SubtitleTrack.uri(subtitle.url, language: subtitle.language),
+    );
+  }
+
+  stream.SubtitleTrack _mapSubtitleTrack(SubtitleTrack track) {
+    final title = track.title?.trim();
+    final lang = track.language?.trim();
+
+    String label;
+    if (title != null && title.isNotEmpty) {
+      label = (lang != null &&
+              lang.isNotEmpty &&
+              !title.toLowerCase().contains(lang.toLowerCase()))
+          ? '$title ($lang)'
+          : title;
+    } else if (lang != null && lang.isNotEmpty) {
+      label = lang;
+    } else {
+      label = 'Track ${track.id}';
+    }
+
+    return stream.SubtitleTrack(
+      url: '',
+      language: label,
+      embeddedId: track.id,
+    );
   }
 
   stream.AudioTrack _mapAudioTrack(AudioTrack track) {
@@ -302,14 +387,38 @@ class MediaKitEngine implements VideoEngine {
     await _player.setRate(speed);
   }
 
+  /// Idempotent, and it has to be.
+  ///
+  /// Two owners call this: `PlayerScreen.dispose` and the provider's own
+  /// `ref.onDispose`. The flag alone was not enough -- it guarded the stream
+  /// listeners but not the teardown below, so both callers reached
+  /// `_player.dispose()`. media_kit throws on the second call, and because the
+  /// first call is never awaited that throw lands as an unhandled async error
+  /// part-way through the teardown, before `mpv_terminate_destroy` is
+  /// scheduled. The mpv context then leaks -- and with it the MediaCodec
+  /// instance it holds.
+  ///
+  /// That is what "the next episode loads everything and sits at 0:00" is: the
+  /// demuxer is fine, so the playlist parses and the duration appears, but
+  /// there is no decoder left to hand the frames to. The first playback after
+  /// a cold start works because the codec pool is empty; every one after it
+  /// inherits the leak.
+  Future<void>? _disposing;
+
   @override
-  Future<void> dispose() async {
+  Future<void> dispose() => _disposing ??= _dispose();
+
+  Future<void> _dispose() async {
     _disposed = true;
     await _positionSubscription?.cancel();
     for (final sub in _subscriptions) {
       await sub.cancel();
     }
-    await _player.dispose();
+    try {
+      await _player.dispose();
+    } catch (_) {
+      // Already gone. Nothing left to release.
+    }
   }
 
   @override

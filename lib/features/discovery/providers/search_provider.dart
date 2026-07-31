@@ -118,11 +118,7 @@ class SearchNotifier extends AsyncNotifier<PaginatedResult<UnifiedMedia>?> {
         final info = activeSources.first;
         try {
           final source =
-              (arg.type == MediaType.ANIME ||
-                  arg.type == MediaType.MOVIE ||
-                  arg.type == MediaType.TV)
-              ? ref.read(animeSourceProvider(info))
-              : ref.read(mangaSourceProvider(info));
+              ref.read(animeSourceProvider(info));
           List<UnifiedMedia> items = [];
           try {
             items = await source.getTrending(page: page);
@@ -142,11 +138,7 @@ class SearchNotifier extends AsyncNotifier<PaginatedResult<UnifiedMedia>?> {
       final futures = activeSources.map((info) async {
         try {
           final source =
-              (arg.type == MediaType.ANIME ||
-                  arg.type == MediaType.MOVIE ||
-                  arg.type == MediaType.TV)
-              ? ref.read(animeSourceProvider(info))
-              : ref.read(mangaSourceProvider(info));
+              ref.read(animeSourceProvider(info));
           return await source.search(
             arg.query,
             arg.type,

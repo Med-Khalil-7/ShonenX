@@ -1,8 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:anymex_extension_runtime_bridge/Settings/KvStore.dart';
 import 'package:anymex_extension_runtime_bridge/anymex_extension_runtime_bridge.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:get/get.dart';
 import 'package:path/path.dart' as p;
@@ -13,20 +13,28 @@ import 'package:shonenx/core/caching/cache_manager.dart';
 import 'package:shonenx/core/caching/domain/cache_entry.dart';
 import 'package:shonenx/core/network/http_adapter.dart';
 import 'package:shonenx/core/network/http_client.dart';
-import 'package:shonenx/core/services/notification_service.dart';
 import 'package:shonenx/core/utils/app_logger.dart';
 import 'package:shonenx/features/discovery/domain/media_preference.dart';
 import 'package:shonenx/features/discovery/domain/media_source_preference.dart';
-import 'package:shonenx/features/downloads/domain/models/download_task.dart';
 import 'package:shonenx/features/history/domain/models/watch_history_entry.dart';
-import 'package:shonenx/features/history/domain/models/read_history_entry.dart';
 import 'package:shonenx/features/library/domain/models/library_entry.dart';
-import 'package:shonenx/features/notifications/domain/models/notification_subscription.dart';
 import 'package:shonenx/features/tracking/domain/isar_tracker_link.dart';
-import 'package:window_manager/window_manager.dart';
 
 class AppInit {
   static bool isBridgeInitialized = false;
+
+  /// Completes when [setupBridge] has finished, successfully or not.
+  ///
+  /// The flag alone was not enough to build on. It is set in a `finally`, so
+  /// it says "we tried", not "extensions are loaded" -- and anything that
+  /// looked at the extension runtime before that point got an exception, fell
+  /// back to inbuilt sources, and had no way to hear about it later. Awaiting
+  /// this instead means a fast launch waits rather than concluding there are
+  /// no extensions. It always completes: [setupBridge] cannot leave it hanging
+  /// even when the bridge throws.
+  static final Completer<void> _bridgeReady = Completer<void>();
+  static Future<void> get bridgeReady => _bridgeReady.future;
+
   static String? pendingDeepLink;
 
   late final ScopedLogger _log = AppLogger.scope(AppInit);
@@ -39,22 +47,17 @@ class AppInit {
 
     log.section('START');
 
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      await _initWindowManager();
-      log.s('Window manager initialized');
-    }
-
-    await _initVideoEngines();
-    log.s('Video engines initialized');
-
+    // MediaKit is deliberately not initialised here. It dlopens libmpv and
+    // its JNI glue -- tens of megabytes mapped into a 1 GB device -- on every
+    // cold start, for a first screen that plays no video. videoEngineProvider
+    // does it instead, and that is the only route to a Player.
     await _initDatabase();
     log.s('Database initialized');
 
-    await _cleanupOldDslProviders();
-    log.s('Old DSL providers cleaned up');
-
-    await _initNotifications();
-    log.s('Notifications initialized');
+    // Housekeeping for a directory no build has written since the DSL sources
+    // were removed. Nothing waits on it, so it must not sit on the path to the
+    // first frame.
+    unawaited(_cleanupOldDslProviders());
 
     log.section('DONE');
 
@@ -65,9 +68,7 @@ class AppInit {
     final log = _log.child('_cleanupOldDslProviders');
     try {
       final dir = await getApplicationDocumentsDirectory();
-      final dslDir = Platform.isAndroid || Platform.isIOS || Platform.isMacOS
-          ? Directory(p.join(dir.path, 'dsl_providers'))
-          : Directory(p.join(dir.path, 'ShonenX', 'dsl_providers'));
+      final dslDir = Directory(p.join(dir.path, 'dsl_providers'));
 
       if (await dslDir.exists()) {
         await dslDir.delete(recursive: true);
@@ -75,49 +76,6 @@ class AppInit {
       }
     } catch (e) {
       log.w('Failed to delete dsl_providers: $e');
-    }
-  }
-
-  Future<void> _initWindowManager() async {
-    final log = _log.child('_initWindowManager');
-
-    try {
-      await windowManager.ensureInitialized();
-
-      bool isTilingWm = false;
-
-      if (Platform.isLinux) {
-        final env = Platform.environment;
-        final desktop = env['XDG_CURRENT_DESKTOP']?.toLowerCase() ?? '';
-        final session = env['DESKTOP_SESSION']?.toLowerCase() ?? '';
-
-        isTilingWm =
-            desktop.contains('hyprland') ||
-            session.contains('hyprland') ||
-            env.containsKey('HYPRLAND_INSTANCE_SIGNATURE') ||
-            desktop.contains('niri') ||
-            session.contains('niri');
-      }
-
-      final windowOptions = WindowOptions(
-        center: true,
-
-        backgroundColor: Platform.isWindows
-            ? const Color(0xFF000000)
-            : Colors.transparent,
-
-        titleBarStyle: isTilingWm ? TitleBarStyle.hidden : null,
-
-        windowButtonVisibility: Platform.isLinux && !isTilingWm,
-      );
-
-      await windowManager.waitUntilReadyToShow(windowOptions, () async {
-        await windowManager.show();
-        await windowManager.focus();
-      });
-    } catch (e, st) {
-      log.e('WINDOWMANAGER INIT FAILED', e, st);
-      rethrow;
     }
   }
 
@@ -135,9 +93,6 @@ class AppInit {
           MediaPreferenceSchema,
           IsarTrackerLinkSchema,
           WatchHistoryEntrySchema,
-          ReadHistoryEntrySchema,
-          DownloadTaskSchema,
-          NotificationSubscriptionSchema,
 
           // MSourceSchema,
           // SourcePreferenceSchema,
@@ -195,54 +150,46 @@ class AppInit {
         projectName: "ShonenX",
       );
 
-      await AnymeXRuntimeBridge.checkAndInitialize();
-
+      // Deliberately no checkAndInitialize() here. Get.find below constructs
+      // ExtensionManager (registered with Get.lazyPut), and its onInit already
+      // calls it. Calling it here too ran the whole runtime-host load twice on
+      // every launch -- the completer inside only dedupes *concurrent* calls,
+      // and these were sequential -- which meant unzipping every native
+      // library out of the host APK twice before the app was usable.
       final extManager = Get.find<ExtensionManager>();
 
-      int retryCount = 0;
-      while (extManager.managers.isEmpty && retryCount < 100) {
-        await Future.delayed(const Duration(milliseconds: 50));
-        retryCount++;
+      // Give the managers a moment to register, but do not sit here for a
+      // full five seconds: this runs in the background now, and a caller that
+      // needs sources reads them through providers that are invalidated once
+      // the bridge reports ready.
+      const pollInterval = Duration(milliseconds: 50);
+      const maxWait = Duration(seconds: 2);
+      var waited = Duration.zero;
+      while (extManager.managers.isEmpty && waited < maxWait) {
+        await Future.delayed(pollInterval);
+        waited += pollInterval;
       }
 
-      // await extManager.onRuntimeBridgeInitialization();
-
-      log.s('Extension bridge ready');
+      log.s(
+        'Extension bridge ready '
+        '(managers=${extManager.managers.length}, waited=${waited.inMilliseconds}ms)',
+      );
     } catch (e, st) {
       log.e('BRIDGE INIT FAILED', e, st);
       rethrow;
     } finally {
       isBridgeInitialized = true;
-    }
-  }
-
-  Future<void> _initNotifications() async {
-    final log = _log.child('_initNotifications');
-
-    try {
-      await NotificationService.instance.init();
-      log.s('Notification service initialized');
-    } catch (e, st) {
-      log.e('NOTIFICATION INIT FAILED', e, st);
-      rethrow;
+      if (!_bridgeReady.isCompleted) _bridgeReady.complete();
     }
   }
 
   static Future<Directory> getDatabaseDirectory(String dirName) async {
-    final dir = await getApplicationDocumentsDirectory();
-    if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
-      return dir;
-    } else {
-      String dbDir = p.join(dir.path, dirName, 'databases');
-      await Directory(dbDir).create(recursive: true);
-      return Directory(dbDir);
-    }
+    return getApplicationDocumentsDirectory();
   }
 
-  static Future<void> _initVideoEngines() async {
-    final log = AppLogger.scope('AppInit').child('initVideoEngines');
-
+  /// Loads libmpv. Idempotent, and called from `videoEngineProvider` rather
+  /// than from startup so a session that never opens the player never pays it.
+  static void ensureVideoEnginesReady() {
     MediaKit.ensureInitialized();
-    log.i('MediaKit initialized');
   }
 }

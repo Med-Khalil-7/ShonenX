@@ -122,6 +122,7 @@ class _ManualTrackerMatchSheetState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TextField(
+            keyboardType: TextInputType.none, // TV: never raise the system IME
             controller: _controller,
             decoration: InputDecoration(
               labelText: 'Search Anime',

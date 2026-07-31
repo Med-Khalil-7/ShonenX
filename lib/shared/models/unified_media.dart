@@ -2,8 +2,6 @@
 
 enum MediaType {
   ANIME,
-  MANGA,
-  NOVEL,
   TV,
   MOVIE;
 
@@ -11,10 +9,6 @@ enum MediaType {
     switch (this) {
       case MediaType.ANIME:
         return 'Anime';
-      case MediaType.MANGA:
-        return 'Manga';
-      case MediaType.NOVEL:
-        return 'Novel';
       case MediaType.TV:
         return 'TV Series';
       case MediaType.MOVIE:

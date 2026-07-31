@@ -72,9 +72,7 @@ class _ManualMatchSheetState extends ConsumerState<ManualMatchSheet> {
       final pref = await ref.read(
         mediaPreferenceProvider(_effectiveArgs).future,
       );
-      final source = widget.type == MediaType.ANIME
-          ? ref.read(animeSourceProvider(pref.sourceInfo))
-          : ref.read(mangaSourceProvider(pref.sourceInfo));
+      final source = ref.read(animeSourceProvider(pref.sourceInfo));
       final results = await source.search(cleanQuery, widget.type);
       if (mounted) setState(() => _results = results);
     } catch (_) {
@@ -106,6 +104,7 @@ class _ManualMatchSheetState extends ConsumerState<ManualMatchSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TextField(
+            keyboardType: TextInputType.none, // TV: never raise the system IME
             controller: _controller,
             decoration: InputDecoration(
               labelText: widget.type == MediaType.ANIME

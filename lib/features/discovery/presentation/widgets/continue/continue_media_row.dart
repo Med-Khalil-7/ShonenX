@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
+import 'package:shonenx/core/tv/tv_metrics.dart';
 import 'package:shonenx/shared/providers/ui_prefs_provider.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/continue/continue_reading_card.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/continue/continue_watching_card.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/rows/horizontal_section.dart';
-import 'package:shonenx/features/history/domain/models/read_history_entry.dart';
 import 'package:shonenx/features/history/domain/models/watch_history_entry.dart';
-import 'package:shonenx/features/history/providers/read_history_provider.dart';
 import 'package:shonenx/features/history/providers/watch_history_provider.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
 
@@ -19,11 +18,7 @@ class ContinueMediaRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isAnime = type == MediaType.ANIME;
-
-    final asyncData = isAnime
-        ? ref.watch(continueWatchingPerAnimeProvider(10))
-        : ref.watch(continueReadingPerMangaProvider(10));
+    final asyncData = ref.watch(continueWatchingPerAnimeProvider(10));
 
     if (asyncData.value?.isEmpty == true) {
       return const SizedBox.shrink();
@@ -32,55 +27,53 @@ class ContinueMediaRow extends ConsumerWidget {
     final cwStyle = ref.watch(
       uiPrefsProvider.select((p) => p.continueWatchingStyle),
     );
-    final crStyle = ref.watch(
-      uiPrefsProvider.select((p) => p.continueReadingStyle),
-    );
     final isCwWide = ref.watch(
       uiPrefsProvider.select((p) => p.isContinueWatchingWide(cwStyle.name)),
     );
-    final isCrWide = ref.watch(
-      uiPrefsProvider.select((p) => p.isContinueReadingWide(crStyle.name)),
-    );
 
-    final layoutHeight = isAnime
-        ? cwStyle
-              .getLayout(isContinueWatching: true, isWideMode: isCwWide)
-              .height
-        : crStyle
-              .getLayout(isContinueReading: true, isWideMode: isCrWide)
-              .height;
+    // The card styles carry their own pixel sizes, tuned for a phone, and a
+    // continue card came out over twice as wide as the poster beside it --
+    // the row read as a different, louder screen sitting on top of Home.
+    //
+    // Width is what is scaled rather than height: the cards are landscape and
+    // the posters portrait, so matching heights would make the cards wider
+    // still. At 1.55 posters wide a card is clearly the bigger item without
+    // dominating, and the row's height follows from it.
+    final m = ShonenXMetrics.of(context);
+    final layout = cwStyle.getLayout(
+      isContinueWatching: true,
+      isWideMode: isCwWide,
+    );
+    final cardScale = layout.width == 0
+        ? 1.0
+        : (m.rowPoster * 1.55) / layout.width;
+    final rowHeight = layout.height * cardScale;
 
     return HorizontalSection(
       title: title,
-      height: layoutHeight,
-      emptyText: isAnime ? 'No anime in this list.' : 'No manga in this list.',
+      height: rowHeight,
+      // The poster rows ask for a gap that already includes the transparent
+      // focus ring their cards carry, and the section deducts it. These cards
+      // have no such ring, so the same request would come out as almost no
+      // gap at all -- add the ring back, plus more room because the cards are
+      // wider and need the separation to read as separate.
+      gap: m.rowGap * 2.4 + TvFocus.ringWidth * 2,
+      emptyText: 'No anime in this list.',
       data: asyncData,
       onMoreTap: () => context.push('/continue/${type.id}'),
       itemBuilder: (context, dynamic entry) {
-        if (isAnime) {
-          final watchEntry = entry as WatchHistoryEntry;
-          final progress = watchEntry.durationInMilliseconds == 0
-              ? 0.0
-              : watchEntry.positionInMilliseconds /
-                    watchEntry.durationInMilliseconds;
+        final watchEntry = entry as WatchHistoryEntry;
+        final progress = watchEntry.durationInMilliseconds == 0
+            ? 0.0
+            : watchEntry.positionInMilliseconds /
+                  watchEntry.durationInMilliseconds;
 
-          return ContinueWatchingItem(
-            entry: watchEntry,
-            progress: progress,
-            style: cwStyle,
-          );
-        } else {
-          final readEntry = entry as ReadHistoryEntry;
-          final progress = readEntry.totalPages == 0
-              ? 0.0
-              : readEntry.positionPage / readEntry.totalPages;
-
-          return ContinueReadingItem(
-            entry: readEntry,
-            progress: progress,
-            style: crStyle,
-          );
-        }
+        return ContinueWatchingItem(
+          entry: watchEntry,
+          progress: progress,
+          style: cwStyle,
+          scale: cardScale,
+        );
       },
     );
   }

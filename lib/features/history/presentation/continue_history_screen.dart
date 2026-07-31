@@ -6,13 +6,11 @@ import 'package:shonenx/features/discovery/presentation/widgets/continue/continu
 import 'package:shonenx/shared/providers/ui_prefs_provider.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/cards/media_card.dart';
 import 'package:shonenx/features/history/providers/watch_history_provider.dart';
-import 'package:shonenx/features/history/providers/read_history_provider.dart';
 import 'package:shonenx/shared/widgets/app_scaffold.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
 import 'package:shonenx/shared/widgets/app_bottom_sheet.dart';
 import 'package:shonenx/core/utils/responsive.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/continue/continue_watching_card.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/continue/continue_reading_card.dart';
 
 class ContinueHistoryScreen extends ConsumerStatefulWidget {
   final MediaType type;
@@ -47,7 +45,7 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
     });
   }
 
-  Future<void> _deleteSelected(bool isAnime) async {
+  Future<void> _deleteSelected() async {
     final toDelete = _selectedIds.toList();
     setState(() {
       _selectedIds.clear();
@@ -55,11 +53,7 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
     });
 
     for (final id in toDelete) {
-      if (isAnime) {
-        await ref.read(watchHistoryRepositoryProvider).deleteByAnimeId(id);
-      } else {
-        await ref.read(readHistoryRepositoryProvider).deleteByMangaId(id);
-      }
+      await ref.read(watchHistoryRepositoryProvider).deleteByAnimeId(id);
     }
 
     if (mounted) {
@@ -76,7 +70,6 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
     String id,
     String title,
     String imageUrl,
-    bool isAnime,
   ) {
     AppBottomSheet.show(
       context: context,
@@ -86,7 +79,7 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
         children: [
           ListTile(
             leading: const Icon(Icons.play_arrow_rounded),
-            title: Text(isAnime ? 'Continue Watching' : 'Continue Reading'),
+            title: Text('Continue Watching'),
             onTap: () {
               Navigator.pop(context);
               context.push(
@@ -129,15 +122,9 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
             ),
             onTap: () async {
               Navigator.pop(context);
-              if (isAnime) {
-                await ref
-                    .read(watchHistoryRepositoryProvider)
-                    .deleteByAnimeId(id);
-              } else {
-                await ref
-                    .read(readHistoryRepositoryProvider)
-                    .deleteByMangaId(id);
-              }
+              await ref
+                  .read(watchHistoryRepositoryProvider)
+                  .deleteByAnimeId(id);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Removed from history')),
@@ -150,7 +137,7 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
     );
   }
 
-  Widget _buildSearchAndSelectionHeader(List<dynamic> filtered, bool isAnime) {
+  Widget _buildSearchAndSelectionHeader(List<dynamic> filtered) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       child: Row(
@@ -159,6 +146,7 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
             child: SizedBox(
               height: 42,
               child: TextField(
+                       keyboardType: TextInputType.none, // TV: never raise the system IME
                 controller: _searchController,
                 decoration: InputDecoration(
                   hintText: 'Search history...',
@@ -193,7 +181,7 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
                     _selectedIds.clear();
                   } else {
                     for (final e in filtered) {
-                      _selectedIds.add(isAnime ? e.animeId : e.mangaId);
+                      _selectedIds.add(e.animeId);
                     }
                   }
                 });
@@ -212,25 +200,17 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isAnime = widget.type == MediaType.ANIME;
     final style = ref.watch(uiPrefsProvider.select((s) => s.cardStyle));
     final theme = Theme.of(context);
 
-    final AsyncValue<List<dynamic>> historyAsync;
-    if (isAnime) {
-      historyAsync = ref
-          .watch(continueWatchingPerAnimeProvider(100))
-          .whenData((data) => data.toList());
-    } else {
-      historyAsync = ref
-          .watch(continueReadingPerMangaProvider(100))
-          .whenData((data) => data.toList());
-    }
+    final historyAsync = ref
+        .watch(continueWatchingPerAnimeProvider(100))
+        .whenData((data) => data.toList());
 
     return AppScaffold(
       title: _isSelectionMode
           ? '${_selectedIds.length} Selected'
-          : (isAnime ? 'Continue Watching' : 'Continue Reading'),
+          : ('Continue Watching'),
       subtitle: _isSelectionMode
           ? 'Select items to delete'
           : 'Pick up where you left off',
@@ -241,7 +221,7 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
             tooltip: 'Delete Selected',
             onPressed: _selectedIds.isEmpty
                 ? null
-                : () => _deleteSelected(isAnime),
+                : () => _deleteSelected(),
           ),
           IconButton(
             icon: const Icon(Icons.close),
@@ -266,8 +246,7 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
           final filtered = _searchQuery.isEmpty
               ? entries
               : entries.where((e) {
-                  final title =
-                      (isAnime ? e.animeTitle : e.mangaTitle) as String;
+                  final String title = e.animeTitle;
                   return title.toLowerCase().contains(_searchQuery);
                 }).toList();
 
@@ -277,11 +256,12 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
 
           return Column(
             children: [
-              _buildSearchAndSelectionHeader(filtered, isAnime),
+              _buildSearchAndSelectionHeader(filtered),
               Expanded(
                 child: filtered.isEmpty
                     ? const Center(child: Text('No matching history items.'))
                     : GridView.builder(
+                        cacheExtent: 400,
                         padding: const EdgeInsets.all(10),
                         gridDelegate: SliverGridDelegateWithMinCrossAxisExtent(
                           minCrossAxisExtent: style.layout.width,
@@ -292,15 +272,11 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
                         itemCount: filtered.length,
                         itemBuilder: (context, index) {
                           final entry = filtered[index];
-                          final String id = isAnime
-                              ? entry.animeId
-                              : entry.mangaId;
-                          final String title = isAnime
-                              ? entry.animeTitle
-                              : entry.mangaTitle;
+                          final String id = entry.animeId;
+                          final String title = entry.animeTitle;
                           final String imageUrl =
                               entry.cover ??
-                              (isAnime ? entry.thumbnailUrl : null) ??
+                              (entry.thumbnailUrl) ??
                               '';
                           final isSelected = _selectedIds.contains(id);
 
@@ -328,7 +304,6 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
                                           id,
                                           title,
                                           imageUrl,
-                                          isAnime,
                                         );
                                       }
                                     },
@@ -339,7 +314,6 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
                                           id,
                                           title,
                                           imageUrl,
-                                          isAnime,
                                         );
                                       } else {
                                         _toggleSelection(id);
@@ -417,18 +391,10 @@ class _ContinueHistoryItemsScreenState
     with ContinueMediaMixin<ContinueHistoryItemsScreen> {
   @override
   Widget build(BuildContext context) {
-    final isAnime = widget.type == MediaType.ANIME;
 
-    final AsyncValue<List<dynamic>> historyAsync;
-    if (isAnime) {
-      historyAsync = ref
-          .watch(historyEpisodesProvider(widget.mediaId))
-          .whenData((data) => data.toList());
-    } else {
-      historyAsync = ref
-          .watch(historyChaptersProvider(widget.mediaId))
-          .whenData((data) => data.toList());
-    }
+    final historyAsync = ref
+        .watch(historyEpisodesProvider(widget.mediaId))
+        .whenData((data) => data.toList());
 
     return AppScaffold(
       body: historyAsync.when(
@@ -440,47 +406,34 @@ class _ContinueHistoryItemsScreenState
           }
 
           final prefsAsync = ref.watch(uiPrefsProvider);
-          final style = isAnime
-              ? prefsAsync.continueWatchingStyle
-              : prefsAsync.continueReadingStyle;
+          final style = prefsAsync.continueWatchingStyle;
 
-          final isWideMode = isAnime
-              ? prefsAsync.isContinueWatchingWide(style.name)
-              : prefsAsync.isContinueReadingWide(style.name);
+          final isWideMode = prefsAsync.isContinueWatchingWide(style.name);
 
           final layout = style.getLayout(
-            isContinueWatching: isAnime,
-            isContinueReading: !isAnime,
+            isContinueWatching: true,
             isWideMode: isWideMode,
           );
 
           final firstEntry = entries.first;
-          final title = isAnime ? firstEntry.animeTitle : firstEntry.mangaTitle;
+          final title = firstEntry.animeTitle;
           final bannerUrl =
               firstEntry.banner ??
               firstEntry.cover ??
-              (isAnime ? firstEntry.thumbnailUrl : null);
+              (firstEntry.thumbnailUrl);
           final coverUrl = firstEntry.cover ?? bannerUrl;
           final imageUrl = bannerUrl ?? coverUrl ?? '';
 
           int totalWatched = entries.length;
           String totalTimeStr = '';
-          if (isAnime) {
-            final totalMillis = entries.fold<int>(
-              0,
-              (sum, e) => sum + ((e.durationInMilliseconds as int?) ?? 0),
-            );
-            final duration = Duration(milliseconds: totalMillis);
-            final hours = duration.inHours;
-            final mins = (duration.inMinutes % 60);
-            totalTimeStr = hours > 0 ? '${hours}h ${mins}m' : '${mins}m';
-          } else {
-            final totalPages = entries.fold<int>(
-              0,
-              (sum, e) => sum + ((e.totalPages as int?) ?? 0),
-            );
-            totalTimeStr = '$totalPages Pages';
-          }
+          final totalMillis = entries.fold<int>(
+            0,
+            (sum, e) => sum + ((e.durationInMilliseconds as int?) ?? 0),
+          );
+          final duration = Duration(milliseconds: totalMillis);
+          final hours = duration.inHours;
+          final mins = (duration.inMinutes % 60);
+          totalTimeStr = hours > 0 ? '${hours}h ${mins}m' : '${mins}m';
 
           return CustomScrollView(
             slivers: [
@@ -547,9 +500,7 @@ class _ContinueHistoryItemsScreenState
                                 _buildStatBadge(
                                   context,
                                   Icons.play_circle_outline,
-                                  isAnime
-                                      ? '$totalWatched Episodes'
-                                      : '$totalWatched Chapters',
+                                  '$totalWatched Episodes',
                                 ),
                                 const SizedBox(width: 8),
                                 _buildStatBadge(
@@ -580,27 +531,15 @@ class _ContinueHistoryItemsScreenState
                   delegate: SliverChildBuilderDelegate((context, index) {
                     final entry = entries[index];
 
-                    if (isAnime) {
-                      final duration = entry.durationInMilliseconds ?? 1;
-                      final pos = entry.positionInMilliseconds ?? 0;
-                      final progress = (duration > 0) ? (pos / duration) : 0.0;
+                    final duration = entry.durationInMilliseconds;
+                    final pos = entry.positionInMilliseconds;
+                    final progress = (duration > 0) ? (pos / duration) : 0.0;
 
-                      return ContinueWatchingItem(
-                        entry: entry,
-                        progress: progress,
-                        style: style,
-                      );
-                    } else {
-                      final total = entry.totalPages ?? 1;
-                      final current = entry.currentPage ?? 0;
-                      final progress = (total > 0) ? (current / total) : 0.0;
-
-                      return ContinueReadingItem(
-                        entry: entry,
-                        progress: progress,
-                        style: style,
-                      );
-                    }
+                    return ContinueWatchingItem(
+                      entry: entry,
+                      progress: progress,
+                      style: style,
+                    );
                   }, childCount: entries.length),
                 ),
               ),

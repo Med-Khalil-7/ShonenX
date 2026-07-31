@@ -11,13 +11,21 @@ import 'package:shonenx/features/tracking/engine/remote_tracker.dart';
 class UserHomeLayoutNotifier extends Notifier<List<HomeSection>> {
   SharedPreferences get _storage => ref.read(sharedPreferencesProvider);
 
+  /// Bumped when the shipped default changes shape.
+  ///
+  /// The default only applies when nothing is stored, so without a new key an
+  /// existing install keeps whatever the first run wrote -- which is how it
+  /// ended up showing a single row. A hand-ordered layout is lost once; it is
+  /// re-editable in Settings -> Home.
+  static const _schemaVersion = 2;
+
   String get _dataKey {
     final prefs = ref.read(discoveryPrefsProvider);
     if (prefs.mode == MetadataMode.source) {
-      return 'home_layout_source';
+      return 'home_layout_source_v$_schemaVersion';
     } else {
       final tracker = ref.read(metadataSourceProvider);
-      return 'home_layout_tracker_${tracker.type.name}';
+      return 'home_layout_tracker_${tracker.type.name}_v$_schemaVersion';
     }
   }
 
@@ -37,59 +45,68 @@ class UserHomeLayoutNotifier extends Notifier<List<HomeSection>> {
     }
 
     if (prefs.mode == MetadataMode.source || tracker == null) {
+      // One discovery section only. In source mode the feed provider ignores
+      // the category and always asks the extension for its trending list, so
+      // N category rows would be N copies of the same list; the home screen
+      // fans this one section out to a row per active extension instead.
+      // Continue Watching leads. It is the only row whose contents the user
+      // put there themselves, and the one thing they are most likely to have
+      // opened Home to reach; a category row is browsing, and browsing can
+      // wait a scroll.
       return const [
         HomeSection(
           id: '1',
-          title: 'Trending Anime',
-          type: HomeSectionType.discovery,
-          targetMediaType: MediaType.ANIME,
-          trackerCategory: TrackerCategory.trending,
-        ),
-        HomeSection(
-          id: '2',
-          title: 'Trending Manga',
-          type: HomeSectionType.discovery,
-          targetMediaType: MediaType.MANGA,
-          trackerCategory: TrackerCategory.trending,
-        ),
-        HomeSection(
-          id: '3',
           title: 'Continue Watching',
           type: HomeSectionType.continueMedia,
           targetMediaType: MediaType.ANIME,
         ),
         HomeSection(
-          id: '4',
-          title: 'Continue Reading',
-          type: HomeSectionType.continueMedia,
-          targetMediaType: MediaType.MANGA,
+          id: '3',
+          title: 'Trending Anime',
+          type: HomeSectionType.discovery,
+          targetMediaType: MediaType.ANIME,
+          trackerCategory: TrackerCategory.trending,
         ),
       ];
     } else {
       int idCounter = 1;
       final sections = <HomeSection>[];
 
+      // Continue Watching leads, ahead of every category. It is the only row
+      // whose contents the user put there themselves, and the one thing they
+      // are most likely to have opened Home to reach.
       for (final media in tracker.supportedMediaTypes) {
-        if (tracker.supportedCategories.contains(TrackerCategory.trending)) {
-          sections.add(HomeSection(
+        sections.add(
+          HomeSection(
             id: (idCounter++).toString(),
-            title: '${TrackerCategory.trending.label} ${media.displayName}',
-            type: HomeSectionType.discovery,
+            title: 'Continue Watching',
+            type: HomeSectionType.continueMedia,
             targetMediaType: media,
-            trackerCategory: TrackerCategory.trending,
-          ));
-        }
+          ),
+        );
       }
 
-      for (final media in tracker.supportedMediaTypes) {
-        sections.add(HomeSection(
-          id: (idCounter++).toString(),
-          title: (media == MediaType.MANGA || media == MediaType.NOVEL)
-              ? 'Continue Reading'
-              : 'Continue Watching',
-          type: HomeSectionType.continueMedia,
-          targetMediaType: media,
-        ));
+      // A row per category the tracker actually serves. AniList gives
+      // Trending Now, All-Time Popular, Top Rated All-Time and Upcoming Next
+      // Season; the previous default asked for Trending and stopped, which is
+      // why Home opened onto a single row.
+      for (final category in tracker.supportedCategories) {
+        for (final media in tracker.supportedMediaTypes) {
+          sections.add(
+            HomeSection(
+              id: (idCounter++).toString(),
+              // Only qualify with the media type when there is more than one
+              // to tell apart -- "Trending Now Anime" reads as a typo when
+              // anime is the only thing the app carries.
+              title: tracker.supportedMediaTypes.length > 1
+                  ? '${category.label} ${media.displayName}'
+                  : category.label,
+              type: HomeSectionType.discovery,
+              targetMediaType: media,
+              trackerCategory: category,
+            ),
+          );
+        }
       }
 
       return sections;
@@ -132,23 +149,6 @@ class UserHomeLayoutNotifier extends Notifier<List<HomeSection>> {
 
   void setSections(List<HomeSection> sections) {
     state = sections;
-    _saveDb();
-  }
-
-  void setupHomeLayoutForContentPreference({
-    required bool includeAnime,
-    required bool includeManga,
-  }) {
-    // Generate default layout based on current tracker, then filter by user preferences
-    _storage.remove(_dataKey);
-    final defaults = build();
-    
-    state = defaults.where((s) {
-      if (!includeAnime && s.targetMediaType == MediaType.ANIME) return false;
-      if (!includeManga && s.targetMediaType == MediaType.MANGA) return false;
-      return true;
-    }).toList();
-    
     _saveDb();
   }
 

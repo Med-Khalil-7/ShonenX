@@ -562,6 +562,7 @@ class _CleanTextFieldState extends State<_CleanTextField> {
                     labelWidget,
                     const SizedBox(height: 8),
                     TextField(
+                      keyboardType: TextInputType.none, // TV: never raise the system IME
                       controller: widget.controller,
                       maxLines: widget.maxLines,
                       style: TextStyle(

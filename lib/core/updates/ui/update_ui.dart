@@ -7,7 +7,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:shonenx/core/updates/models/github_release.dart';
 import 'package:shonenx/core/updates/ui/android_update_widget.dart';
-import 'package:shonenx/core/updates/ui/linux_update_widget.dart';
 import 'package:shonenx/shared/widgets/app_bottom_sheet.dart';
 
 class UpdateUI {
@@ -167,16 +166,6 @@ class UpdateUI {
                 icon: const Icon(Icons.open_in_browser_rounded, size: 18),
                 label: const Text('GitHub'),
               ),
-              if (Platform.isLinux)
-                OutlinedButton.icon(
-                  onPressed: () {
-                    onDownload?.call();
-                    context.pop();
-                    LinuxUpdateWidget.show(context);
-                  },
-                  icon: const Icon(Icons.terminal_rounded, size: 18),
-                  label: const Text('Terminal Install'),
-                ),
               if (Platform.isAndroid)
                 FilledButton.icon(
                   onPressed: () {

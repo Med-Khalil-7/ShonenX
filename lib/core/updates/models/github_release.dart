@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 
 class ReleaseAsset {
@@ -46,25 +45,7 @@ class GitHubRelease {
 
   Future<ReleaseAsset?> getBestAsset() async {
     if (assets.isEmpty) return null;
-    if (Platform.isLinux) {
-      for (final a in assets) {
-        final name = a.name.toLowerCase();
-        if (name.contains('linux') &&
-            (name.endsWith('.zip') ||
-                name.endsWith('.tar.gz') ||
-                name.endsWith('.appimage'))) {
-          return a;
-        }
-      }
-    } else if (Platform.isWindows) {
-      for (final a in assets) {
-        final name = a.name.toLowerCase();
-        if (name.endsWith('.exe') ||
-            (name.contains('win') && name.endsWith('.zip'))) {
-          return a;
-        }
-      }
-    } else if (Platform.isAndroid) {
+    {
       try {
         final deviceInfo = DeviceInfoPlugin();
         final androidInfo = await deviceInfo.androidInfo;
@@ -105,25 +86,7 @@ class GitHubRelease {
 
   String? get downloadUrl {
     if (assets.isEmpty) return null;
-    if (Platform.isLinux) {
-      for (final a in assets) {
-        final name = a.name.toLowerCase();
-        if (name.contains('linux') &&
-            (name.endsWith('.zip') ||
-                name.endsWith('.tar.gz') ||
-                name.endsWith('.appimage'))) {
-          return a.downloadUrl;
-        }
-      }
-    } else if (Platform.isWindows) {
-      for (final a in assets) {
-        final name = a.name.toLowerCase();
-        if (name.endsWith('.exe') ||
-            (name.contains('win') && name.endsWith('.zip'))) {
-          return a.downloadUrl;
-        }
-      }
-    } else if (Platform.isAndroid) {
+    {
       for (final a in assets) {
         if (a.name.toLowerCase().endsWith('.apk')) {
           return a.downloadUrl;

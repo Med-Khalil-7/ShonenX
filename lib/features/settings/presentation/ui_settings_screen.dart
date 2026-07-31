@@ -64,34 +64,6 @@ class UiSettingsScreen extends ConsumerWidget {
                 onTap: () =>
                     showContinueWatchingSheet(context, ref, notifier, theme),
               ),
-              SettingsActionTile(
-                icon: Icons.menu_book_rounded,
-                title: 'Continue Reading Style',
-                subtitle: 'Style of cards on the Continue Reading row',
-                trailing: _Chip(
-                  label: prefs.continueReadingStyle.displayName,
-                  cs: cs,
-                ),
-                onTap: () =>
-                    showContinueReadingSheet(context, ref, notifier, theme),
-              ),
-            ],
-          ),
-
-          SettingsSection(
-            title: 'Episodes',
-            children: [
-              SettingsActionTile(
-                icon: Icons.view_list_rounded,
-                title: 'Episode/Chapter View mode',
-                subtitle: 'Default view mode for episode lists',
-                trailing: _Chip(
-                  label: prefs.episodeViewMode.displayName,
-                  cs: cs,
-                ),
-                onTap: () =>
-                    showEpisodeModeSheet(context, ref, notifier, theme),
-              ),
             ],
           ),
 
