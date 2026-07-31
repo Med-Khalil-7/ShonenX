@@ -141,12 +141,13 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
   }
 
   /// Up escapes to the header, which is drawn over the hero and is therefore
-  /// invisible to geometric traversal. Left and right wrap.
+  /// invisible to geometric traversal. Right wraps; left does not.
   ///
-  /// The strip is a loop: past the last slide is the first one again. Letting
-  /// traversal fall out of the ends instead sent focus off to whatever
-  /// happened to sit beside the hero, which from the first slide meant leaving
-  /// the carousel entirely on what reads as a request to see the slide before.
+  /// Right off the end returns to the first slide, so browsing forward never
+  /// dead-ends. Left off the first slide is deliberately *not* a wrap: it falls
+  /// through so the shell can hand focus to the navigation rail, which is the
+  /// only way to reach the rail from the hero. Wrapping both ways cost the user
+  /// that route.
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
@@ -171,6 +172,9 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
     final from = _thumbFocus.indexWhere((n) => n.hasFocus);
     if (from < 0) return KeyEventResult.ignored;
 
+    // Leaving on the left edge is the shell's business, not ours.
+    if (step < 0 && from == 0) return KeyEventResult.ignored;
+
     final to = (from + step) % count;
     if (to >= 0 && to < _thumbFocus.length) {
       _thumbFocus[to].requestFocus();
@@ -191,7 +195,14 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
     final cs = theme.colorScheme;
     final size = MediaQuery.sizeOf(context);
     final m = ShonenXMetrics.of(context);
-    final height = size.height * ShonenX.heroHeightFraction;
+
+    // Snapped to a whole device pixel. A fraction of a pixel left the bottom
+    // row only partly covered by the scrim that hides the backdrop, so a
+    // hairline of the artwork showed along the hero's bottom edge -- one bright
+    // line across the full width, right where the hero meets the first row.
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final height =
+        (size.height * ShonenX.heroHeightFraction * dpr).roundToDouble() / dpr;
     final insets = TvMetrics.ofSize(size);
     final items = _items;
     final media = _current;
@@ -272,6 +283,16 @@ class _Details extends StatelessWidget {
     required this.onOpen,
   });
 
+  /// Line counts and line heights the reserved boxes are built from. Kept as
+  /// constants so the box and the Text it holds can never disagree.
+  static const _titleLines = 2;
+  static const _synopsisLines = 3;
+  static const _titleHeight = 1.1;
+  static const _bodyHeight = 1.5;
+
+  double get _titleLineHeight => metrics.titleHero * _titleHeight;
+  double get _bodyLineHeight => metrics.body * _bodyHeight;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -287,36 +308,44 @@ class _Details extends StatelessWidget {
         // own, which is what keeps the strip below on screen.
         TvMetaRow(media: media!, showGenres: true),
         SizedBox(height: m.body * 0.8),
-        Text(
-          media!.title.availableTitle,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.displaySmall?.copyWith(
-            fontSize: m.titleHero,
-            fontWeight: FontWeight.w800,
-            color: cs.onSurface,
-            height: 1.1,
+        // Title and synopsis occupy their full line count whether or not the
+        // slide fills it. Sized to content, a one-line title or a title with
+        // no synopsis behind it made the whole column shorter, and the strip
+        // below jumped up the screen as the carousel advanced -- a page
+        // indicator that will not hold still is worse than no indicator.
+        SizedBox(
+          height: _titleLineHeight * _titleLines,
+          child: Text(
+            media!.title.availableTitle,
+            maxLines: _titleLines,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.displaySmall?.copyWith(
+              fontSize: m.titleHero,
+              fontWeight: FontWeight.w800,
+              color: cs.onSurface,
+              height: _titleHeight,
+            ),
           ),
         ),
-        if (media!.description != null && media!.description!.isNotEmpty) ...[
-          SizedBox(height: m.body),
-          Text(
-            plainSynopsis(media!.description!),
-            maxLines: 3,
+        SizedBox(height: m.body),
+        SizedBox(
+          height: _bodyLineHeight * _synopsisLines,
+          child: Text(
+            plainSynopsis(media!.description ?? ''),
+            maxLines: _synopsisLines,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodyLarge?.copyWith(
               fontSize: m.body,
               color: cs.onSurfaceVariant,
-              height: 1.5,
+              height: _bodyHeight,
             ),
           ),
-        ],
-        // The strip follows the synopsis it belongs to. It used to be pushed to
-        // the foot of the hero by a Spacer here, which left it stranded halfway
-        // down the screen with nothing between it and the text it indexes.
-        // Enough of a gap that it reads as a separate control, not as a fourth
-        // line of the description.
-        SizedBox(height: m.body * 3.4),
+        ),
+        // The strip hugs the foot of the hero. With the block above at a fixed
+        // height that is a fixed position, so it neither drifts between slides
+        // nor sits adrift in the middle of the screen -- the hero's own height
+        // is what places it, and that is tuned to land just under the text.
+        const Spacer(),
         if (items.isNotEmpty)
           _SlideStrip(
             items: items,
@@ -326,10 +355,6 @@ class _Details extends StatelessWidget {
             autofocus: autofocus,
             onOpen: onOpen,
           ),
-        // Slack now sits below the strip. Still a Spacer rather than nothing,
-        // so a viewport too short for the column shrinks this to zero instead
-        // of overflowing.
-        const Spacer(),
       ],
     );
   }

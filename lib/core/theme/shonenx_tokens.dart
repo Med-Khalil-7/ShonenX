@@ -61,7 +61,7 @@ abstract final class ShonenX {
   /// Cut from 0.72 once the strip moved up to sit under the synopsis: the
   /// hero's content ended well before its box did, so the extra height was
   /// pure empty space between the strip and the first row.
-  static const heroHeightFraction = 0.62;
+  static const heroHeightFraction = 0.56;
 }
 
 /// Every size in the TV design, as a fraction of the viewport width.
