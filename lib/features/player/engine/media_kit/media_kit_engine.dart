@@ -166,6 +166,22 @@ class MediaKitEngine implements VideoEngine {
     });
   }
 
+  /// How long to wait for the first frame before calling it a failure.
+  ///
+  /// Generous, because a cold seek into an unbuffered HLS stream on a slow
+  /// connection is legitimately slow. The point is not to be strict, it is to
+  /// be finite.
+  static const _readyTimeout = Duration(seconds: 25);
+
+  /// Waits for playback to actually start, then runs [onReady].
+  ///
+  /// Readiness is "position moved past zero", which only the listener below
+  /// can observe -- so if the stream never starts decoding, that listener
+  /// never fires. Without a timeout the future here never completed and
+  /// `initialize` never returned, which is what left the player spinning at
+  /// 0:00 with no error: the caller's `isLoading = false` was on the next
+  /// line and was never reached. A stream the device cannot decode has to
+  /// fail, not hang.
   Future<void> _waitUntilReady(Future<void> Function() onReady) async {
     await _positionSubscription?.cancel();
     _positionSubscription = null;
@@ -187,7 +203,13 @@ class MediaKitEngine implements VideoEngine {
       }
     });
 
-    await completer.future;
+    try {
+      await completer.future.timeout(_readyTimeout);
+    } on TimeoutException {
+      await _positionSubscription?.cancel();
+      _positionSubscription = null;
+      throw PlaybackDidNotStartException(_readyTimeout);
+    }
   }
 
   @override

@@ -56,3 +56,20 @@ abstract class VideoEngine {
   /// platform texture the widget layer cannot read back.
   Future<Uint8List?> grabCurrentFrame() async => null;
 }
+
+/// Thrown when a stream opens but never produces a first frame.
+///
+/// The demuxer and the decoder are independent: a playlist can parse and a
+/// duration can appear while nothing is being decoded at all. That is what a
+/// codec the device cannot handle looks like from the outside, and it is worth
+/// naming so the UI can say something better than showing a spinner forever.
+class PlaybackDidNotStartException implements Exception {
+  final Duration waited;
+
+  const PlaybackDidNotStartException(this.waited);
+
+  @override
+  String toString() =>
+      'Playback did not start within ${waited.inSeconds}s. This source may use '
+      'a format this device cannot decode -- try another quality or server.';
+}
