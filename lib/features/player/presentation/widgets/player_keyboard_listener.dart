@@ -26,6 +26,11 @@ class PlayerKeyboardListener extends ConsumerWidget {
 
   final bool controlsVisible;
 
+  /// Starts a scrub from a left/right press that arrived with the controls
+  /// down. Without it that press only wakes the buttons, and reaching the
+  /// timeline costs a second press and a traversal -- no TV player does that.
+  final void Function(bool forward)? onScrub;
+
   /// Reveal the controls and hand focus to play/pause.
   final VoidCallback onWake;
 
@@ -41,6 +46,7 @@ class PlayerKeyboardListener extends ConsumerWidget {
     required this.engine,
     required this.controller,
     required this.controlsVisible,
+    this.onScrub,
     required this.onWake,
     required this.onUserInteraction,
     required this.onToggleEpisodePanel,
@@ -133,9 +139,20 @@ class PlayerKeyboardListener extends ConsumerWidget {
     }
 
     if (!controlsVisible && _directional.contains(key)) {
-      // The first press only wakes the overlay. It must not also activate
-      // whatever button focus happens to land on.
-      if (isDown) onWake();
+      final scrub = onScrub;
+      final horizontal =
+          key == LogicalKeyboardKey.arrowLeft ||
+          key == LogicalKeyboardKey.arrowRight;
+
+      // Left and right go straight to the timeline, the way a TV player is
+      // expected to behave. Up and down still just raise the overlay.
+      if (isDown && horizontal && scrub != null) {
+        scrub(key == LogicalKeyboardKey.arrowRight);
+      } else if (isDown) {
+        // The first press only wakes the overlay. It must not also activate
+        // whatever button focus happens to land on.
+        onWake();
+      }
       return KeyEventResult.handled;
     }
 

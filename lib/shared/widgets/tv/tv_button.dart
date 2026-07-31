@@ -45,6 +45,10 @@ class TvButton extends StatelessWidget {
 
   final double height;
 
+  /// Colour of the focus ring. Transparent for buttons that already read as
+  /// prominent on their own -- a white ring around a white button is noise.
+  final Color? ringColor;
+
   /// Scroll into view on focus. Turn off where the button is known to be in
   /// the first screenful: the default centres it, which on a scrollable page
   /// silently scrolls the heading above it out of sight.
@@ -63,6 +67,7 @@ class TvButton extends StatelessWidget {
     this.width,
     this.height = 64,
     this.ensureVisible = true,
+    this.ringColor,
   });
 
   @override
@@ -91,6 +96,7 @@ class TvButton extends StatelessWidget {
       focusNode: focusNode,
       ensureVisible: ensureVisible,
       borderRadius: BorderRadius.circular(8),
+      ringColor: ringColor,
       // The ring sits outside the fill, so the button must not also grow --
       // two rows of these would jostle each other.
       scaleOnFocus: false,

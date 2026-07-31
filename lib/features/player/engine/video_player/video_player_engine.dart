@@ -14,6 +14,7 @@ class VideoPlayerEngine implements VideoEngine {
   VideoPlayerController? _controller;
   final Ref ref;
 
+
   static final HTTP _http = HTTP();
 
   VideoPlayerEngine(this.ref);
@@ -29,6 +30,7 @@ class VideoPlayerEngine implements VideoEngine {
     ref
         .read(videoEngineStateProvider.notifier)
         .updateState(isBuffering: true, isPlaying: false);
+
 
     _controller?.removeListener(_listener);
     await _controller?.dispose();
@@ -80,12 +82,43 @@ class VideoPlayerEngine implements VideoEngine {
     return Consumer(
       builder: (context, ref, _) {
         final fit = ref.watch(videoEngineStateProvider.select((s) => s.fit));
+        // Rebuilds when the controller itself is swapped -- a new episode or a
+        // quality change replaces it, and the closure below captures the old
+        // one otherwise.
+        ref.watch(videoEngineStateProvider.select((s) => s.duration));
 
-        if (_controller == null || !_controller!.value.isInitialized) {
+        final controller = _controller;
+        if (controller == null) {
           return const ColoredBox(color: Colors.black);
         }
 
-        final size = _controller!.value.size;
+        // Listening to the controller is what makes the first frame appear.
+        //
+        // This used to read `value.isInitialized` inside a Consumer that only
+        // watched `fit`, so nothing rebuilt it when initialisation finished:
+        // the black box stayed until something unrelated happened to repaint
+        // the tree -- a remote press, a panel closing. The video was playing
+        // the whole time, just never drawn.
+        return ValueListenableBuilder<VideoPlayerValue>(
+          valueListenable: controller,
+          builder: (context, value, _) {
+            if (!value.isInitialized) {
+              return const ColoredBox(color: Colors.black);
+            }
+            return _videoBox(context, controller, value, fit);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _videoBox(
+    BuildContext context,
+    VideoPlayerController controller,
+    VideoPlayerValue value,
+    BoxFit fit,
+  ) {
+        final size = value.size;
         final aspectWidth = size.width > 0 ? size.width : 16.0;
         final aspectHeight = size.height > 0 ? size.height : 9.0;
         final aspectRatio = aspectWidth / aspectHeight;
@@ -102,13 +135,11 @@ class VideoPlayerEngine implements VideoEngine {
               child: SizedBox(
                 width: boxWidth,
                 height: boxHeight,
-                child: VideoPlayer(_controller!),
+                child: VideoPlayer(controller),
               ),
             ),
           ),
         );
-      },
-    );
   }
 
   @override
@@ -187,21 +218,6 @@ class VideoPlayerEngine implements VideoEngine {
 
   @override
   Duration get currentDuration => _controller?.value.duration ?? Duration.zero;
-
-  // ExoPlayer gives no way to read a decoded frame back, at any position. The
-  // scrub preview falls back to a bare time readout on this engine.
-  /// No frame preview on this engine, so nothing to point anywhere.
-  @override
-  void setPreviewSource(VideoStream? stream) {}
-
-  @override
-  bool get supportsFramePreview => false;
-
-  @override
-  Future<Uint8List?> grabFrameAt(Duration position) async => null;
-
-  @override
-  Future<void> releaseFramePreview() async {}
 
   @override
   Future<Uint8List?> grabCurrentFrame() async => null;

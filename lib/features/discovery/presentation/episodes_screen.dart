@@ -9,8 +9,10 @@ import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/e
 import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_source_header.dart';
 import 'package:shonenx/features/history/providers/watch_history_provider.dart';
 import 'package:shonenx/features/player/domain/player_mode.dart';
+import 'package:shonenx/shared/models/unified_episode.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
 import 'package:shonenx/shared/widgets/app_scaffold.dart';
+import 'package:shonenx/source_engine/models/source_info.dart';
 import 'package:shonenx/source_engine/utils/media_type_extensions.dart';
 
 /// The episode picker, full screen.
@@ -22,7 +24,15 @@ import 'package:shonenx/source_engine/utils/media_type_extensions.dart';
 class EpisodesScreen extends ConsumerWidget {
   final UnifiedMedia media;
 
-  const EpisodesScreen({super.key, required this.media});
+  /// What to do with the chosen episode.
+  ///
+  /// Null starts the player, which is what the route does. The player itself
+  /// mounts this same screen over its own surface and passes a callback that
+  /// switches episode in place -- so the picker is one widget used twice
+  /// rather than two that drift apart.
+  final void Function(UnifiedEpisode episode, SourceInfo sourceInfo)? onPlay;
+
+  const EpisodesScreen({super.key, required this.media, this.onPlay});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -103,6 +113,12 @@ class EpisodesScreen extends ConsumerWidget {
                     bottom: m.body * 2,
                   ),
                   onEpisodeTap: (episode, sourceInfo) {
+                    final handler = onPlay;
+                    if (handler != null) {
+                      handler(episode, sourceInfo);
+                      return;
+                    }
+
                     final entry = history
                         .where((e) => e.episodeNumber == episode.number)
                         .firstOrNull;

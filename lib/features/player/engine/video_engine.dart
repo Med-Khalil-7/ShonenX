@@ -23,31 +23,6 @@ abstract class VideoEngine {
   Duration get currentPosition;
   Duration get currentDuration;
 
-  /// Whether [grabFrameAt] can return anything.
-  ///
-  /// False on engines that cannot decode off the timeline. Callers must fall
-  /// back rather than assume -- the scrub preview degrades to a bare time
-  /// readout when this is false.
-  bool get supportsFramePreview => false;
-
-  /// A JPEG of the frame at [position], or null if one cannot be produced.
-  ///
-  /// Null is an ordinary outcome, not a failure: the platform may refuse, the
-  /// seek may time out, or the engine may be mid-teardown.
-  Future<Uint8List?> grabFrameAt(Duration position) async => null;
-
-  /// Points [grabFrameAt] at a cheaper rendition of the same episode.
-  ///
-  /// The preview decodes in software on a second player, so aiming it at the
-  /// 1080p stream the viewer is watching makes every scrub step cost a
-  /// full-size decode. Null means "use whatever is playing".
-  void setPreviewSource(VideoStream? stream) {}
-
-  /// Drops any resources held for [grabFrameAt].
-  ///
-  /// Called when scrubbing stops. The frame source can be expensive to keep
-  /// alive, and nothing needs it between scrubs.
-  Future<void> releaseFramePreview() async {}
 
   /// A JPEG of the frame on screen right now, or null.
   ///

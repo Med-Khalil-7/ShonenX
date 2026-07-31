@@ -42,26 +42,32 @@ abstract final class TvConfirmDialog {
                       ),
                     ),
                     SizedBox(height: m.label * 3),
+                    // Expanded, not a fraction of the dialog. Two buttons at
+                    // 0.38 each plus the gap between them plus the padding
+                    // either side added up to more than the dialog is wide, so
+                    // the row overflowed -- and any longer label made it
+                    // worse. Sharing what is actually left cannot overflow.
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        TvButton(
-                          label: confirmLabel,
-                          width: m.dialogWidth * 0.38,
-                          height: m.buttonHeight * 0.9,
-                          // The dialog only ever appears because the user
-                          // asked to leave, so confirm is the likely answer
-                          // and should be one press away.
-                          autofocus: true,
-                          onPressed: () => Navigator.of(ctx).pop(true),
+                        Expanded(
+                          child: TvButton(
+                            label: confirmLabel,
+                            height: m.buttonHeight * 0.9,
+                            // The dialog only ever appears because the user
+                            // asked to leave, so confirm is the likely answer
+                            // and should be one press away.
+                            autofocus: true,
+                            onPressed: () => Navigator.of(ctx).pop(true),
+                          ),
                         ),
-                        SizedBox(width: m.label * 2.5),
-                        TvButton(
-                          label: cancelLabel,
-                          width: m.dialogWidth * 0.38,
-                          height: m.buttonHeight * 0.9,
-                          variant: TvButtonVariant.filledSurface,
-                          onPressed: () => Navigator.of(ctx).pop(false),
+                        SizedBox(width: m.label),
+                        Expanded(
+                          child: TvButton(
+                            label: cancelLabel,
+                            height: m.buttonHeight * 0.9,
+                            variant: TvButtonVariant.filledSurface,
+                            onPressed: () => Navigator.of(ctx).pop(false),
+                          ),
                         ),
                       ],
                     ),

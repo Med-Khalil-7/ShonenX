@@ -108,14 +108,14 @@ final videoEngineStateProvider =
     );
 
 final videoEngineProvider = Provider.autoDispose<VideoEngine>((ref) {
-  // The only path to a Player, so this is where libmpv gets loaded. Keeping it
-  // out of AppInit means a browse-only session never maps it at all.
-  AppInit.ensureVideoEnginesReady();
-
   final playerType = ref.watch(playerPrefsProvider.select((s) => s.playerType));
 
   switch (playerType) {
     case PlayerType.mediakit:
+      // libmpv is mapped here and nowhere else, so an ExoPlayer session never
+      // loads it at all -- tens of megabytes that a 1 GB box keeps for the
+      // video decoder instead.
+      AppInit.ensureVideoEnginesReady();
       final prefs = ref.read(mediaKitPrefsProvider);
       final engine = MediaKitEngine(prefs, ref);
 

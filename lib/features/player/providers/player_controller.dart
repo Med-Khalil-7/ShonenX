@@ -196,10 +196,84 @@ class PlayerController extends Notifier<PlayerState> {
       _media = mode.media;
 
       await _loadData(mode.episode, startPosition: mode.startPosition);
+    } else if (mode is PlayerModeAuto) {
+      await _resolveAndLoad(mode);
     } else if (mode is PlayerModeOffline) {
       _source = null;
       _media = null;
       await _loadOfflineData(mode);
+    }
+  }
+
+  /// Works out which episode to play, then plays it.
+  ///
+  /// This is the work the callers used to do before navigating -- fetching the
+  /// episode list is a network round trip, and doing it up front meant the play
+  /// button sat spinning on the previous screen. Done here the player is
+  /// already on screen, so the wait happens against the surface it is about to
+  /// fill instead of against a list the user has finished with.
+  Future<void> _resolveAndLoad(PlayerModeAuto mode) async {
+    state = state.copyWith(isLoading: true, error: null);
+    _media = mode.media;
+
+    try {
+      final listState = await ref.read(
+        episodesListProvider(MediaArgs.fromMedia(mode.media)).future,
+      );
+      final episodes = listState.episodes;
+      if (episodes.isEmpty) {
+        state = state.copyWith(
+          isLoading: false,
+          error: 'No episodes found for this source.',
+        );
+        return;
+      }
+
+      _source = ref.read(animeSourceProvider(listState.source));
+
+      // An explicit episode from the caller wins -- continue-watching knows
+      // exactly where it left off.
+      UnifiedEpisode? target;
+      Duration? startPosition = mode.startPosition;
+
+      if (mode.episodeNumber != null) {
+        target = episodes.firstWhereOrNull(
+          (e) => e.number == mode.episodeNumber,
+        );
+      }
+
+      if (target == null) {
+        // Resume the part-watched episode, else the one after the last
+        // finished, else the first.
+        final history =
+            ref.read(historyEpisodesProvider(mode.media.id)).value ?? [];
+        final last = history.firstOrNull;
+        if (last != null) {
+          final partway =
+              last.positionInMilliseconds > 0 &&
+              last.positionInMilliseconds < last.durationInMilliseconds;
+          if (partway) {
+            target = episodes.firstWhereOrNull(
+              (e) => e.number == last.episodeNumber,
+            );
+            startPosition ??= Duration(
+              milliseconds: last.positionInMilliseconds,
+            );
+          } else {
+            target = episodes.firstWhereOrNull(
+              (e) => e.number == last.episodeNumber + 1,
+            );
+          }
+        }
+      }
+      target ??= episodes.first;
+
+      await _loadData(target, startPosition: startPosition);
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Could not start playback: $e',
+      );
     }
   }
 
@@ -527,7 +601,6 @@ class PlayerController extends Notifier<PlayerState> {
                 : activeSubtitle,
             startAt: startPosition,
           );
-      _armPreviewSource();
 
       _startProgressTracker();
     } catch (e) {
@@ -538,6 +611,22 @@ class PlayerController extends Notifier<PlayerState> {
   Future<void> changeStream(VideoStream newStream) async {
     final engine = ref.read(videoEngineProvider);
     final currentPos = engine.currentPosition;
+
+    // Remember the language this mirror represents.
+    //
+    // For these sources the mirror list *is* the language picker -- one label
+    // carries both axes, `Japanese - 1080p`. changeQuality and changeAudioTrack
+    // both persisted their choice; this one did not, so picking a language here
+    // was forgotten the moment the next episode loaded and the mirror was
+    // chosen from defaults again. _preferredAudioLang is what _loadData filters
+    // the mirror list by, so writing it here is what makes the choice stick.
+    final language = StreamCatalog.from(
+      state.streams,
+    ).facetFor(newStream)?.language;
+    if (language != null && language.isNotEmpty) {
+      _preferredAudioLang = language;
+      ref.read(playerPrefsProvider.notifier).setDefaultAudioLang(language);
+    }
 
     state = state.copyWith(
       isLoading: true,
@@ -589,7 +678,6 @@ class PlayerController extends Notifier<PlayerState> {
             : newStream.subtitles.firstOrNull,
         startAt: currentPos,
       );
-      _armPreviewSource();
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -628,7 +716,6 @@ class PlayerController extends Notifier<PlayerState> {
             : state.activeSubtitle,
         startAt: currentPos,
       );
-      _armPreviewSource();
       state = state.copyWith(isLoading: false);
     } catch (e) {
       state = state.copyWith(
@@ -735,12 +822,6 @@ class PlayerController extends Notifier<PlayerState> {
   ///
   /// Safe to call whenever the quality list changes; a null result leaves the
   /// engine previewing whatever is playing, which is the old behaviour.
-  void _armPreviewSource() {
-    ref
-        .read(videoEngineProvider)
-        .setPreviewSource(StreamCatalog.cheapestRendition(state.qualities));
-  }
-
   Future<void> _startProgressTracker() async {
     _progressTimer?.cancel();
     _progressTimer = Timer.periodic(

@@ -15,7 +15,10 @@ enum PlayerType {
     if (value == 'betterplayer' || value == 'mdk' || value == 'videoPlayer') {
       return PlayerType.videoPlayer;
     }
-    return PlayerType.mediakit;
+    if (value == 'mediakit') return PlayerType.mediakit;
+    // Unrecognised or absent: follow the platform default rather than
+    // pinning everyone to mpv.
+    return Platform.isAndroid ? PlayerType.videoPlayer : PlayerType.mediakit;
   }
 }
 
@@ -170,11 +173,33 @@ class PlayerPrefsNotifier extends Notifier<PlayerPrefsState> {
     final prefs = ref.read(sharedPreferencesProvider);
     final json = prefs.getString(_key);
     if (json != null) {
-      return PlayerPrefsState.fromJson(jsonDecode(json));
+      final saved = PlayerPrefsState.fromJson(jsonDecode(json));
+
+      // One-time move off mpv on Android. Anyone who used the app before this
+      // has mediakit written into their prefs, so a change of default alone
+      // would never reach them -- and mpv is the engine that opens a stream,
+      // reports its duration and then never renders a frame on TV hardware.
+      // Recorded with its own flag so switching back to mpv deliberately
+      // sticks rather than being undone on the next launch.
+      const migrationKey = '${_key}_exo_migration';
+      if (Platform.isAndroid &&
+          saved.playerType == PlayerType.mediakit &&
+          !(prefs.getBool(migrationKey) ?? false)) {
+        prefs.setBool(migrationKey, true);
+        final migrated = saved.copyWith(playerType: PlayerType.videoPlayer);
+        prefs.setString(_key, jsonEncode(migrated.toJson()));
+        return migrated;
+      }
+      return saved;
     }
+    // ExoPlayer is the default on Android. libmpv opens the stream and reads
+    // its metadata but frequently never produces a frame on TV hardware --
+    // duration appears, playback sits at 0:00 -- and its surface teardown
+    // blocks the main isolate hard enough for Android to kill the app.
+    // ExoPlayer is the platform decoder these boxes are built around.
     return PlayerPrefsState(
       playerType: Platform.isAndroid
-          ? PlayerType.mediakit
+          ? PlayerType.videoPlayer
           : PlayerType.mediakit,
     );
   }

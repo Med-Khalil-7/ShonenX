@@ -111,58 +111,6 @@ class StreamCatalog {
   bool get hasLanguages => languages.length > 1;
   bool get hasHeights => heights.length > 1;
 
-  /// Cheapest rendition to point the scrub preview at.
-  ///
-  /// The preview runs a second player that decodes in software. Aimed at the
-  /// 1080p variant the viewer is watching, every step of the scrub costs a
-  /// full-size software decode, which on a weak box is most of why dragging
-  /// through an episode stutters. Aimed at the smallest variant it costs a
-  /// fraction of that, and the result is a thumbnail either way.
-  ///
-  /// Null means "nothing better than what is already playing" -- the caller
-  /// keeps its current behaviour rather than guessing.
-  static VideoStream? cheapestRendition(List<VideoStream> qualities) {
-    // Entry zero is the master playlist relabelled 'Auto'. Handing that to the
-    // preview player lets it negotiate its way straight back up to 1080p.
-    final variants = [
-      for (final q in qualities)
-        if (q.quality.trim().toLowerCase() != 'auto') q,
-    ];
-    if (variants.isEmpty) return null;
-
-    final ranked = StreamCatalog.from(
-      variants,
-    ).facets.where((f) => f.height != null).toList();
-    if (ranked.isNotEmpty) {
-      ranked.sort((a, b) => a.height!.compareTo(b.height!));
-      return ranked.first.stream;
-    }
-
-    // Variants with no RESOLUTION in the playlist get a bitrate label instead.
-    final byBitrate = <({int kbps, VideoStream stream})>[];
-    for (final v in variants) {
-      final m = RegExp(
-        r'(\d+)\s*kbps',
-        caseSensitive: false,
-      ).firstMatch(v.quality);
-      if (m != null) {
-        byBitrate.add((kbps: int.parse(m.group(1)!), stream: v));
-      }
-    }
-    if (byBitrate.isNotEmpty) {
-      byBitrate.sort((a, b) => a.kbps.compareTo(b.kbps));
-      return byBitrate.first.stream;
-    }
-
-    // A single unrankable variant still beats the master playlist.
-    if (variants.length == 1) return variants.single;
-
-    // Several variants and nothing to order them by. Masters are conventionally
-    // ascending by bandwidth but nothing guarantees it, so guessing risks
-    // handing the preview the most expensive stream of the lot.
-    return null;
-  }
-
   StreamFacet? facetFor(VideoStream? stream) {
     if (stream == null) return null;
     for (final f in facets) {

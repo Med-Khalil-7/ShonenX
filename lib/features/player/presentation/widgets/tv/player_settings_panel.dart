@@ -5,6 +5,7 @@ import 'package:shonenx/core/tv/tv_focusable.dart';
 import 'package:shonenx/features/player/domain/stream_catalog.dart';
 import 'package:shonenx/features/player/engine/video_engine.dart';
 import 'package:shonenx/features/player/providers/player_controller.dart';
+import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
 import 'package:shonenx/features/player/providers/video_engine_provider.dart';
 import 'package:shonenx/features/settings/presentation/widgets/subtitle_settings_sheet.dart';
 import 'package:shonenx/shared/models/video_server.dart';
@@ -140,6 +141,21 @@ class _PlayerSettingsPanelState extends ConsumerState<PlayerSettingsPanel> {
           },
           onTap: () =>
               ref.read(videoEngineStateProvider.notifier).cycleFit(),
+        ),
+        _NavRow(
+          label: 'Skip intro / outro button',
+          value: ref.watch(
+                playerPrefsProvider.select((p) => p.showAniSkipButton),
+              )
+              ? 'On'
+              : 'Off',
+          showChevron: false,
+          onTap: () {
+            final prefs = ref.read(playerPrefsProvider);
+            ref
+                .read(playerPrefsProvider.notifier)
+                .setShowAniSkipButton(!prefs.showAniSkipButton);
+          },
         ),
         _NavRow(
           label: 'Subtitle style',
@@ -349,11 +365,15 @@ class _NavRow extends StatelessWidget {
   final VoidCallback onTap;
   final bool autofocus;
 
+  /// A row that flips a value in place has nowhere to point to.
+  final bool showChevron;
+
   const _NavRow({
     required this.label,
     required this.value,
     required this.onTap,
     this.autofocus = false,
+    this.showChevron = true,
   });
 
   @override
@@ -391,11 +411,14 @@ class _NavRow extends StatelessWidget {
                 ),
               ),
             SizedBox(width: m.meta * 0.6),
-            Icon(
-              Icons.chevron_right,
-              size: m.meta * 1.5,
-              color: cs.onSurfaceVariant,
-            ),
+            if (showChevron)
+              Icon(
+                Icons.chevron_right,
+                size: m.meta * 1.5,
+                color: cs.onSurfaceVariant,
+              )
+            else
+              SizedBox(width: m.meta * 1.5),
           ],
         ),
       ),

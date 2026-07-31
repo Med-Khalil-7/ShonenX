@@ -43,17 +43,42 @@ class _PlayerSkipButtonState extends ConsumerState<PlayerSkipButton> {
   /// The stamp being offered, if any.
   AniSkipStamp? _showing;
 
-  /// Stamps already offered this episode. Once dismissed or used, a stamp does
-  /// not come back -- otherwise leaving the overlay open through an opening
-  /// re-triggers it every second.
+  /// Stamps dismissed during the current visit to their window.
+  ///
+  /// Cleared the moment playback leaves the window, so seeking back into an
+  /// opening offers the button again with a fresh countdown. It only exists to
+  /// stop a dismissed button re-appearing every second while you are still
+  /// sitting inside the same stamp.
   final Set<SkipType> _spent = {};
 
   Timer? _hideTimer;
   FocusNode? _restoreTo;
 
   @override
+  void initState() {
+    super.initState();
+    _focus.addListener(_holdFocus);
+  }
+
+  /// While the button is up it stays the selected control.
+  ///
+  /// Otherwise revealing the overlay hands focus to the transport row and OK
+  /// plays or pauses instead of skipping -- with a skip button plainly on
+  /// screen. It is only up for a few seconds, and dismisses itself.
+  void _holdFocus() {
+    if (!mounted || _showing == null || _focus.hasFocus) return;
+    if (!ref.read(playerPrefsProvider).focusSkipButton) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _showing != null && !_focus.hasFocus) {
+        _focus.requestFocus();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _hideTimer?.cancel();
+    _focus.removeListener(_holdFocus);
     _focus.dispose();
     super.dispose();
   }
@@ -74,12 +99,12 @@ class _PlayerSkipButtonState extends ConsumerState<PlayerSkipButton> {
     _hideTimer = Timer(Duration(seconds: hold), _dismiss);
   }
 
-  void _dismiss() {
+  void _dismiss({bool markSpent = true}) {
     if (!mounted || _showing == null) return;
     _hideTimer?.cancel();
     final stamp = _showing;
     setState(() => _showing = null);
-    if (stamp != null) _spent.add(stamp.type);
+    if (markSpent && stamp != null) _spent.add(stamp.type);
 
     // Hand focus back only if we still hold it; the user may have moved on.
     if (_focus.hasFocus) {
@@ -113,25 +138,33 @@ class _PlayerSkipButtonState extends ConsumerState<PlayerSkipButton> {
       if (!prefs.showAniSkipButton) return;
       final seconds = pos.inSeconds;
 
+      // Whether we are inside a stamp at all, independent of whether it has
+      // already been dismissed. Folding the two together meant a dismissed
+      // stamp read as "outside", which cleared the dismissal and re-offered
+      // it immediately.
       final inside = stamps.cast<AniSkipStamp?>().firstWhere(
         (s) =>
             s != null &&
             seconds >= s.startTime &&
             seconds < s.endTime &&
-            skipPrefs.mode(s.type) != SkipMode.off &&
-            !_spent.contains(s.type),
+            skipPrefs.mode(s.type) != SkipMode.off,
         orElse: () => null,
       );
 
-      if (inside != null && _showing?.type != inside.type) {
+      if (inside == null) {
+        // Left the window. A later seek back in should offer it again, with
+        // the countdown starting over.
+        _spent.clear();
+        if (_showing != null) _dismiss(markSpent: false);
+        return;
+      }
+
+      if (!_spent.contains(inside.type) && _showing?.type != inside.type) {
         _offer(
           inside,
           takeFocus: prefs.focusSkipButton,
           hold: prefs.skipButtonHoldSeconds,
         );
-      } else if (inside == null && _showing != null) {
-        // Walked out of the stamp without pressing it.
-        _dismiss();
       }
     });
 
@@ -157,6 +190,10 @@ class _PlayerSkipButtonState extends ConsumerState<PlayerSkipButton> {
         height: m.playerButtonHeight,
         focusNode: _focus,
         variant: TvButtonVariant.filledWhite,
+        // No focus ring. It takes focus the moment it appears, so the ring was
+        // permanently on -- a white outline around an already-white button
+        // over dark video, which read as a highlighter rather than as focus.
+        ringColor: Colors.transparent,
         ensureVisible: false,
         onPressed: () => _skip(stamp),
       ),
