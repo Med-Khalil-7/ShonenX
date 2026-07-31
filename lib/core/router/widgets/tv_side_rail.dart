@@ -279,7 +279,11 @@ class _RailLogo extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   maxWidth: expandedWidth,
                   child: Padding(
-                    padding: EdgeInsets.only(left: m.railItemInset * 0.6),
+                    // Wider than the gap a destination row needs. The icons
+                    // sit centred in a box larger than themselves and get
+                    // clear space for free; the mark fills its box edge to
+                    // edge, so all of its breathing room has to be asked for.
+                    padding: EdgeInsets.only(left: m.railItemInset * 1.9),
                     child: Text(
                       'ShonenX',
                       maxLines: 1,
