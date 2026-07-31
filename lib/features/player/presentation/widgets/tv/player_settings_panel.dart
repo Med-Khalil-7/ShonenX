@@ -167,7 +167,7 @@ class _PlayerSettingsPanelState extends ConsumerState<PlayerSettingsPanel> {
       case _Section.quality:
         return _OptionList<VideoStream>(
           options: state.qualities,
-          labelOf: (q) => q.quality ?? 'Auto',
+          labelOf: (q) => q.quality,
           isSelected: (q) => q == state.activeQuality,
           onSelected: (q) {
             widget.controller.changeQuality(q);
@@ -187,7 +187,7 @@ class _PlayerSettingsPanelState extends ConsumerState<PlayerSettingsPanel> {
       case _Section.stream:
         return _OptionList<VideoStream>(
           options: state.streams,
-          labelOf: (s) => s.quality ?? 'Stream',
+          labelOf: (s) => s.quality,
           isSelected: (s) => s == state.activeStream,
           onSelected: (s) {
             widget.controller.changeStream(s);

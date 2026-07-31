@@ -21,6 +21,7 @@ import 'package:shonenx/features/player/providers/aniskip_provider.dart';
 import 'package:shonenx/features/player/providers/player_controller.dart';
 import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
 import 'package:shonenx/features/player/providers/video_engine_provider.dart';
+import 'package:shonenx/shared/models/unified_episode.dart';
 import 'package:shonenx/shared/models/video_stream.dart';
 import 'package:shonenx/core/utils/extensions.dart';
 import 'package:shonenx/shared/widgets/tv/tv_button.dart';
@@ -356,14 +357,14 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   }
 
   /// `E01 "Cruelty"`, or just `E01` when the source gives no episode title.
-  static String? _episodeLabel(dynamic episode) {
+  static String? _episodeLabel(UnifiedEpisode? episode) {
     if (episode == null) return null;
-    final number = episode.number as double;
+    final number = episode.number;
     final asText = number == number.roundToDouble()
         ? number.toInt().toString()
         : number.toString();
     final label = 'E${asText.padLeft(2, '0')}';
-    final title = episode.title as String?;
+    final title = episode.title;
     return (title == null || title.isEmpty) ? label : '$label "$title"';
   }
 
