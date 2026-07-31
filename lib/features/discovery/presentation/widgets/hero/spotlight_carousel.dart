@@ -311,7 +311,12 @@ class _Details extends StatelessWidget {
             ),
           ),
         ],
-        const Spacer(),
+        // The strip follows the synopsis it belongs to. It used to be pushed to
+        // the foot of the hero by a Spacer here, which left it stranded halfway
+        // down the screen with nothing between it and the text it indexes.
+        // Enough of a gap that it reads as a separate control, not as a fourth
+        // line of the description.
+        SizedBox(height: m.body * 3.4),
         if (items.isNotEmpty)
           _SlideStrip(
             items: items,
@@ -321,6 +326,10 @@ class _Details extends StatelessWidget {
             autofocus: autofocus,
             onOpen: onOpen,
           ),
+        // Slack now sits below the strip. Still a Spacer rather than nothing,
+        // so a viewport too short for the column shrinks this to zero instead
+        // of overflowing.
+        const Spacer(),
       ],
     );
   }

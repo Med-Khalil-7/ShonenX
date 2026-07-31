@@ -55,9 +55,13 @@ abstract final class ShonenX {
   /// Slide-strip thumbnails are slightly taller than wide.
   static const thumbAspect = 0.85;
 
-  /// The hero carries metadata, a synopsis, two buttons and a page indicator,
-  /// so it needs most of the screen; the first row still peeks in below.
-  static const heroHeightFraction = 0.72;
+  /// The hero carries metadata, a synopsis and the slide strip, and the first
+  /// row peeks in below it.
+  ///
+  /// Cut from 0.72 once the strip moved up to sit under the synopsis: the
+  /// hero's content ended well before its box did, so the extra height was
+  /// pure empty space between the strip and the first row.
+  static const heroHeightFraction = 0.62;
 }
 
 /// Every size in the TV design, as a fraction of the viewport width.
@@ -231,5 +235,5 @@ class ShonenXMetrics {
   /// Above the reference scale on purpose: these double as the carousel's
   /// page indicator, so they have to be identifiable as artwork at a glance
   /// and not just as dots.
-  double get heroThumb => w * 0.040;
+  double get heroThumb => w * 0.047;
 }
