@@ -19,11 +19,16 @@ class ContinueWatchingItem extends ConsumerStatefulWidget {
   final double progress;
   final ContinueWatchingStyle style;
 
+  /// Multiplier on the style's own size, so a row can bring the card down to
+  /// the height of whatever sits beside it. 1 leaves the style untouched.
+  final double scale;
+
   const ContinueWatchingItem({
     super.key,
     required this.entry,
     required this.progress,
     required this.style,
+    this.scale = 1,
   });
 
   @override
@@ -158,7 +163,7 @@ class _ContinueWatchingItemState extends ConsumerState<ContinueWatchingItem>
     );
 
     final currentTextScale = MediaQuery.of(context).textScaler.scale(1.0);
-    final scaleFactor = layout.width / baseLayout.width;
+    final scaleFactor = (layout.width * widget.scale) / baseLayout.width;
     final normalizedCard = MediaQuery(
       data: MediaQuery.of(
         context,
@@ -166,9 +171,12 @@ class _ContinueWatchingItemState extends ConsumerState<ContinueWatchingItem>
       child: card,
     );
 
+    final width = layout.width * widget.scale;
+    final height = layout.height * widget.scale;
+
     return SizedBox(
-      width: layout.width,
-      height: layout.height,
+      width: width,
+      height: height,
       child: FittedBox(
         fit: BoxFit.fill,
         child: SizedBox(

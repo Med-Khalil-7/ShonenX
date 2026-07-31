@@ -49,24 +49,42 @@ class UserHomeLayoutNotifier extends Notifier<List<HomeSection>> {
       // the category and always asks the extension for its trending list, so
       // N category rows would be N copies of the same list; the home screen
       // fans this one section out to a row per active extension instead.
+      // Continue Watching leads. It is the only row whose contents the user
+      // put there themselves, and the one thing they are most likely to have
+      // opened Home to reach; a category row is browsing, and browsing can
+      // wait a scroll.
       return const [
         HomeSection(
           id: '1',
+          title: 'Continue Watching',
+          type: HomeSectionType.continueMedia,
+          targetMediaType: MediaType.ANIME,
+        ),
+        HomeSection(
+          id: '3',
           title: 'Trending Anime',
           type: HomeSectionType.discovery,
           targetMediaType: MediaType.ANIME,
           trackerCategory: TrackerCategory.trending,
         ),
-        HomeSection(
-          id: '3',
-          title: 'Continue Watching',
-          type: HomeSectionType.continueMedia,
-          targetMediaType: MediaType.ANIME,
-        ),
       ];
     } else {
       int idCounter = 1;
       final sections = <HomeSection>[];
+
+      // Continue Watching leads, ahead of every category. It is the only row
+      // whose contents the user put there themselves, and the one thing they
+      // are most likely to have opened Home to reach.
+      for (final media in tracker.supportedMediaTypes) {
+        sections.add(
+          HomeSection(
+            id: (idCounter++).toString(),
+            title: 'Continue Watching',
+            type: HomeSectionType.continueMedia,
+            targetMediaType: media,
+          ),
+        );
+      }
 
       // A row per category the tracker actually serves. AniList gives
       // Trending Now, All-Time Popular, Top Rated All-Time and Upcoming Next
@@ -89,17 +107,6 @@ class UserHomeLayoutNotifier extends Notifier<List<HomeSection>> {
             ),
           );
         }
-      }
-
-      for (final media in tracker.supportedMediaTypes) {
-        sections.add(
-          HomeSection(
-            id: (idCounter++).toString(),
-            title: 'Continue Watching',
-            type: HomeSectionType.continueMedia,
-            targetMediaType: media,
-          ),
-        );
       }
 
       return sections;

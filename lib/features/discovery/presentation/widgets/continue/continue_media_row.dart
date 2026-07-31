@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/shared/providers/ui_prefs_provider.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/continue/continue_watching_card.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/rows/horizontal_section.dart';
@@ -29,13 +30,27 @@ class ContinueMediaRow extends ConsumerWidget {
       uiPrefsProvider.select((p) => p.isContinueWatchingWide(cwStyle.name)),
     );
 
-    final layoutHeight = cwStyle
-        .getLayout(isContinueWatching: true, isWideMode: isCwWide)
-        .height;
+    // The card styles carry their own pixel sizes, tuned for a phone, and a
+    // continue card came out over twice as wide as the poster beside it --
+    // the row read as a different, louder screen sitting on top of Home.
+    //
+    // Width is what is scaled rather than height: the cards are landscape and
+    // the posters portrait, so matching heights would make the cards wider
+    // still. At 1.55 posters wide a card is clearly the bigger item without
+    // dominating, and the row's height follows from it.
+    final m = ShonenXMetrics.of(context);
+    final layout = cwStyle.getLayout(
+      isContinueWatching: true,
+      isWideMode: isCwWide,
+    );
+    final cardScale = layout.width == 0
+        ? 1.0
+        : (m.rowPoster * 1.55) / layout.width;
+    final rowHeight = layout.height * cardScale;
 
     return HorizontalSection(
       title: title,
-      height: layoutHeight,
+      height: rowHeight,
       emptyText: 'No anime in this list.',
       data: asyncData,
       onMoreTap: () => context.push('/continue/${type.id}'),
@@ -50,6 +65,7 @@ class ContinueMediaRow extends ConsumerWidget {
           entry: watchEntry,
           progress: progress,
           style: cwStyle,
+          scale: cardScale,
         );
       },
     );

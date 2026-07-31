@@ -24,35 +24,12 @@ class CardThumbnail extends StatelessWidget {
     final cs = theme.colorScheme;
     final radius = radiusOverride ?? GlobalUI.uiRoundness;
 
-    if (config.progress == null) {
-      return _buildImage(cs, w: width, h: height, r: radius);
-    }
-
-    final strokeW = config.isActive ? 3.5 : 2.8;
-    return Stack(
-      children: [
-        Padding(
-          padding: EdgeInsets.all(strokeW * 0.5),
-          child: _buildImage(
-            cs,
-            w: width == double.maxFinite ? width : width - strokeW,
-            h: height - strokeW,
-            r: radius - (strokeW * 0.5),
-          ),
-        ),
-        Positioned.fill(
-          child: CustomPaint(
-            painter: _ProgressBorderPainter(
-              progress: config.progress!.clamp(0.0, 1.0),
-              color: cs.primary,
-              trackColor: cs.primary.withValues(alpha: 0.22),
-              strokeWidth: strokeW,
-              radius: radius,
-            ),
-          ),
-        ),
-      ],
-    );
+    // Progress used to be drawn as a ring traced around the artwork. On a TV
+    // it read as a border on the image rather than as a measure of anything,
+    // and every continue-watching card carries a progress, so every one of
+    // them was framed. The remaining-time text beside the title already says
+    // the same thing in words.
+    return _buildImage(cs, w: width, h: height, r: radius);
   }
 
   Widget _buildImage(
@@ -105,69 +82,5 @@ class CardThumbnail extends StatelessWidget {
       alignment: Alignment.center,
       child: Icon(config.fallbackIcon, color: cs.onSurfaceVariant, size: 28),
     );
-  }
-}
-
-class _ProgressBorderPainter extends CustomPainter {
-  final double progress;
-  final Color color;
-  final Color trackColor;
-  final double strokeWidth;
-  final double radius;
-
-  _ProgressBorderPainter({
-    required this.progress,
-    required this.color,
-    required this.trackColor,
-    required this.strokeWidth,
-    required this.radius,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.width <= 0 || size.height <= 0) return;
-    final halfWidth = strokeWidth / 2;
-    final rrect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(
-        halfWidth,
-        halfWidth,
-        size.width - strokeWidth,
-        size.height - strokeWidth,
-      ),
-      Radius.circular((radius - halfWidth).clamp(0.0, 999.0)),
-    );
-
-    final trackPaint = Paint()
-      ..color = trackColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth;
-
-    canvas.drawRRect(rrect, trackPaint);
-
-    if (progress > 0.0) {
-      final path = Path()..addRRect(rrect);
-      for (final metric in path.computeMetrics()) {
-        final extractLength = metric.length * progress.clamp(0.0, 1.0);
-        final subPath = metric.extractPath(0.0, extractLength);
-
-        final progressPaint = Paint()
-          ..color = color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = strokeWidth
-          ..strokeCap = StrokeCap.round;
-
-        canvas.drawPath(subPath, progressPaint);
-        break;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ProgressBorderPainter oldDelegate) {
-    return oldDelegate.progress != progress ||
-        oldDelegate.color != color ||
-        oldDelegate.trackColor != trackColor ||
-        oldDelegate.strokeWidth != strokeWidth ||
-        oldDelegate.radius != radius;
   }
 }
