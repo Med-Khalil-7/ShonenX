@@ -42,14 +42,16 @@ const tvDestinations = <TvNavDestination>[
   ),
 ];
 
-/// Icon-only navigation rail with the app mark at the top and a red bar at the
-/// screen's edge marking the active branch.
+/// Navigation rail with the app mark at the top and a red bar at the screen's
+/// edge marking the active branch.
 ///
-/// Drawn as an overlay rather than as a Row member. It used to expand on
-/// focus, which meant every lazy list in the branch relaid out on each
-/// expansion -- a cost a TV SoC cannot absorb smoothly. At a fixed width the
-/// content padding is constant and nothing below it ever reflows.
-class TvSideRail extends StatelessWidget {
+/// Icon-only at rest; taking focus expands it to show each destination's
+/// label. The expansion is drawn **over** the branch content -- `TvShellBody`
+/// pads the content by the *collapsed* width and never changes it -- so
+/// nothing below reflows. An earlier version widened the content padding
+/// instead, which relaid out every lazy list in the branch on each expansion,
+/// a cost a TV SoC cannot absorb smoothly.
+class TvSideRail extends StatefulWidget {
   final int currentIndex;
   final ValueChanged<TvNavDestination> onSelected;
 
@@ -66,8 +68,22 @@ class TvSideRail extends StatelessWidget {
     required this.scopeNode,
   });
 
+  @override
+  State<TvSideRail> createState() => _TvSideRailState();
+}
+
+/// How much of the expanded panel an item occupies.
+///
+/// One number rather than two so the panel's opaque region and the item's
+/// width cannot drift apart: the item must always sit inside the solid part,
+/// or the focus plate appears to hang off the panel onto the content.
+const double _railItemFraction = 0.86;
+
+class _TvSideRailState extends State<TvSideRail> {
+  bool _expanded = false;
+
   int get _selectedItem =>
-      tvDestinations.indexWhere((d) => d.branchIndex == currentIndex);
+      tvDestinations.indexWhere((d) => d.branchIndex == widget.currentIndex);
 
   @override
   Widget build(BuildContext context) {
@@ -75,13 +91,17 @@ class TvSideRail extends StatelessWidget {
     final m = ShonenXMetrics.of(context);
     final verticalInset = TvMetrics.verticalOfSize(MediaQuery.sizeOf(context));
     final itemGap = m.railItem * 0.25;
+    final width = _expanded ? m.railExpandedWidth : m.railWidth;
 
     return FocusScope(
-      node: scopeNode,
+      node: widget.scopeNode,
       child: Focus(
         // Reports descendant focus without becoming a focus stop itself.
         canRequestFocus: false,
         skipTraversal: true,
+        onFocusChange: (hasFocus) {
+          if (_expanded != hasFocus) setState(() => _expanded = hasFocus);
+        },
         onKeyEvent: (node, event) {
           if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
             return KeyEventResult.ignored;
@@ -90,7 +110,7 @@ class TvSideRail extends StatelessWidget {
           // but being explicit means it works from any item and never lands
           // somewhere surprising.
           if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-            onEscapeRight();
+            widget.onEscapeRight();
             return KeyEventResult.handled;
           }
           // Nothing is left of the rail; swallow so focus does not jump
@@ -100,36 +120,68 @@ class TvSideRail extends StatelessWidget {
           }
           return KeyEventResult.ignored;
         },
-        child: SizedBox(
-          width: m.railWidth,
+        child: AnimatedContainer(
+          duration: TvFocus.animation,
+          curve: TvFocus.curve,
+          width: width,
+          // Expanded, the panel is opaque behind every item and fades out only
+          // over the strip to their right, so it reads over artwork without a
+          // hard vertical seam. The opaque region has to clear the widest item
+          // (see [_railItemFraction]) -- fading earlier left the focused row
+          // hanging off the edge of its own panel.
+          //
+          // Collapsed it draws nothing at all: the icons sit directly on the
+          // branch content, as they always have.
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: _expanded
+                  ? [ShonenX.bg, ShonenX.bg, ShonenX.bg.withValues(alpha: 0)]
+                  : const [
+                      Color(0x00000000),
+                      Color(0x00000000),
+                      Color(0x00000000),
+                    ],
+              stops: const [0, _railItemFraction, 1],
+            ),
+          ),
           child: Stack(
             children: [
               Padding(
                 padding: EdgeInsets.symmetric(vertical: verticalInset),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(height: m.railLogo * 0.43),
                     // Brand mark, never a focus stop -- a remote should not
                     // have to step over decoration to reach a destination.
-                    const ExcludeFocus(child: _RailLogo()),
+                    Padding(
+                      padding: EdgeInsets.only(left: m.railItemInset),
+                      child: const ExcludeFocus(child: _RailLogo()),
+                    ),
                     Expanded(
                       child: FocusTraversalGroup(
                         policy: OrderedTraversalPolicy(),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             for (var i = 0; i < tvDestinations.length; i++)
                               FocusTraversalOrder(
                                 order: NumericFocusOrder(i.toDouble()),
                                 child: Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    vertical: itemGap / 2,
+                                  padding: EdgeInsets.only(
+                                    left: m.railItemInset,
+                                    top: itemGap / 2,
+                                    bottom: itemGap / 2,
                                   ),
                                   child: _RailItem(
                                     destination: tvDestinations[i],
                                     selected: i == _selectedItem,
+                                    expanded: _expanded,
                                     onPressed: () =>
-                                        onSelected(tvDestinations[i]),
+                                        widget.onSelected(tvDestinations[i]),
                                   ),
                                 ),
                               ),
@@ -264,41 +316,91 @@ class _RailIndicator extends StatelessWidget {
   }
 }
 
+/// One destination: icon at rest, icon plus label once the rail expands.
+///
+/// The icon holds its position through the animation -- it is the fixed part
+/// of the row and the label is what arrives -- so the expansion reads as text
+/// appearing rather than the whole rail sliding.
 class _RailItem extends StatelessWidget {
   final TvNavDestination destination;
   final bool selected;
+  final bool expanded;
   final VoidCallback onPressed;
 
   const _RailItem({
     required this.destination,
     required this.selected,
+    required this.expanded,
     required this.onPressed,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final m = ShonenXMetrics.of(context);
+
+    // Icon plus the longest label, kept inside the panel's opaque region and
+    // clear of the inset it already carries on the left.
+    final expandedWidth =
+        m.railExpandedWidth * _railItemFraction - m.railItemInset * 2;
 
     return TvFocusable(
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(m.railItem * 0.2),
+      borderRadius: BorderRadius.circular(m.railItem * 0.25),
       scaleOnFocus: false,
       // The rail is narrow; a ring would crowd the icon. Focus reads as a
       // filled plate instead, and red stays reserved for the edge indicator.
       ringColor: Colors.transparent,
       filledWhenFocused: true,
       focusFillColor: cs.surfaceContainer,
-      builder: (context, isFocused) => Container(
-        width: m.railItem,
-        height: m.railItem,
-        alignment: Alignment.center,
-        child: Icon(
-          destination.icon,
-          size: m.railIcon,
-          color: isFocused || selected ? cs.onSurface : cs.onSurfaceVariant,
-        ),
-      ),
+      builder: (context, isFocused) {
+        // The selected destination reads red so the rail says where you are
+        // even before the edge indicator is in view.
+        final color = selected
+            ? cs.primary
+            : (isFocused ? cs.onSurface : cs.onSurfaceVariant);
+
+        return AnimatedContainer(
+          duration: TvFocus.animation,
+          curve: TvFocus.curve,
+          width: expanded ? expandedWidth : m.railItem,
+          height: m.railItem,
+          child: Row(
+            children: [
+              SizedBox(
+                width: m.railItem,
+                child: Icon(destination.icon, size: m.railIcon, color: color),
+              ),
+              if (expanded)
+                // Clipped, not wrapped: mid-animation the row is narrower than
+                // the text and a wrapping label would jump to two lines and
+                // back.
+                Expanded(
+                  child: ClipRect(
+                    child: OverflowBox(
+                      alignment: Alignment.centerLeft,
+                      maxWidth: expandedWidth,
+                      child: Text(
+                        destination.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.clip,
+                        softWrap: false,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontSize: m.label,
+                          color: color,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
