@@ -100,6 +100,8 @@ class PlayerController extends Notifier<PlayerState> {
   static const _thumbnailRefreshInterval = Duration(minutes: 2);
 
   final Set<SkipType> _alreadyAutoSkipped = {};
+  AniSkipArgs? _autoSkipArgs;
+  bool _autoNextTriggered = false;
 
   // Subscriptions
   ProviderSubscription<Duration>? _positionSubscription;
@@ -301,6 +303,7 @@ class PlayerController extends Notifier<PlayerState> {
     bool force = false,
   }) async {
     _alreadyAutoSkipped.clear();
+    _autoNextTriggered = false;
     _cachedThumbnail = null;
     _lastThumbnailTime = null;
     _initialCaptureDone = false;
@@ -371,6 +374,7 @@ class PlayerController extends Notifier<PlayerState> {
     if (_source == null) return;
     if (state.activeEpisode?.id != episode.id) {
       _alreadyAutoSkipped.clear();
+    _autoNextTriggered = false;
     }
     state = state.copyWith(
       isLoading: true,
@@ -662,34 +666,61 @@ class PlayerController extends Notifier<PlayerState> {
     await ref.read(videoEngineProvider).setSpeed(speed);
   }
 
+  /// Watches playback for auto-skip and auto-next.
+  ///
+  /// Registered once per episode. It used to snapshot prefs and stamps at
+  /// registration, which is why the transport bar re-ran it on every position
+  /// tick -- closing and reopening a subscription roughly once a second for
+  /// the whole episode. Both inputs are read live instead.
   void setupAutoSkipListener(AniSkipArgs? args) {
     _positionSubscription?.close();
-
-    final prefs = ref.read(aniskipPrefsProvider);
-    final skips = ref.read(aniSkipProvider(args)).value ?? [];
+    _autoSkipArgs = args;
 
     _positionSubscription = ref.listen(
       videoEngineStateProvider.select((s) => s.position),
-      (previous, current) {
-        final seconds = current.inSeconds;
-
-        for (final skip in skips) {
-          final mode = prefs.mode(skip.type);
-
-          if (mode != SkipMode.auto) continue;
-
-          final isInside = seconds >= skip.startTime && seconds < skip.endTime;
-
-          if (isInside) {
-            if (_alreadyAutoSkipped.add(skip.type)) {
-              ref
-                  .read(videoEngineProvider)
-                  .seekTo(Duration(seconds: skip.endTime.ceil()));
-            }
-          }
-        }
-      },
+      (previous, current) => _onPositionTick(current),
     );
+  }
+
+  void _onPositionTick(Duration position) {
+    final seconds = position.inSeconds;
+    if (seconds <= 0) return;
+
+    final prefs = ref.read(aniskipPrefsProvider);
+    final skips = ref.read(aniSkipProvider(_autoSkipArgs)).value ?? const [];
+
+    for (final skip in skips) {
+      if (prefs.mode(skip.type) != SkipMode.auto) continue;
+      if (seconds < skip.startTime || seconds >= skip.endTime) continue;
+      if (_alreadyAutoSkipped.add(skip.type)) {
+        ref
+            .read(videoEngineProvider)
+            .seekTo(Duration(seconds: skip.endTime.ceil()));
+      }
+    }
+
+    _maybeAutoNext(position);
+  }
+
+  /// Rolls into the next episode as this one runs out.
+  ///
+  /// This lived in the skip button before, so moving that button onto its own
+  /// layer would have quietly taken auto-next with it. It belongs here: it is
+  /// playback behaviour, not a piece of the overlay.
+  void _maybeAutoNext(Duration position) {
+    if (_autoNextTriggered) return;
+
+    final playerPrefs = ref.read(playerPrefsProvider);
+    if (!playerPrefs.autoNext || !hasNextEpisode) return;
+
+    final duration = ref.read(videoEngineStateProvider).duration;
+    if (duration.inSeconds <= 0) return;
+
+    final remaining = duration.inSeconds - position.inSeconds;
+    if (remaining > 0 && remaining > playerPrefs.nextEpisodeThreshold) return;
+
+    _autoNextTriggered = true;
+    skipEpisode();
   }
 
   Future<void> _startProgressTracker() async {

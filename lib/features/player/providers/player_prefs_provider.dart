@@ -30,6 +30,12 @@ class PlayerPrefsState {
   final bool showSkipButton;
   final int skipDuration;
 
+  /// Show the AniSkip "Skip Opening"/"Skip Ending" button over the video.
+  ///
+  /// Distinct from [showSkipButton], which is the manual +Xs quick-seek in the
+  /// transport row.
+  final bool showAniSkipButton;
+
   /// How long the Skip Opening/Ending button stays up before hiding itself.
   final int skipButtonHoldSeconds;
 
@@ -55,6 +61,7 @@ class PlayerPrefsState {
     this.nextEpisodeThreshold = 85,
     this.showSkipButton = true,
     this.skipDuration = 85,
+    this.showAniSkipButton = true,
     this.skipButtonHoldSeconds = 8,
     this.focusSkipButton = true,
     this.showAutoNextCountdown = true,
@@ -73,6 +80,7 @@ class PlayerPrefsState {
     int? nextEpisodeThreshold,
     bool? showSkipButton,
     int? skipDuration,
+    bool? showAniSkipButton,
     int? skipButtonHoldSeconds,
     bool? focusSkipButton,
     bool? showAutoNextCountdown,
@@ -89,6 +97,7 @@ class PlayerPrefsState {
       nextEpisodeThreshold: nextEpisodeThreshold ?? this.nextEpisodeThreshold,
       showSkipButton: showSkipButton ?? this.showSkipButton,
       skipDuration: skipDuration ?? this.skipDuration,
+      showAniSkipButton: showAniSkipButton ?? this.showAniSkipButton,
       skipButtonHoldSeconds:
           skipButtonHoldSeconds ?? this.skipButtonHoldSeconds,
       focusSkipButton: focusSkipButton ?? this.focusSkipButton,
@@ -116,6 +125,7 @@ class PlayerPrefsState {
       nextEpisodeThreshold: map['nextEpisodeThreshold'] ?? 85,
       showSkipButton: map['showSkipButton'] ?? true,
       skipDuration: map['skipDuration'] ?? 85,
+      showAniSkipButton: map['showAniSkipButton'] ?? true,
       skipButtonHoldSeconds: map['skipButtonHoldSeconds'] ?? 8,
       focusSkipButton: map['focusSkipButton'] ?? true,
       showAutoNextCountdown: map['showAutoNextCountdown'] ?? true,
@@ -135,6 +145,7 @@ class PlayerPrefsState {
       'nextEpisodeThreshold': nextEpisodeThreshold,
       'showSkipButton': showSkipButton,
       'skipDuration': skipDuration,
+      'showAniSkipButton': showAniSkipButton,
       'skipButtonHoldSeconds': skipButtonHoldSeconds,
       'focusSkipButton': focusSkipButton,
       'showAutoNextCountdown': showAutoNextCountdown,
@@ -207,6 +218,11 @@ class PlayerPrefsNotifier extends Notifier<PlayerPrefsState> {
 
   void setShowSkipButton(bool value) {
     state = state.copyWith(showSkipButton: value);
+    _saveDb();
+  }
+
+  void setShowAniSkipButton(bool value) {
+    state = state.copyWith(showAniSkipButton: value);
     _saveDb();
   }
 

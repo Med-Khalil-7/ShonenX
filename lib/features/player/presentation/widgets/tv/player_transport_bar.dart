@@ -17,6 +17,28 @@ import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
 import 'package:shonenx/features/player/providers/video_engine_provider.dart';
 import 'package:shonenx/shared/widgets/tv/tv_button.dart';
 
+/// How far through the auto-next countdown we are, or null when it has not
+/// started. Drawn as a ring on the Next Episode button.
+final _autoNextProgressProvider = Provider.autoDispose<double?>((ref) {
+  final prefs = ref.watch(playerPrefsProvider);
+  if (!prefs.autoNext || !prefs.showAutoNextCountdown) return null;
+
+  final position = ref.watch(
+    videoEngineStateProvider.select((s) => s.position),
+  );
+  final duration = ref.watch(
+    videoEngineStateProvider.select((s) => s.duration),
+  );
+  if (duration.inSeconds <= 0) return null;
+
+  final remaining = duration.inSeconds - position.inSeconds;
+  if (remaining > prefs.nextEpisodeThreshold) return null;
+
+  final threshold = prefs.nextEpisodeThreshold;
+  if (threshold <= 0) return 1.0;
+  return ((threshold - remaining) / threshold).clamp(0.0, 1.0);
+});
+
 String formatPlaybackTime(Duration d) {
   String two(int n) => n.toString().padLeft(2, '0');
   final minutes = two(d.inMinutes.remainder(60));
@@ -51,8 +73,6 @@ class PlayerTransportBar extends ConsumerStatefulWidget {
 }
 
 class _PlayerTransportBarState extends ConsumerState<PlayerTransportBar> {
-  bool _hasTriggeredAutoNext = false;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -60,8 +80,10 @@ class _PlayerTransportBarState extends ConsumerState<PlayerTransportBar> {
     final insets = TvMetrics.ofSize(MediaQuery.sizeOf(context));
     final aniSkips = ref.watch(aniSkipProvider(widget.aniskipArgs));
 
-    ref.listen(videoEngineStateProvider.select((s) => s.position), (_, current) {
-      if (current.inSeconds > 0) {
+    // AniSkip needs the episode length, which is zero until playback starts,
+    // so the args change once early on. Re-register then -- and only then.
+    ref.listen(videoEngineStateProvider.select((s) => s.duration), (prev, next) {
+      if (prev != next && next.inSeconds > 0) {
         widget.controller.setupAutoSkipListener(widget.aniskipArgs);
       }
     });
@@ -95,18 +117,6 @@ class _PlayerTransportBarState extends ConsumerState<PlayerTransportBar> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: _SkipAction(
-                      engine: widget.engine,
-                      controller: widget.controller,
-                      aniSkips: aniSkips.value ?? const [],
-                      hasTriggeredAutoNext: _hasTriggeredAutoNext,
-                      onAutoNextTriggered: () =>
-                          _hasTriggeredAutoNext = true,
-                    ),
-                  ),
-                  SizedBox(height: m.transportIcon * 0.25),
                   _SeekRow(
                     engine: widget.engine,
                     aniSkips: aniSkips.value ?? const [],
@@ -360,9 +370,7 @@ class _ControlRow extends ConsumerWidget {
     final isPlaying = ref.watch(
       videoEngineStateProvider.select((s) => s.isPlaying),
     );
-    final skipDuration = ref.watch(
-      playerPrefsProvider.select((p) => p.skipDuration),
-    );
+    final prefs = ref.watch(playerPrefsProvider);
 
     return Row(
       children: [
@@ -399,19 +407,22 @@ class _ControlRow extends ConsumerWidget {
             icon: Icons.skip_next_rounded,
             tooltip: 'Next episode',
             label: 'Next Episode',
+            // The fraction was computed and thrown away before; drawing it
+            // is what makes auto-next something you can see coming.
+            progress: ref.watch(_autoNextProgressProvider),
             onPressed: () {
               onInteraction();
               controller.skipEpisode();
             },
           )
-        else
+        else if (prefs.showSkipButton)
           _TransportButton(
             icon: Icons.fast_forward_rounded,
             tooltip: 'Skip forward',
-            label: '+${skipDuration}s',
+            label: '+${prefs.skipDuration}s',
             onPressed: () {
               onInteraction();
-              engine.seekRelative(Duration(seconds: skipDuration));
+              engine.seekRelative(Duration(seconds: prefs.skipDuration));
             },
           ),
       ],
@@ -426,12 +437,16 @@ class _TransportButton extends StatelessWidget {
   final VoidCallback onPressed;
   final FocusNode? focusNode;
 
+  /// 0..1 countdown drawn as a ring around the icon, or null for none.
+  final double? progress;
+
   const _TransportButton({
     required this.icon,
     required this.tooltip,
     required this.onPressed,
     this.label,
     this.focusNode,
+    this.progress,
   });
 
   @override
@@ -464,94 +479,36 @@ class _TransportButton extends StatelessWidget {
                 ),
                 SizedBox(width: m.meta * 0.6),
               ],
-              Icon(
-                icon,
-                size: m.transportIcon,
-                semanticLabel: tooltip,
-                color: color,
+              SizedBox(
+                width: m.transportIcon,
+                height: m.transportIcon,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    if (progress != null)
+                      SizedBox.expand(
+                        child: CircularProgressIndicator(
+                          value: progress,
+                          strokeWidth: 2,
+                          color: color,
+                          backgroundColor: color.withValues(alpha: 0.25),
+                        ),
+                      ),
+                    Icon(
+                      icon,
+                      size: progress != null
+                          ? m.transportIcon * 0.6
+                          : m.transportIcon,
+                      semanticLabel: tooltip,
+                      color: color,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
         );
       },
     );
-  }
-}
-
-/// Skip Opening / Skip Ending while inside an AniSkip stamp, and the auto-next
-/// countdown as the episode runs out.
-class _SkipAction extends ConsumerWidget {
-  final VideoEngine engine;
-  final PlayerController controller;
-  final List<AniSkipStamp> aniSkips;
-  final bool hasTriggeredAutoNext;
-  final VoidCallback onAutoNextTriggered;
-
-  const _SkipAction({
-    required this.engine,
-    required this.controller,
-    required this.aniSkips,
-    required this.hasTriggeredAutoNext,
-    required this.onAutoNextTriggered,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final position = ref.watch(
-      videoEngineStateProvider.select((s) => s.position),
-    );
-    final duration = ref.watch(
-      videoEngineStateProvider.select((s) => s.duration),
-    );
-    final skipPrefs = ref.watch(aniskipPrefsProvider);
-    final playerPrefs = ref.watch(playerPrefsProvider);
-
-    final seconds = position.inSeconds;
-    final currentSkip = aniSkips
-        .cast<AniSkipStamp?>()
-        .firstWhere(
-          (s) =>
-              s != null && seconds >= s.startTime && seconds < s.endTime,
-          orElse: () => null,
-        );
-
-    if (currentSkip != null &&
-        skipPrefs.mode(currentSkip.type) != SkipMode.off) {
-      final label = switch (currentSkip.type) {
-        SkipType.opening || SkipType.mixedOpening => 'Skip Opening',
-        SkipType.ending || SkipType.mixedEnding => 'Skip Ending',
-        SkipType.recap => 'Skip Recap',
-      };
-      return TvButton(
-        label: label,
-        icon: Icons.skip_next_rounded,
-        height: ShonenXMetrics.of(context).buttonHeight * 0.9,
-        variant: TvButtonVariant.filledWhite,
-        onPressed: () =>
-            engine.seekTo(Duration(seconds: currentSkip.endTime.ceil())),
-      );
-    }
-
-    final remaining = duration.inSeconds - position.inSeconds;
-    final isNearEnd =
-        controller.hasNextEpisode &&
-        duration.inSeconds > 0 &&
-        (remaining <= playerPrefs.nextEpisodeThreshold ||
-            position.inSeconds >= duration.inSeconds);
-
-    if (isNearEnd && playerPrefs.autoNext && !hasTriggeredAutoNext) {
-      final elapsed = playerPrefs.nextEpisodeThreshold - remaining;
-      final progress = playerPrefs.nextEpisodeThreshold > 0
-          ? (elapsed / playerPrefs.nextEpisodeThreshold).clamp(0.0, 1.0)
-          : 1.0;
-      if (progress >= 1.0 || remaining <= 0) {
-        onAutoNextTriggered();
-        WidgetsBinding.instance.addPostFrameCallback(
-          (_) => controller.skipEpisode(),
-        );
-      }
-    }
-
-    return SizedBox(height: ShonenXMetrics.of(context).buttonHeight * 0.9);
   }
 }

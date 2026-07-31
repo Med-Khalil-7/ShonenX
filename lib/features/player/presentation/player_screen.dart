@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
-import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_list_panel.dart';
+import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_grid.dart';
 import 'package:shonenx/features/player/domain/player_mode.dart';
 import 'package:shonenx/features/player/engine/video_engine.dart';
 import 'package:shonenx/features/player/presentation/widgets/custom_subtitle_overlay.dart';
@@ -14,6 +14,7 @@ import 'package:shonenx/features/player/presentation/widgets/player_keyboard_lis
 import 'package:shonenx/features/player/presentation/widgets/tv/player_center_indicator.dart';
 import 'package:shonenx/features/player/presentation/widgets/tv/player_audio_panel.dart';
 import 'package:shonenx/features/player/presentation/widgets/tv/player_settings_panel.dart';
+import 'package:shonenx/features/player/presentation/widgets/tv/player_skip_button.dart';
 import 'package:shonenx/features/player/presentation/widgets/tv/player_top_bar.dart';
 import 'package:shonenx/features/player/presentation/widgets/tv/player_transport_bar.dart';
 import 'package:shonenx/features/player/providers/aniskip_provider.dart';
@@ -38,7 +39,9 @@ class PlayerScreen extends ConsumerStatefulWidget {
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   /// Long enough to cross the overlay with a D-pad. Three seconds was tuned
   /// for a mouse and expires mid-traversal on a remote.
-  static const _autoHide = Duration(seconds: 5);
+  Duration get _autoHide => Duration(
+    seconds: ref.read(playerPrefsProvider).controlsTimeoutSeconds,
+  );
 
   final FocusNode _playPauseFocus = FocusNode(debugLabel: 'playPause');
 
@@ -84,9 +87,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     ]);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(playerControllerProvider.notifier)
-          .initialize(widget.mode);
+      final controller = ref.read(playerControllerProvider.notifier);
+      controller.initialize(widget.mode);
+      // Once, here -- not from the transport bar's build, which re-registered
+      // it on every position tick.
+      controller.setupAutoSkipListener(
+        _aniSkipArgs(ref.read(videoEngineProvider)),
+      );
       _wake();
     });
   }
@@ -162,9 +169,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           if (current == null) {
             return const Center(child: CircularProgressIndicator());
           }
-          return EpisodeListPanel(
+          return EpisodeGridView(
             media: (widget.mode as PlayerModeOnline).media,
             currentEpisodeNumber: current.number,
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
             onEpisodeTap: (episode, _) {
               Navigator.of(sheetContext).pop();
               ref.read(playerControllerProvider.notifier).loadEpisode(episode);
@@ -327,6 +335,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 subtitlesOn:
                     playerState.activeSubtitle != null &&
                     playerState.activeSubtitle!.url.isNotEmpty,
+              ),
+              PlayerSkipButton(
+                engine: engine,
+                aniskipArgs: _aniSkipArgs(engine),
               ),
               PlayerTransportBar(
                 visible: _showControls,
