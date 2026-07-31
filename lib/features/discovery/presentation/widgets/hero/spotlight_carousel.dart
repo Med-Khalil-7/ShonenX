@@ -140,19 +140,42 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
     });
   }
 
-  /// The strip traverses normally; only the escape upward needs handling,
-  /// because the header buttons are drawn over the hero and are therefore
-  /// invisible to geometric traversal.
+  /// Up escapes to the header, which is drawn over the hero and is therefore
+  /// invisible to geometric traversal. Left and right wrap.
+  ///
+  /// The strip is a loop: past the last slide is the first one again. Letting
+  /// traversal fall out of the ends instead sent focus off to whatever
+  /// happened to sit beside the hero, which from the first slide meant leaving
+  /// the carousel entirely on what reads as a request to see the slide before.
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
-    if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
-        widget.onEscapeUp != null) {
+    final key = event.logicalKey;
+
+    if (key == LogicalKeyboardKey.arrowUp && widget.onEscapeUp != null) {
       widget.onEscapeUp!();
       return KeyEventResult.handled;
     }
-    return KeyEventResult.ignored;
+
+    final step = switch (key) {
+      LogicalKeyboardKey.arrowRight => 1,
+      LogicalKeyboardKey.arrowLeft => -1,
+      _ => 0,
+    };
+    if (step == 0) return KeyEventResult.ignored;
+
+    final count = _items.length;
+    if (count == 0) return KeyEventResult.ignored;
+
+    final from = _thumbFocus.indexWhere((n) => n.hasFocus);
+    if (from < 0) return KeyEventResult.ignored;
+
+    final to = (from + step) % count;
+    if (to >= 0 && to < _thumbFocus.length) {
+      _thumbFocus[to].requestFocus();
+    }
+    return KeyEventResult.handled;
   }
 
   void _openDetails(UnifiedMedia media) {

@@ -88,30 +88,102 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// explicitly -- the same fallback the navigation rail uses.
   final FocusNode _heroFocus = FocusNode(debugLabel: 'heroEntry');
 
+  /// One scope per row, so up and down can move by row instead of by geometry.
+  ///
+  /// Geometric traversal was picking the wrong target on nearly every press:
+  /// down from a card could land two rows below, or sideways within the row it
+  /// started in. Two things defeat it here -- the rows scroll horizontally, so
+  /// which card sits under which moves between presses, and the page scrolls
+  /// vertically as focus lands, which invalidates the positional history
+  /// `DirectionalFocusTraversalPolicy` keeps to make its choices.
+  ///
+  /// A scope per row sidesteps both. Row-to-row movement becomes an index
+  /// step, and because a `FocusScopeNode` restores its own `focusedChild`,
+  /// returning to a row lands on the card the user left it on.
+  final List<FocusScopeNode> _rowScopes = [];
+
   @override
   void dispose() {
     _headerFocus.dispose();
     _heroFocus.dispose();
+    for (final scope in _rowScopes) {
+      scope.dispose();
+    }
     _scroll.dispose();
     super.dispose();
   }
 
-  /// Up from the first row lands on the hero.
+  /// Grows the scope list to cover [count] rows. Never shrinks mid-session:
+  /// disposing a scope that still holds focus would drop focus into nothing.
+  void _ensureRowScopes(int count) {
+    while (_rowScopes.length < count) {
+      _rowScopes.add(FocusScopeNode(debugLabel: 'homeRow${_rowScopes.length}'));
+    }
+  }
+
+  /// Index of the row holding focus, or -1 when focus is above the rows.
+  int get _focusedRow => _rowScopes.indexWhere((s) => s.hasFocus);
+
+  /// Nearest row at or after [from] that has something to focus.
   ///
-  /// Let normal traversal try first; only claim the key when focus did not
-  /// move, which is exactly the case at the top row.
-  KeyEventResult _handleUp(FocusNode node, KeyEvent event) {
+  /// Rows can be empty -- a Continue Watching with no history renders nothing
+  /// -- and an empty row must be stepped over rather than swallowing the press.
+  int? _rowWithFocusables(int from, int step, int count) {
+    for (var i = from; i >= 0 && i < count; i += step) {
+      if (_firstTargetIn(_rowScopes[i]) != null) return i;
+    }
+    return null;
+  }
+
+  /// Where focus should land in [scope]: where it was left, or the first card.
+  static FocusNode? _firstTargetIn(FocusScopeNode scope) {
+    final remembered = scope.focusedChild;
+    if (remembered != null && remembered.canRequestFocus) return remembered;
+    for (final node in scope.traversalDescendants) {
+      if (node.canRequestFocus) return node;
+    }
+    return null;
+  }
+
+  /// Focuses a card in the row rather than the row itself.
+  ///
+  /// `FocusScopeNode.requestFocus()` on a scope that has never held focus
+  /// focuses the *scope*, which leaves nothing highlighted and the next press
+  /// with no card to move from -- the row looked like it had swallowed the
+  /// keypress.
+  void _focusRow(int index) {
+    final target = _firstTargetIn(_rowScopes[index]);
+    if (target != null) target.requestFocus();
+  }
+
+  KeyEventResult _handleVertical(FocusNode node, KeyEvent event, int rowCount) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
-    if (event.logicalKey != LogicalKeyboardKey.arrowUp) {
-      return KeyEventResult.ignored;
-    }
-    final before = FocusManager.instance.primaryFocus;
-    if (before != null && before.focusInDirection(TraversalDirection.up)) {
+    final key = event.logicalKey;
+    final goingDown = key == LogicalKeyboardKey.arrowDown;
+    final goingUp = key == LogicalKeyboardKey.arrowUp;
+    if (!goingDown && !goingUp) return KeyEventResult.ignored;
+
+    final current = _focusedRow;
+
+    if (goingDown) {
+      final next = _rowWithFocusables(current + 1, 1, rowCount);
+      if (next == null) return KeyEventResult.handled; // already at the bottom
+      _focusRow(next);
       return KeyEventResult.handled;
     }
-    if (_heroFocus.canRequestFocus) {
+
+    // Up from the first row -- or from anywhere the rows do not cover -- hands
+    // back to the hero rather than dead-ending.
+    if (current > 0) {
+      final prev = _rowWithFocusables(current - 1, -1, rowCount);
+      if (prev != null) {
+        _focusRow(prev);
+        return KeyEventResult.handled;
+      }
+    }
+    if (current != -1 && _heroFocus.canRequestFocus) {
       _heroFocus.requestFocus();
       return KeyEventResult.handled;
     }
@@ -148,6 +220,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ? allActive.where((s) => s.id != heroSection.id).toList()
         : allActive;
 
+    _ensureRowScopes(activeSections.length);
+
     return AppScaffold(
       // The hero reaches the panel edge; the rows below apply overscan
       // themselves via HorizontalSection.
@@ -175,7 +249,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: Focus(
           canRequestFocus: false,
           skipTraversal: true,
-          onKeyEvent: _handleUp,
+          onKeyEvent: (node, event) =>
+              _handleVertical(node, event, activeSections.length),
           child: CustomScrollView(
             controller: _scroll,
             slivers: [
@@ -233,7 +308,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   }
                 }
 
-                return activeSections.map((section) {
+                return activeSections.indexed.map((entry) {
+                  final (index, section) = entry;
                   int? dIndex;
                   int totalCount = 0;
                   if (section.type == HomeSectionType.discovery) {
@@ -246,12 +322,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   // No padding here: the gap below a row is the row's own, so
                   // a section with nothing to show collapses to nothing
                   // instead of leaving a gap where it would have been.
+                  //
+                  // The scope wraps the section from the outside so the row
+                  // widgets themselves stay unaware of it -- they are shared
+                  // with screens that have no row-stepping.
                   return SliverToBoxAdapter(
-                    child: _buildSectionWidget(
-                      context,
-                      section,
-                      discoveryIndex: dIndex,
-                      totalDiscoverySections: totalCount,
+                    child: FocusScope(
+                      node: _rowScopes[index],
+                      child: _buildSectionWidget(
+                        context,
+                        section,
+                        discoveryIndex: dIndex,
+                        totalDiscoverySections: totalCount,
+                      ),
                     ),
                   );
                 });

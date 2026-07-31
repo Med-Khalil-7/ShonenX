@@ -224,5 +224,9 @@ class ShonenXMetrics {
   // --- Hero ---------------------------------------------------------------
 
   /// Width of one artwork thumbnail in the slide strip.
-  double get heroThumb => w * 0.033;
+  ///
+  /// Above the reference scale on purpose: these double as the carousel's
+  /// page indicator, so they have to be identifiable as artwork at a glance
+  /// and not just as dots.
+  double get heroThumb => w * 0.040;
 }
