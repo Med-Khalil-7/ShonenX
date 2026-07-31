@@ -144,6 +144,7 @@ class _KitsuLoginFormState extends State<_KitsuLoginForm> {
         ),
         const SizedBox(height: 12),
         TextField(
+          keyboardType: TextInputType.none, // TV: never raise the system IME
           controller: _passwordController,
           obscureText: _obscurePassword,
           decoration: InputDecoration(

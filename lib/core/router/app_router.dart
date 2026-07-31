@@ -5,6 +5,7 @@ import 'package:shonenx/app_init.dart';
 import 'package:shonenx/core/router/complex_extra_codec.dart';
 import 'package:shonenx/core/router/scaffold_with_nav_bar.dart';
 import 'package:shonenx/features/discovery/presentation/details_screen.dart';
+import 'package:shonenx/features/discovery/presentation/episodes_screen.dart';
 import 'package:shonenx/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:shonenx/features/discovery/presentation/home_screen.dart';
 import 'package:shonenx/features/splash/presentation/splash_screen.dart';
@@ -222,10 +223,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      // GoRoute(
-      //     path: AppRoutes.sourceSettings,
-      //     builder: (context, state) => const SourceSettingsScreen(),
-      //   ),
+      GoRoute(
+        path: '/episodes',
+        builder: (context, state) =>
+            EpisodesScreen(media: state.extra as UnifiedMedia),
+      ),
       GoRoute(
         path: '/player',
         builder: (context, state) {

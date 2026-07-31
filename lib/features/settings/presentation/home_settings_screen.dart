@@ -451,6 +451,7 @@ class _EditSectionSheetState extends ConsumerState<_EditSectionSheet> {
           ],
 
           TextField(
+            keyboardType: TextInputType.none, // TV: never raise the system IME
             controller: _titleController,
             decoration: InputDecoration(
               labelText: 'Section Title',
@@ -858,6 +859,7 @@ class _AddSectionSheetState extends ConsumerState<_AddSectionSheet> {
 
           if (canAdd) ...[
             TextField(
+              keyboardType: TextInputType.none, // TV: never raise the system IME
               controller: _titleController,
               decoration: InputDecoration(
                 labelText: 'Section Title',

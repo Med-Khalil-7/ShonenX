@@ -395,6 +395,7 @@ class _PresetGallerySheetState extends ConsumerState<PresetGallerySheet> {
             ),
             const SizedBox(height: 14),
             TextField(
+              keyboardType: TextInputType.none, // TV: never raise the system IME
               controller: nameController,
               decoration: const InputDecoration(
                 labelText: 'Preset Name',
@@ -405,6 +406,7 @@ class _PresetGallerySheetState extends ConsumerState<PresetGallerySheet> {
             ),
             const SizedBox(height: 12),
             TextField(
+              keyboardType: TextInputType.none, // TV: never raise the system IME
               controller: authorController,
               decoration: const InputDecoration(
                 labelText: 'Author / Creator',
@@ -415,6 +417,7 @@ class _PresetGallerySheetState extends ConsumerState<PresetGallerySheet> {
             ),
             const SizedBox(height: 12),
             TextField(
+              keyboardType: TextInputType.none, // TV: never raise the system IME
               controller: descController,
               decoration: const InputDecoration(
                 labelText: 'Description',
@@ -528,6 +531,7 @@ class _PresetGallerySheetState extends ConsumerState<PresetGallerySheet> {
             ),
             const SizedBox(height: 8),
             TextField(
+              keyboardType: TextInputType.none, // TV: never raise the system IME
               controller: controller,
               maxLines: 6,
               decoration: const InputDecoration(
@@ -626,6 +630,7 @@ class _PresetGallerySheetState extends ConsumerState<PresetGallerySheet> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TextField(
+              keyboardType: TextInputType.none, // TV: never raise the system IME
               controller: nameController,
               decoration: const InputDecoration(
                 labelText: 'Preset Name',
@@ -636,6 +641,7 @@ class _PresetGallerySheetState extends ConsumerState<PresetGallerySheet> {
             ),
             const SizedBox(height: 12),
             TextField(
+              keyboardType: TextInputType.none, // TV: never raise the system IME
               controller: authorController,
               decoration: const InputDecoration(
                 labelText: 'Author / Creator',

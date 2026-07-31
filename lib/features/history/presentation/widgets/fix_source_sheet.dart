@@ -164,11 +164,10 @@ class _FixSourceSheetState extends ConsumerState<FixSourceSheet> {
           children: [
             Expanded(
               child: TextField(
+                       keyboardType: TextInputType.none, // TV: never raise the system IME
                 controller: _controller,
                 decoration: InputDecoration(
-                  labelText: widget.type == MediaType.ANIME
-                      ? 'Search Anime'
-                      : 'Search Manga / Novel',
+                  labelText: 'Search Anime',
                   border: const OutlineInputBorder(),
                   suffixIcon: _isSearching
                       ? const Padding(

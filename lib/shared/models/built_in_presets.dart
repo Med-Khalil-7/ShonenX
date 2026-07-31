@@ -1,6 +1,5 @@
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_list_panel.dart';
 import 'package:shonenx/shared/models/app_theme_preset.dart';
 import 'package:shonenx/shared/providers/theme_prefs_provider.dart';
 import 'package:shonenx/shared/providers/ui_prefs_provider.dart';
@@ -37,7 +36,6 @@ class BuiltInPresets {
         "media_expressive": false,
         "cr_expressive": true,
       },
-      episodeViewMode: EpisodeViewMode.classic,
     ),
     AppThemePreset(
       id: '2',
@@ -60,7 +58,6 @@ class BuiltInPresets {
       uiRoundness: 18.0,
       cardStyle: MediaCardStyle.classic,
       continueWatchingStyle: ContinueWatchingStyle.classic,
-      episodeViewMode: EpisodeViewMode.classic,
     ),
     AppThemePreset(
       id: '3',
@@ -84,7 +81,6 @@ class BuiltInPresets {
       uiRoundness: 16.0,
       cardStyle: MediaCardStyle.classic,
       continueWatchingStyle: ContinueWatchingStyle.classic,
-      episodeViewMode: EpisodeViewMode.classic,
     ),
     AppThemePreset(
       id: '4',
@@ -106,7 +102,6 @@ class BuiltInPresets {
       uiRoundness: 20.0,
       cardStyle: MediaCardStyle.classic,
       continueWatchingStyle: ContinueWatchingStyle.classic,
-      episodeViewMode: EpisodeViewMode.classic,
     ),
     AppThemePreset(
       id: '5',
@@ -129,7 +124,6 @@ class BuiltInPresets {
       uiRoundness: 16.0,
       cardStyle: MediaCardStyle.cinematic,
       continueWatchingStyle: ContinueWatchingStyle.cinematic,
-      episodeViewMode: EpisodeViewMode.classic,
       navBarStyle: NavBarStyle.minimal,
     ),
   ];

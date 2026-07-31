@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shonenx/core/theme/shonenx_tokens.dart';
@@ -50,7 +51,9 @@ final categorySectionFeedProvider =
         );
         return result.items;
       } else {
-        final allSources = await ref.watch(availableAnimeSourcesProvider.future);
+        final allSources = await ref.watch(
+          availableAnimeSourcesProvider.future,
+        );
         final prefs = ref.watch(discoveryPrefsProvider);
         final activeSources = allSources
             .where((s) => prefs.activeSources.contains(s.id))
@@ -78,10 +81,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// explicit hand-off -- see [SpotlightCarousel.onEscapeUp].
   final FocusNode _headerFocus = FocusNode(debugLabel: 'homeHeader');
 
+  final ScrollController _scroll = ScrollController();
+
+  /// The hero's first thumbnail. Directional traversal cannot find its way out
+  /// of the first row's own traversal group, so up from there is handed over
+  /// explicitly -- the same fallback the navigation rail uses.
+  final FocusNode _heroFocus = FocusNode(debugLabel: 'heroEntry');
+
   @override
   void dispose() {
     _headerFocus.dispose();
+    _heroFocus.dispose();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  /// Up from the first row lands on the hero.
+  ///
+  /// Let normal traversal try first; only claim the key when focus did not
+  /// move, which is exactly the case at the top row.
+  KeyEventResult _handleUp(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey != LogicalKeyboardKey.arrowUp) {
+      return KeyEventResult.ignored;
+    }
+    final before = FocusManager.instance.primaryFocus;
+    if (before != null && before.focusInDirection(TraversalDirection.up)) {
+      return KeyEventResult.handled;
+    }
+    if (_heroFocus.canRequestFocus) {
+      _heroFocus.requestFocus();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// Returns the page to the top when focus comes back up to the hero, which
+  /// is otherwise left half-scrolled behind the row the user came from.
+  void _scrollToTop() {
+    if (!_scroll.hasClients || _scroll.offset == 0) return;
+    _scroll.animateTo(
+      0,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   @override
@@ -127,78 +172,98 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             }
           }
         },
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Stack(
-                children: [
-                  if (heroSection != null)
-                    SpotlightCarousel(
-                      data: ref.watch(
-                        categorySectionFeedProvider((
-                          heroSection.trackerCategory ?? TrackerCategory.trending,
-                          heroSection.targetMediaType ?? MediaType.ANIME,
-                        )),
+        child: Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          onKeyEvent: _handleUp,
+          child: CustomScrollView(
+            controller: _scroll,
+            slivers: [
+              SliverToBoxAdapter(
+                child: Stack(
+                  children: [
+                    if (heroSection != null)
+                      SpotlightCarousel(
+                        data: ref.watch(
+                          categorySectionFeedProvider((
+                            heroSection.trackerCategory ??
+                                TrackerCategory.trending,
+                            heroSection.targetMediaType ?? MediaType.ANIME,
+                          )),
+                        ),
+                        onEscapeUp: _headerFocus.requestFocus,
+                        onEnter: _scrollToTop,
+                        entryFocus: _heroFocus,
+                      )
+                    else
+                      SizedBox(
+                        height:
+                            TvMetrics.verticalOfSize(
+                              MediaQuery.sizeOf(context),
+                            ) +
+                            16,
                       ),
-                      onEscapeUp: _headerFocus.requestFocus,
-                    )
-                  else
-                    SizedBox(height: TvMetrics.verticalOfSize(
-                      MediaQuery.sizeOf(context),
-                    ) + 16),
-                  Positioned(
-                    top:
-                        TvMetrics.verticalOfSize(MediaQuery.sizeOf(context)) +
-                        16,
-                    right: ShonenXMetrics.of(context).shellGutter(
-                      MediaQuery.sizeOf(context),
+                    Positioned(
+                      top:
+                          TvMetrics.verticalOfSize(MediaQuery.sizeOf(context)) +
+                          16,
+                      right: ShonenXMetrics.of(
+                        context,
+                      ).shellGutter(MediaQuery.sizeOf(context)),
+                      child: _HeaderActions(firstFocus: _headerFocus),
                     ),
-                    child: _HeaderActions(firstFocus: _headerFocus),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            ...() {
-              final discoveryIndexMap = <MediaType, int>{};
-              final totalDiscoveryCounts = <MediaType, int>{};
-              for (final s in activeSections) {
-                if (s.type == HomeSectionType.discovery) {
-                  final mt = s.targetMediaType ?? MediaType.ANIME;
-                  totalDiscoveryCounts[mt] =
-                      (totalDiscoveryCounts[mt] ?? 0) + 1;
-                }
-              }
-
-              return activeSections.map((section) {
-                int? dIndex;
-                int totalCount = 0;
-                if (section.type == HomeSectionType.discovery) {
-                  final mt = section.targetMediaType ?? MediaType.ANIME;
-                  dIndex = discoveryIndexMap[mt] ?? 0;
-                  discoveryIndexMap[mt] = dIndex + 1;
-                  totalCount = totalDiscoveryCounts[mt] ?? 1;
+              // Breathing room between the hero and the first row heading. The
+              // hero's bottom scrim already fades into the page, so without this
+              // the heading reads as part of the hero rather than as the label
+              // of the row under it.
+              SliverToBoxAdapter(
+                child: SizedBox(height: ShonenXMetrics.of(context).body * 2.5),
+              ),
+              ...() {
+                final discoveryIndexMap = <MediaType, int>{};
+                final totalDiscoveryCounts = <MediaType, int>{};
+                for (final s in activeSections) {
+                  if (s.type == HomeSectionType.discovery) {
+                    final mt = s.targetMediaType ?? MediaType.ANIME;
+                    totalDiscoveryCounts[mt] =
+                        (totalDiscoveryCounts[mt] ?? 0) + 1;
+                  }
                 }
 
-                return SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 16.0),
-                    child: _buildSectionWidget(
-                      context,
-                      section,
-                      discoveryIndex: dIndex,
-                      totalDiscoverySections: totalCount,
+                return activeSections.map((section) {
+                  int? dIndex;
+                  int totalCount = 0;
+                  if (section.type == HomeSectionType.discovery) {
+                    final mt = section.targetMediaType ?? MediaType.ANIME;
+                    dIndex = discoveryIndexMap[mt] ?? 0;
+                    discoveryIndexMap[mt] = dIndex + 1;
+                    totalCount = totalDiscoveryCounts[mt] ?? 1;
+                  }
+
+                  return SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 16.0),
+                      child: _buildSectionWidget(
+                        context,
+                        section,
+                        discoveryIndex: dIndex,
+                        totalDiscoverySections: totalCount,
+                      ),
                     ),
-                  ),
-                );
-              });
-            }(),
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height:
-                    TvMetrics.verticalOfSize(MediaQuery.sizeOf(context)) + 40,
+                  );
+                });
+              }(),
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height:
+                      TvMetrics.verticalOfSize(MediaQuery.sizeOf(context)) + 40,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -272,7 +337,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         final m = ShonenXMetrics.of(context);
         return HorizontalSection<UnifiedMedia>(
           title: section.title,
-          height: m.rowPoster / ShonenX.posterAspect,
+          height: TvPosterCard.rowExtent(context, width: m.rowPoster),
           gap: m.rowGap,
           data: ref.watch(categorySectionFeedProvider((category, mediaType))),
           skeletonItemBuilder: (context, index) =>
@@ -337,7 +402,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             2,
             (sIndex) => HorizontalSection<UnifiedMedia>(
               title: 'Loading',
-              height: m.rowPoster / ShonenX.posterAspect,
+              height: TvPosterCard.rowExtent(context, width: m.rowPoster),
               gap: m.rowGap,
               data: const AsyncValue.loading(),
               itemBuilder: (_, __) => const SizedBox.shrink(),
@@ -360,7 +425,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final m = ShonenXMetrics.of(context);
     return HorizontalSection<UnifiedMedia>(
       title: title,
-      height: m.rowPoster / ShonenX.posterAspect,
+      height: TvPosterCard.rowExtent(context, width: m.rowPoster),
       gap: m.rowGap,
       data: ref.watch(singleSourceFeedProvider((info, MediaType.ANIME))),
       skeletonItemBuilder: (context, index) =>

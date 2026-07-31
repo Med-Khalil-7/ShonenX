@@ -12,11 +12,7 @@ import 'package:shonenx/core/tv/tv_metrics.dart';
 import 'package:shonenx/features/auth/providers/auth_provider.dart';
 import 'package:shonenx/features/discovery/domain/media_actions.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/details/detail_media_row.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_list_panel.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_source_header.dart';
 import 'package:shonenx/features/discovery/providers/details_provider.dart';
-import 'package:shonenx/features/history/domain/models/watch_history_entry.dart';
-import 'package:shonenx/features/history/providers/watch_history_provider.dart';
 import 'package:shonenx/features/player/domain/player_mode.dart';
 import 'package:shonenx/features/tracking/domain/isar_tracker_link.dart';
 import 'package:shonenx/features/tracking/domain/models/tracker_type.dart';
@@ -30,8 +26,6 @@ import 'package:shonenx/shared/models/video_server.dart';
 import 'package:shonenx/shared/widgets/app_scaffold.dart';
 import 'package:shonenx/shared/widgets/tv/tv_badge.dart';
 import 'package:shonenx/shared/widgets/tv/tv_button.dart';
-import 'package:shonenx/shared/widgets/tv/tv_side_sheet.dart';
-import 'package:shonenx/source_engine/utils/media_type_extensions.dart';
 
 /// Single-page detail view.
 ///
@@ -117,57 +111,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     }
   }
 
-  void _openEpisodes(UnifiedMedia media) {
-    final history = ref.read(historyEpisodesProvider(media.id)).value ?? [];
-    final hasSources =
-        (ref.read(media.type.availableSourcesProvider).value ?? []).isNotEmpty;
-
-    TvSideSheet.show(
-      context: context,
-      label: 'Episodes',
-      builder: (sheetContext) => !hasSources
-          ? const NoExtensionsPlaceholder()
-          : Column(
-              children: [
-                EpisodeSourceHeader(media: media),
-                Expanded(child: _episodeList(sheetContext, media, history)),
-              ],
-            ),
-    );
-  }
-
-  Widget _episodeList(
-    BuildContext sheetContext,
-    UnifiedMedia media,
-    List<WatchHistoryEntry> history,
-  ) {
-    return EpisodeListPanel(
-      media: media,
-      currentEpisodeNumber: history.firstOrNull?.episodeNumber,
-      onEpisodeTap: (episode, sourceInfo) {
-        final entry = history
-            .where((e) => e.episodeNumber == episode.number)
-            .firstOrNull;
-        final resume =
-            entry != null &&
-            entry.positionInMilliseconds > 0 &&
-            entry.positionInMilliseconds < entry.durationInMilliseconds;
-
-        Navigator.of(sheetContext).pop();
-        context.push(
-          '/player',
-          extra: PlayerModeOnline(
-            media: media,
-            episode: episode,
-            sourceInfo: sourceInfo,
-            startPosition: resume
-                ? Duration(milliseconds: entry.positionInMilliseconds)
-                : null,
-          ),
-        );
-      },
-    );
-  }
+  /// Episodes live on their own page now. A remote needs the whole screen to
+  /// show a hundred numbered squares; a 38%-wide sheet showed a list.
+  void _openEpisodes(UnifiedMedia media) =>
+      context.push('/episodes', extra: media);
 
   Future<void> _addToWatchList(UnifiedMedia media) =>
       MediaActions.addToWatchList(context, ref, media);

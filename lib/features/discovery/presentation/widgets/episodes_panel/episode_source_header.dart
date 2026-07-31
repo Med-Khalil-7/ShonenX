@@ -81,18 +81,22 @@ class EpisodeSourceHeader extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            matchedTitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: hasError ? cs.error : cs.onSurface,
-            ),
-          ),
-          const SizedBox(height: 12),
+          // Title and its two escape hatches share a line: stacked, they cost
+          // the episode grid a whole row of squares for no added clarity.
           Row(
             children: [
+              Expanded(
+                child: Text(
+                  matchedTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: hasError ? cs.error : cs.onSurface,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
               TvButton(
                 label: 'Source',
                 icon: Icons.swap_horiz_rounded,

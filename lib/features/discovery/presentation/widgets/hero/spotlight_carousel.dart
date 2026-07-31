@@ -31,12 +31,23 @@ class SpotlightCarousel extends ConsumerStatefulWidget {
   /// and have to be handed focus explicitly.
   final VoidCallback? onEscapeUp;
 
+  /// Invoked when focus returns to the hero from below. Its thumbnails opt out
+  /// of `ensureVisible` so that moving along the strip cannot scroll the page,
+  /// which also means nothing scrolls the page back up on the way in.
+  final VoidCallback? onEnter;
+
+  /// Used for the first thumbnail, so the page can hand focus back into the
+  /// hero from below without reaching into this widget's state.
+  final FocusNode? entryFocus;
+
   const SpotlightCarousel({
     super.key,
     required this.data,
     this.tagPrefix = 'spotlight',
     this.autofocus = true,
     this.onEscapeUp,
+    this.onEnter,
+    this.entryFocus,
   });
 
   @override
@@ -68,7 +79,8 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
   void dispose() {
     _timer?.cancel();
     for (final node in _thumbFocus) {
-      node.dispose();
+      // The entry node is owned by the page.
+      if (node != widget.entryFocus) node.dispose();
     }
     super.dispose();
   }
@@ -76,8 +88,11 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
   /// Grown lazily: the slide count is not known until the feed resolves.
   FocusNode _focusFor(int index) {
     while (_thumbFocus.length <= index) {
-      final node = FocusNode(debugLabel: 'heroThumb${_thumbFocus.length}');
       final i = _thumbFocus.length;
+      // The first thumbnail borrows the page's node so the page can focus it.
+      final node = i == 0 && widget.entryFocus != null
+          ? widget.entryFocus!
+          : FocusNode(debugLabel: 'heroThumb$i');
       node.addListener(() {
         if (!mounted) return;
         if (node.hasFocus) _select(i);
@@ -111,6 +126,7 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
     // from under the OK press.
     if (hasFocus) {
       _timer?.cancel();
+      widget.onEnter?.call();
     } else {
       _restartTimer();
     }

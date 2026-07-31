@@ -1147,6 +1147,7 @@ class _ExtensionTesterScreenState extends ConsumerState<ExtensionTesterScreen> {
                       vertical: 6.0,
                     ),
                     child: TextField(
+                             keyboardType: TextInputType.none, // TV: never raise the system IME
                       controller: _queryController,
                       enabled: !_isTesting,
                       decoration: const InputDecoration(

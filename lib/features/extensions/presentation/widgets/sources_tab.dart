@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:get/get.dart';
+import 'package:shonenx/core/tv/tv_metrics.dart';
 import 'package:shonenx/features/extensions/models/unified_source.dart';
 import 'package:shonenx/features/extensions/providers/extensions_provider.dart';
 import 'package:shonenx/features/settings/presentation/source_settings_sheet.dart';
@@ -20,6 +21,55 @@ import 'package:shonenx/source_engine/source_engine_provider.dart';
 import 'package:shonenx/source_engine/source_registry.dart';
 import 'extension_beginner_sheet.dart';
 import 'runtime_setup_sheet.dart';
+
+/// Draws a focus ring around a row when anything inside it holds focus.
+///
+/// The variant sub-rows are assembled from badges and bare icon buttons rather
+/// than a `ListTile`, so nothing was painting a focus state for them: with a
+/// remote, the row you were on was invisible. Reacting to *descendant* focus
+/// keeps each button separately reachable instead of collapsing the row into a
+/// single stop and stranding the ones that lose out.
+class _FocusHighlightRow extends StatefulWidget {
+  final Widget child;
+
+  const _FocusHighlightRow({required this.child});
+
+  @override
+  State<_FocusHighlightRow> createState() => _FocusHighlightRowState();
+}
+
+class _FocusHighlightRowState extends State<_FocusHighlightRow> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (hasFocus) {
+        if (hasFocus != _focused) setState(() => _focused = hasFocus);
+      },
+      child: AnimatedContainer(
+        duration: TvFocus.animation,
+        curve: TvFocus.curve,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: _focused
+              ? cs.onSurface.withValues(alpha: 0.10)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _focused ? cs.onSurface : Colors.transparent,
+            width: TvFocus.ringWidth,
+          ),
+        ),
+        child: widget.child,
+      ),
+    );
+  }
+}
 
 class _LangHeaderTile extends StatelessWidget {
   final String lang;
@@ -287,6 +337,7 @@ class _GroupHeaderTile extends ConsumerWidget {
                             children: groupSources.map((source) {
                               return _buildVariantSubItem(
                                 context,
+                                ref,
                                 source,
                                 controller,
                                 availableList,
@@ -312,6 +363,7 @@ class _GroupHeaderTile extends ConsumerWidget {
                                 children: columns[i].map((source) {
                                   return _buildVariantSubItem(
                                     context,
+                                    ref,
                                     source,
                                     controller,
                                     availableList,
@@ -358,11 +410,15 @@ class _GroupHeaderTile extends ConsumerWidget {
 
   Widget _buildVariantSubItem(
     BuildContext context,
+    WidgetRef ref,
     UnifiedSource source,
     ExtensionsController controller,
     List<SourceInfo>? availableList,
   ) {
     final theme = Theme.of(context);
+    final isProcessing = ref
+        .watch(extensionsControllerProvider)
+        .contains(source.id);
     final isDefault = controller.isDefaultSource(source, type, availableList);
     final langStr =
         (source.lang ??
@@ -388,8 +444,7 @@ class _GroupHeaderTile extends ConsumerWidget {
       }
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1),
+    return _FocusHighlightRow(
       child: Row(
         children: [
           // Left Pill: Info Container (Lang + Version + Engine)
@@ -522,7 +577,36 @@ class _GroupHeaderTile extends ConsumerWidget {
               type: type,
               iconSize: 18,
             ),
-          ],
+          ] else if (!isInstalled)
+            // A group's variants had no install control whatsoever -- the only
+            // way to add one was to hope it also appeared ungrouped. Expanding
+            // a group and pressing Install on the language you want is the
+            // whole point of the group.
+            isProcessing
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : FilledButton.tonalIcon(
+                    onPressed: () =>
+                        _startInstall(context, source, controller),
+                    icon: const Icon(Icons.download_rounded, size: 16),
+                    label: const Text(
+                      'Install',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      minimumSize: const Size(0, 32),
+                    ),
+                  ),
         ],
       ),
     );
@@ -1089,6 +1173,14 @@ class _SourcesTabState extends ConsumerState<SourcesTab> {
                 .toUpperCase()
           : source.name,
       subtitle: subtitleText,
+      // A tile with no onTap is not a focus stop, so on a remote the whole
+      // Available list was unreachable except for the install buttons hugging
+      // the right edge -- and nothing ever showed which row you were on.
+      // Installing is the only thing an available source can do, so it is the
+      // row's action.
+      onTap: widget.isInstalled || isProcessing
+          ? null
+          : () => _startInstall(context, source, controller),
       tileColor: source.isInbuilt
           ? Theme.of(context).colorScheme.secondaryContainer
           : (source.effectiveNsfw ? Colors.red.withValues(alpha: 0.06) : null),
@@ -1249,29 +1341,28 @@ class _SourcesTabState extends ConsumerState<SourcesTab> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   )
-                : FilledButton.tonalIcon(
-                    onPressed: () {
-                      if (Platform.isAndroid &&
-                          source.bridgeSource is ASource) {
-                        _showInstallMethodSheet(context, source, controller);
-                      } else {
-                        controller.installSource(context, source);
-                      }
-                    },
-                    icon: const Icon(Icons.download_rounded, size: 16),
-                    label: const Text(
-                      'Install',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                // Excluded from traversal: the row itself now carries the
+                // action, and two stops for one command means pressing DOWN
+                // twice to get past every extension in the list.
+                : ExcludeFocus(
+                    child: FilledButton.tonalIcon(
+                      onPressed: () =>
+                          _startInstall(context, source, controller),
+                      icon: const Icon(Icons.download_rounded, size: 16),
+                      label: const Text(
+                        'Install',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
                       ),
-                    ),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 0,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 0,
+                        ),
+                        minimumSize: const Size(0, 32),
                       ),
-                      minimumSize: const Size(0, 32),
                     ),
                   ),
           ],
@@ -1307,67 +1398,84 @@ class _SourcesTabState extends ConsumerState<SourcesTab> {
       },
     );
   }
+}
 
-  void _showInstallMethodSheet(
-    BuildContext context,
-    UnifiedSource source,
-    ExtensionsController controller,
-  ) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Install ${source.name}',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'How would you like to install this extension?',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 24),
-              ListTile(
-                leading: const Icon(Icons.apps_rounded),
-                title: const Text('App (Normal)'),
-                subtitle: const Text('Installs as a standard Android app.'),
-                onTap: () {
-                  Navigator.pop(context);
-                  (source.bridgeSource as ASource).isPrivate = false;
-                  controller.installSource(context, source);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.security_rounded),
-                title: const Text('Private / Internal'),
-                subtitle: const Text(
-                  'Installs internally. Does not show up in device settings or launcher.',
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  (source.bridgeSource as ASource).isPrivate = true;
-                  controller.installSource(context, source);
-                },
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        );
-      },
-    );
+/// Install, asking how first when the platform offers a choice.
+///
+/// Top-level rather than a method on the tab state so the variant sub-rows
+/// inside a group header can trigger exactly the same flow -- until now they
+/// had no install affordance at all.
+void _startInstall(
+  BuildContext context,
+  UnifiedSource source,
+  ExtensionsController controller,
+) {
+  if (Platform.isAndroid && source.bridgeSource is ASource) {
+    _showInstallMethodSheet(context, source, controller);
+  } else {
+    controller.installSource(context, source);
   }
+}
+
+void _showInstallMethodSheet(
+  BuildContext context,
+  UnifiedSource source,
+  ExtensionsController controller,
+) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (context) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Install ${source.name}',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'How would you like to install this extension?',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ListTile(
+              leading: const Icon(Icons.apps_rounded),
+              title: const Text('App (Normal)'),
+              subtitle: const Text('Installs as a standard Android app.'),
+              onTap: () {
+                Navigator.pop(context);
+                (source.bridgeSource as ASource).isPrivate = false;
+                controller.installSource(context, source);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.security_rounded),
+              title: const Text('Private / Internal'),
+              subtitle: const Text(
+                'Installs internally. Does not show up in device settings or launcher.',
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                (source.bridgeSource as ASource).isPrivate = true;
+                controller.installSource(context, source);
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      );
+    },
+  );
 }

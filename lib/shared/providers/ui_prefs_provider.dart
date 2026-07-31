@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shonenx/shared/providers/storage_provider.dart';
-import 'package:shonenx/features/discovery/presentation/widgets/episodes_panel/episode_tiles.dart';
 import 'package:shonenx/shared/models/ui_style_enums.dart';
 
 export 'package:shonenx/shared/models/ui_style_enums.dart';
@@ -31,7 +30,6 @@ class UiPrefState {
 
   final MediaCardStyle cardStyle;
   final ContinueWatchingStyle continueWatchingStyle;
-  final EpisodeViewMode episodeViewMode;
   final NavBarStyle navBarStyle;
   final Map<String, dynamic> experimentalConfig;
   final Map<String, bool> cardStyleWideModes;
@@ -42,7 +40,6 @@ class UiPrefState {
   const UiPrefState({
     this.cardStyle = MediaCardStyle.classic,
     this.continueWatchingStyle = ContinueWatchingStyle.classic,
-    this.episodeViewMode = EpisodeViewMode.classic,
     this.navBarStyle = NavBarStyle.classic,
     this.experimentalConfig = defaultExperimentalConfig,
     this.cardStyleWideModes = const {},
@@ -61,7 +58,6 @@ class UiPrefState {
   UiPrefState copyWith({
     MediaCardStyle? cardStyle,
     ContinueWatchingStyle? continueWatchingStyle,
-    EpisodeViewMode? episodeViewMode,
     NavBarStyle? navBarStyle,
     Map<String, dynamic>? experimentalConfig,
     Map<String, bool>? cardStyleWideModes,
@@ -73,7 +69,6 @@ class UiPrefState {
       cardStyle: cardStyle ?? this.cardStyle,
       continueWatchingStyle:
           continueWatchingStyle ?? this.continueWatchingStyle,
-      episodeViewMode: episodeViewMode ?? this.episodeViewMode,
       navBarStyle: navBarStyle ?? this.navBarStyle,
       experimentalConfig: experimentalConfig ?? this.experimentalConfig,
       cardStyleWideModes: cardStyleWideModes ?? this.cardStyleWideModes,
@@ -86,7 +81,6 @@ class UiPrefState {
   Map<String, dynamic> toJson() => {
     'cardStyle': cardStyle.name,
     'continueWatchingStyle': continueWatchingStyle.name,
-    'episodeViewMode': episodeViewMode.name,
     'navBarStyle': navBarStyle.name,
     'experimentalConfig': experimentalConfig,
     'cardStyleWideModes': cardStyleWideModes,
@@ -104,10 +98,6 @@ class UiPrefState {
       continueWatchingStyle: ContinueWatchingStyle.values.firstWhere(
         (e) => e.name == json['continueWatchingStyle'],
         orElse: () => ContinueWatchingStyle.classic,
-      ),
-      episodeViewMode: EpisodeViewMode.values.firstWhere(
-        (e) => e.name == json['episodeViewMode'],
-        orElse: () => EpisodeViewMode.classic,
       ),
       navBarStyle: NavBarStyle.values.firstWhere(
         (e) => e.name == json['navBarStyle'],
@@ -130,7 +120,7 @@ class UiPrefState {
 
   @override
   String toString() =>
-      'UiPrefState(cardStyle: $cardStyle, continueWatchingStyle: $continueWatchingStyle, episodeViewMode: $episodeViewMode, navBarStyle: $navBarStyle, experimentalConfig: $experimentalConfig, cardStyleWideModes: $cardStyleWideModes, showCardRatings: $showCardRatings, showCardGenres: $showCardGenres, showCardYear: $showCardYear)';
+      'UiPrefState(cardStyle: $cardStyle, continueWatchingStyle: $continueWatchingStyle, navBarStyle: $navBarStyle, experimentalConfig: $experimentalConfig, cardStyleWideModes: $cardStyleWideModes, showCardRatings: $showCardRatings, showCardGenres: $showCardGenres, showCardYear: $showCardYear)';
 
   @override
   bool operator ==(Object other) {
@@ -138,7 +128,6 @@ class UiPrefState {
     return other is UiPrefState &&
         other.cardStyle == cardStyle &&
         other.continueWatchingStyle == continueWatchingStyle &&
-        other.episodeViewMode == episodeViewMode &&
         other.navBarStyle == navBarStyle &&
         other.showCardRatings == showCardRatings &&
         other.showCardGenres == showCardGenres &&
@@ -151,7 +140,6 @@ class UiPrefState {
   int get hashCode => Object.hash(
     cardStyle,
     continueWatchingStyle,
-    episodeViewMode,
     navBarStyle,
     experimentalConfig,
     cardStyleWideModes,
@@ -237,11 +225,6 @@ class UiPrefsNotifier extends Notifier<UiPrefState> {
 
   void updateContinueWatchingStyle(ContinueWatchingStyle style) {
     state = state.copyWith(continueWatchingStyle: style);
-    _saveDb();
-  }
-
-  void updateEpisodeViewMode(EpisodeViewMode mode) {
-    state = state.copyWith(episodeViewMode: mode);
     _saveDb();
   }
 

@@ -146,6 +146,7 @@ class _ContinueHistoryScreenState extends ConsumerState<ContinueHistoryScreen> {
             child: SizedBox(
               height: 42,
               child: TextField(
+                       keyboardType: TextInputType.none, // TV: never raise the system IME
                 controller: _searchController,
                 decoration: InputDecoration(
                   hintText: 'Search history...',

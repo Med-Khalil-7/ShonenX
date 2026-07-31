@@ -232,6 +232,7 @@ class _SourceSettingsSheetState extends ConsumerState<SourceSettingsSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TextField(
+            keyboardType: TextInputType.none, // TV: never raise the system IME
             controller: controller,
             decoration: const InputDecoration(border: OutlineInputBorder()),
             autofocus: true,

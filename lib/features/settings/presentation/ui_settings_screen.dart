@@ -68,23 +68,6 @@ class UiSettingsScreen extends ConsumerWidget {
           ),
 
           SettingsSection(
-            title: 'Episodes',
-            children: [
-              SettingsActionTile(
-                icon: Icons.view_list_rounded,
-                title: 'Episode/Chapter View mode',
-                subtitle: 'Default view mode for episode lists',
-                trailing: _Chip(
-                  label: prefs.episodeViewMode.displayName,
-                  cs: cs,
-                ),
-                onTap: () =>
-                    showEpisodeModeSheet(context, ref, notifier, theme),
-              ),
-            ],
-          ),
-
-          SettingsSection(
             title: 'Navigation',
             children: [
               SettingsActionTile(

@@ -25,7 +25,7 @@ class DetailMediaRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return HorizontalSection<UnifiedMedia>(
       title: title,
-      height: ShonenXMetrics.of(context).rowPoster / ShonenX.posterAspect,
+      height: TvPosterCard.rowExtent(context),
       gap: ShonenXMetrics.of(context).rowGap,
       data: AsyncValue.data(items),
       itemBuilder: (context, item) => TvPosterCard(
@@ -53,8 +53,8 @@ class DetailCharacterRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return HorizontalSection<MediaCharacter>(
       title: 'Characters',
-      // Portrait image plus two text lines, all derived so the row cannot
-      // overflow when the type scale changes.
+      // Portrait plus two text lines. The card lets the portrait absorb any
+      // slack, so this only has to be roughly right -- see _CharacterCard.
       height: ShonenXMetrics.of(context).rowPoster * 1.25 +
           ShonenXMetrics.of(context).body * 3.2,
       gap: ShonenXMetrics.of(context).rowGap,
@@ -87,27 +87,33 @@ class _CharacterCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
-              borderRadius: radius,
-              child: SizedBox(
-                width: m.rowPoster,
-                height: m.rowPoster * 1.25,
-                child: (character.image == null || character.image!.isEmpty)
-                    ? Container(
-                        color: cs.surfaceContainer,
-                        child: Icon(
-                          Icons.person_outline,
-                          color: cs.onSurfaceVariant,
+            // The portrait takes whatever the row has left over after the two
+            // captions. Pinning its height instead made the card depend on the
+            // font's line metrics matching the row's estimate of them, and a
+            // 5px shortfall is a red overflow banner.
+            Expanded(
+              child: ClipRRect(
+                borderRadius: radius,
+                child: SizedBox(
+                  width: m.rowPoster,
+                  child:
+                      (character.image == null || character.image!.isEmpty)
+                      ? Container(
+                          color: cs.surfaceContainer,
+                          child: Icon(
+                            Icons.person_outline,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        )
+                      : CachedNetworkImage(
+                          imageUrl: character.image!,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) =>
+                              Container(color: cs.surfaceContainer),
+                          errorWidget: (_, __, ___) =>
+                              Container(color: cs.surfaceContainer),
                         ),
-                      )
-                    : CachedNetworkImage(
-                        imageUrl: character.image!,
-                        fit: BoxFit.cover,
-                        placeholder: (_, __) =>
-                            Container(color: cs.surfaceContainer),
-                        errorWidget: (_, __, ___) =>
-                            Container(color: cs.surfaceContainer),
-                      ),
+                ),
               ),
             ),
             SizedBox(height: m.body * 0.5),

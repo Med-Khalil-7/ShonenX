@@ -29,7 +29,7 @@ class LibraryRow extends ConsumerWidget {
     final isLocal = targetTracker == TrackerType.local;
     final mediaType = targetMediaType ?? MediaType.ANIME;
     final m = ShonenXMetrics.of(context);
-    final rowHeight = m.rowPoster / ShonenX.posterAspect;
+    final rowHeight = TvPosterCard.rowExtent(context, width: m.rowPoster);
 
     Widget buildCard(BuildContext ctx, dynamic entry, String tagPrefix) {
       return TvPosterCard(

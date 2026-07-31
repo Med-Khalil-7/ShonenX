@@ -79,6 +79,7 @@ class _RawConfigOverrideSheetState extends State<RawConfigOverrideSheet> {
             ),
             const SizedBox(height: 16),
             TextField(
+              keyboardType: TextInputType.none, // TV: never raise the system IME
               controller: _controller,
               maxLines: 5,
               decoration: InputDecoration(
