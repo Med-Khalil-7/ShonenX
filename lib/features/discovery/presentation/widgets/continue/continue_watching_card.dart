@@ -9,8 +9,11 @@ import 'package:shonenx/shared/widgets/app_network_image.dart';
 import 'package:shonenx/features/discovery/presentation/widgets/continue/continue_media_mixin.dart';
 import 'package:shonenx/features/history/domain/models/watch_history_entry.dart';
 import 'package:shonenx/features/history/providers/watch_history_provider.dart';
-import 'package:shonenx/features/player/domain/player_mode.dart';
+import 'package:shonenx/features/discovery/providers/episodes_provider.dart';
+import 'package:shonenx/features/discovery/domain/media_args.dart';
+import 'package:shonenx/features/history/providers/continue_watching_resolver.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
+import 'package:shonenx/source_engine/source_registry.dart';
 import 'continue_card_layout.dart';
 
 class ContinueWatchingItem extends ConsumerStatefulWidget {
@@ -49,31 +52,42 @@ class _ContinueWatchingItemState extends ConsumerState<ContinueWatchingItem>
     ),
   };
 
-  /// Straight to the player, at the episode and position this card shows.
+  /// Resolves the source, then opens the player on it.
   ///
-  /// It used to resolve the source first and then route via the detail screen
-  /// with an autoplay flag, so pressing a card that already says "EP 7, 12 min
-  /// left" sat spinning through a source lookup and a screen the user never
-  /// wanted to see. Everything needed is on the history entry; the player
-  /// resolves the rest against its own loading state.
-  void _resumeEpisode() {
-    final entry = widget.entry;
-    context.push(
-      '/player',
-      extra: PlayerModeAuto(
-        media: UnifiedMedia(
-          id: entry.animeId,
-          idMal: entry.animeIdMal,
-          title: MediaTitle(english: entry.animeTitle),
-          type: MediaType.ANIME,
-          cover: entry.cover ?? entry.thumbnailUrl,
-          banner: entry.banner,
-        ),
-        episodeNumber: entry.episodeNumber,
-        startPosition: entry.positionInMilliseconds > 0
-            ? Duration(milliseconds: entry.positionInMilliseconds)
-            : null,
-      ),
+  /// The resolve happens here rather than inside the player. It is a search
+  /// against the source and it can fail -- wrong match, source down, no
+  /// episodes -- and the place to say so is the screen the user is still
+  /// looking at, where handleResumeMedia can offer to pick another source.
+  /// Done inside the player there is nothing behind the failure but a black
+  /// screen, and nowhere to go back to.
+  ///
+  /// It goes to the player directly, not through the detail screen with an
+  /// autoplay flag: this card already says which episode and how far in.
+  Future<void> _resumeEpisode() async {
+    await handleResumeMedia(
+      resolveAndPlay: () async {
+        // Same reason as MediaActions.play: the resolver walks the preference
+        // -> match -> episodes chain, and it needs a live subscriber for the
+        // length of the walk or an upstream change restarts it under us.
+        final keepAlive = ref.listenManual(
+          episodesListProvider(
+            MediaArgs(mediaTitle: widget.entry.animeTitle, type: MediaType.ANIME),
+          ),
+          (_, __) {},
+        );
+        try {
+          final result = await ref
+              .read(continueWatchingResolverProvider)
+              .resolve(widget.entry);
+          if (!mounted) return;
+          context.push('/player', extra: result.mode);
+        } finally {
+          keepAlive.close();
+        }
+      },
+      mediaType: MediaType.ANIME,
+      mediaTitle: widget.entry.animeTitle,
+      availableSourcesProvider: availableAnimeSourcesProvider,
     );
   }
 

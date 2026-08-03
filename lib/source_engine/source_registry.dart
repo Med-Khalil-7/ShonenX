@@ -226,12 +226,35 @@ final availableAnimeSourcesProvider = FutureProvider<List<SourceInfo>>(
     try {
       final enabledManagers = ref.watch(enabledExtensionManagersProvider);
       final bridgeManager = Get.find<bridge.ExtensionManager>();
-      final worker1 = ever(bridgeManager.installedAnimeExtensions, (_) {
+      // Rebuild only when the list of extensions actually changes.
+      //
+      // These are GetX observables and they tick for every write the runtime
+      // makes while it loads -- repo fetches, per-manager registration, the
+      // odd reorder. Invalidating on each tick restarted this provider over
+      // and over, and mediaPreferenceProvider watches its future, so
+      // *resolving a title* restarted with it and could not settle until the
+      // churn stopped. On a cold start that was a minute of the Play button
+      // spinning before anything happened. Comparing ids collapses a burst of
+      // identical notifications into nothing.
+      String signature(List<dynamic> exts) =>
+          exts.map((e) => '${e.id}:${e.managerId}').join(',');
+
+      var lastSignature = signature(bridgeManager.installedAnimeExtensions);
+      void invalidateIfChanged() {
+        final next = signature(bridgeManager.installedAnimeExtensions);
+        if (next == lastSignature) return;
+        lastSignature = next;
         ref.invalidateSelf();
-      });
-      final worker2 = ever(bridgeManager.availableAnimeExtensions, (_) {
-        ref.invalidateSelf();
-      });
+      }
+
+      final worker1 = ever(
+        bridgeManager.installedAnimeExtensions,
+        (_) => invalidateIfChanged(),
+      );
+      final worker2 = ever(
+        bridgeManager.availableAnimeExtensions,
+        (_) => invalidateIfChanged(),
+      );
       ref.onDispose(() {
         worker1.dispose();
         worker2.dispose();

@@ -53,7 +53,17 @@ class MediaMatchNotifier extends AsyncNotifier<MatchedMediaState> {
 
   @override
   Future<MatchedMediaState> build() async {
-    state = const AsyncLoading();
+    // No `state = const AsyncLoading()` here.
+    //
+    // Riverpod already reports loading for as long as this build's future is
+    // pending; assigning state from inside build publishes a second, manual
+    // loading value that the build's own future never resolves. A widget that
+    // watches this as an AsyncValue never notices -- it just rebuilds when the
+    // data lands, which is why the episodes screen always worked. A one-shot
+    // `await ref.read(...future)` latches onto that manual value and waits
+    // forever, which is what left the player spinning on a black screen for
+    // any title whose episode list had not been opened yet. Opening the list
+    // first "fixed" it only because the match was then already cached.
     final prefs = await ref.watch(mediaPreferenceProvider(args).future);
 
     if (args.sourceId != null && args.providerId != null) {

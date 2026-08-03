@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:shonenx/core/utils/extensions.dart';
+import 'package:shonenx/features/discovery/domain/media_args.dart';
+import 'package:shonenx/features/discovery/providers/episodes_provider.dart';
+import 'package:shonenx/features/history/providers/watch_history_provider.dart';
 import 'package:shonenx/features/player/domain/player_mode.dart';
 import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
 import 'package:shonenx/features/tracking/domain/models/tracked_status.dart';
@@ -10,6 +14,7 @@ import 'package:shonenx/features/tracking/presentation/widgets/tracker_manager_s
 import 'package:shonenx/features/tracking/providers/media_tracking_provider.dart';
 import 'package:shonenx/features/tracking/providers/tracker_link_provider.dart';
 import 'package:shonenx/features/tracking/providers/tracker_registry.dart';
+import 'package:shonenx/shared/models/unified_episode.dart';
 import 'package:shonenx/shared/models/unified_media.dart';
 import 'package:shonenx/shared/models/video_server.dart';
 
@@ -40,11 +45,65 @@ abstract final class MediaActions {
       ref.read(playerPrefsProvider.notifier).setDefaultServerType(serverType);
     }
 
-    // Straight to the player. Choosing the episode means fetching the whole
-    // episode list from the source, and doing that here left the button
-    // spinning on a screen the user had finished with. PlayerModeAuto hands
-    // that work to the player, which is already on screen while it happens.
-    context.push('/player', extra: PlayerModeAuto(media: media));
+    final args = MediaArgs.fromMedia(media);
+
+    // Hold the chain subscribed for as long as we wait on it.
+    //
+    // preference -> match -> episodes each watch the next, and none of them is
+    // autoDispose, but a one-shot `read(...future)` from a button leaves the
+    // chain with no live subscriber: any upstream change restarts it and the
+    // future we are holding never settles. The episodes screen watches these
+    // providers, which is the only reason Play worked after opening the list
+    // once. listenManual gives this path the same subscription for the length
+    // of the await.
+    final keepAlive = ref.listenManual(episodesListProvider(args), (_, __) {});
+
+    try {
+      final state = await ref.read(episodesListProvider(args).future);
+      final episodes = state.episodes;
+      if (episodes.isEmpty) {
+        _toast(context, 'No episodes found for this source.');
+        return;
+      }
+
+      final history = ref.read(historyEpisodesProvider(media.id)).value ?? [];
+      final last = history.firstOrNull;
+
+      UnifiedEpisode? target;
+      Duration? startPosition;
+
+      if (last != null) {
+        final partway =
+            last.positionInMilliseconds > 0 &&
+            last.positionInMilliseconds < last.durationInMilliseconds;
+        if (partway) {
+          target = episodes.firstWhereOrNull(
+            (e) => e.number == last.episodeNumber,
+          );
+          startPosition = Duration(milliseconds: last.positionInMilliseconds);
+        } else {
+          target = episodes.firstWhereOrNull(
+            (e) => e.number == last.episodeNumber + 1,
+          );
+        }
+      }
+      target ??= episodes.first;
+
+      if (!context.mounted) return;
+      context.push(
+        '/player',
+        extra: PlayerModeOnline(
+          media: media,
+          episode: target,
+          sourceInfo: state.source,
+          startPosition: startPosition,
+        ),
+      );
+    } catch (e) {
+      _toast(context, 'Could not start playback: $e');
+    } finally {
+      keepAlive.close();
+    }
   }
 
   /// Marks the title as planned on the primary tracker. Falls back to the
