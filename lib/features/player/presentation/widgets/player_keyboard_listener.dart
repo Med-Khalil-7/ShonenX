@@ -41,7 +41,6 @@ class PlayerKeyboardListener extends ConsumerWidget {
   final VoidCallback onUserInteraction;
 
   final VoidCallback onToggleEpisodePanel;
-  final VoidCallback onBack;
 
   const PlayerKeyboardListener({
     super.key,
@@ -54,7 +53,6 @@ class PlayerKeyboardListener extends ConsumerWidget {
     required this.onWake,
     required this.onUserInteraction,
     required this.onToggleEpisodePanel,
-    required this.onBack,
   });
 
   // Not const: LogicalKeyboardKey overrides ==, which a const set forbids.
@@ -136,10 +134,15 @@ class PlayerKeyboardListener extends ConsumerWidget {
         }
         return KeyEventResult.handled;
 
-      case LogicalKeyboardKey.escape:
-      case LogicalKeyboardKey.goBack:
-        if (isDown) onBack();
-        return KeyEventResult.handled;
+      // BACK is deliberately not handled here.
+      //
+      // Android delivers it as a platform pop, which PopScope on the player
+      // already answers. Some remotes send a goBack key event *as well*, and
+      // taking both meant one press ran the handler twice: the first raised
+      // the controls, the second opened the close prompt, and a third
+      // delivery reached the prompt's own route and popped it again -- the
+      // controls and the prompt appearing together and the prompt vanishing
+      // on its own. One press, one route in.
     }
 
     if (!controlsVisible && _directional.contains(key)) {

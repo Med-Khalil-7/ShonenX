@@ -297,6 +297,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       widthFactor: 1.0,
       builder: (sheetContext) => EpisodesScreen(
         media: media,
+        currentEpisodeNumber: ref
+            .read(playerControllerProvider)
+            .activeEpisode
+            ?.number,
         onPlay: (episode, _) {
           Navigator.of(sheetContext).pop();
           ref.read(playerControllerProvider.notifier).loadEpisode(episode);
@@ -383,7 +387,23 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   /// the middle of closing.
   bool _backInFlight = false;
 
+  /// When the last BACK was acted on, so one press is not acted on twice.
+  DateTime? _lastBack;
+
   Future<void> _handleBack() async {
+    // A single press can arrive down both routes: some remotes send a goBack
+    // key event, and Android delivers the platform pop as well. Acting on both
+    // collapsed the two-stage back -- controls first, prompt second -- into a
+    // single jump to the prompt, because the second delivery arrived after the
+    // first had already raised the controls and returned.
+    final now = DateTime.now();
+    final last = _lastBack;
+    if (last != null &&
+        now.difference(last) < const Duration(milliseconds: 400)) {
+      return;
+    }
+    _lastBack = now;
+
     if (_backInFlight) return;
     _backInFlight = true;
     try {
@@ -400,12 +420,23 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     }
     if (_exitPromptOpen) return;
 
-    // BACK asks about leaving, whatever the overlay happens to be doing.
+    // A scrub owns BACK: it means "abandon this seek". The seek bar cancels it
+    // from its own key handler, so all this has to do is keep out of the way
+    // -- the platform pop arrives for the same press.
+    if (ref.read(isScrubbingProvider)) return;
+
+    // With the controls down, BACK raises them and stops there.
     //
-    // It used to spend the first press dismissing the controls, so leaving
-    // took two presses whenever the bar was up -- and the first one looked
-    // like nothing had happened. The controls come down with it instead, so
-    // the prompt is the only thing on screen.
+    // Leaving is two deliberate presses rather than one: the first brings the
+    // player's own controls up, and only a second one -- with them already in
+    // front of you -- asks about closing.
+    if (!_showControls) {
+      _wake();
+      return;
+    }
+
+    // Controls are up, so this press is the one that means "leave". They come
+    // down with it, leaving the prompt as the only thing on screen.
     _controlsTimer?.cancel();
     setState(() {
       _showControls = false;
@@ -503,18 +534,26 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           onConfirmSkip: _skipHandle.skip,
           onUserInteraction: _keepAwake,
           onToggleEpisodePanel: _toggleEpisodePanel,
-          onBack: _handleBack,
           child: Stack(
             children: [
               Center(
                 child: Offstage(
-                  offstage: playerState.isLoading,
+                  offstage: playerState.isLoading || playerState.error != null,
                   child: RepaintBoundary(
                     key: _videoKey,
                     child: engine.buildVideoView(),
                   ),
                 ),
               ),
+              // A failed resolve used to leave the screen black with no way
+              // to tell it apart from one still loading.
+              if (playerState.error != null)
+                Center(
+                  child: Text(
+                    playerState.error!,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
               // Holds the scene still for the length of a scrub. Above the
               // video so the player can move underneath it.
               if (_frozenFrame != null)

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shonenx/core/theme/shonenx_tokens.dart';
 import 'package:shonenx/core/tv/tv_metrics.dart';
@@ -9,6 +10,7 @@ import 'package:shonenx/features/player/engine/video_engine.dart';
 import 'package:shonenx/features/player/providers/aniskip_prefs_provider.dart';
 import 'package:shonenx/features/player/providers/aniskip_provider.dart';
 import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
+import 'package:shonenx/features/player/providers/scrub_provider.dart';
 import 'package:shonenx/features/player/providers/video_engine_provider.dart';
 import 'package:shonenx/shared/widgets/tv/tv_button.dart';
 
@@ -54,7 +56,28 @@ class PlayerSkipButton extends ConsumerStatefulWidget {
 }
 
 class _PlayerSkipButtonState extends ConsumerState<PlayerSkipButton> {
-  final FocusNode _focus = FocusNode(debugLabel: 'skipButton');
+  late final FocusNode _focus = FocusNode(
+    debugLabel: 'skipButton',
+    onKeyEvent: _onKey,
+  );
+
+  /// Navigating away from the button takes it down.
+  ///
+  /// It holds focus while it is up, so without this the press to leave was
+  /// answered by the button claiming focus straight back -- there was no way
+  /// off it but to wait it out. Up or down now dismisses it and lets the press
+  /// through to whatever is there, and dismissing means it stays down for this
+  /// visit to the stamp rather than re-offering a second later.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey != LogicalKeyboardKey.arrowUp &&
+        event.logicalKey != LogicalKeyboardKey.arrowDown) {
+      return KeyEventResult.ignored;
+    }
+    if (_showing == null) return KeyEventResult.ignored;
+    _dismiss();
+    return KeyEventResult.ignored;
+  }
 
   /// The stamp being offered, if any.
   AniSkipStamp? _showing;
@@ -107,6 +130,9 @@ class _PlayerSkipButtonState extends ConsumerState<PlayerSkipButton> {
     if (!mounted || _showing == null || _focus.hasFocus) return;
     if (!ref.read(playerPrefsProvider).focusSkipButton) return;
     if (!_isTopmost) return;
+    // The seek bar owns focus for the length of a scrub; taking it back is
+    // what cancelled the scrub the moment this button appeared.
+    if (ref.read(isScrubbingProvider)) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _showing != null && !_focus.hasFocus && _isTopmost) {
         _focus.requestFocus();
@@ -126,7 +152,7 @@ class _PlayerSkipButtonState extends ConsumerState<PlayerSkipButton> {
   void _offer(AniSkipStamp stamp, {required bool takeFocus, required int hold}) {
     setState(() => _showing = stamp);
 
-    if (takeFocus && _isTopmost) {
+    if (takeFocus && _isTopmost && !ref.read(isScrubbingProvider)) {
       final previous = FocusManager.instance.primaryFocus;
       // Do not record ourselves as the place to return to.
       if (previous != _focus) _restoreTo = previous;
@@ -176,6 +202,18 @@ class _PlayerSkipButtonState extends ConsumerState<PlayerSkipButton> {
 
     ref.listen(videoEngineStateProvider.select((s) => s.position), (_, pos) {
       if (!prefs.showAniSkipButton) return;
+
+      // Stay out of the way of a scrub.
+      //
+      // Scrubbing moves the player, so the position ticks this listens to jump
+      // wherever the thumb goes -- straight through the opening, usually. The
+      // button would offer itself mid-drag and take focus off the seek bar,
+      // which ends the scrub and throws away where the viewer was heading.
+      // Nothing is marked spent either: leaving the window this way is the
+      // player being driven, not the offer being declined, so once the scrub
+      // is committed the next tick offers it normally.
+      if (ref.read(isScrubbingProvider)) return;
+
       final seconds = pos.inSeconds;
 
       // Whether we are inside a stamp at all, independent of whether it has

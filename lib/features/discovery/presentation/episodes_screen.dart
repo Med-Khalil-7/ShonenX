@@ -32,7 +32,20 @@ class EpisodesScreen extends ConsumerWidget {
   /// rather than two that drift apart.
   final void Function(UnifiedEpisode episode, SourceInfo sourceInfo)? onPlay;
 
-  const EpisodesScreen({super.key, required this.media, this.onPlay});
+  /// The episode to open on, when the caller knows better than history does.
+  ///
+  /// Opened from the player this is what is actually playing. History only
+  /// says where the last *save* landed -- it is written every few seconds, so
+  /// straight after switching episode it still names the previous one, and the
+  /// grid opened on that episode's range tab instead of the running one's.
+  final double? currentEpisodeNumber;
+
+  const EpisodesScreen({
+    super.key,
+    required this.media,
+    this.onPlay,
+    this.currentEpisodeNumber,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -107,7 +120,9 @@ class EpisodesScreen extends ConsumerWidget {
               Expanded(
                 child: EpisodeGridView(
                   media: media,
-                  currentEpisodeNumber: history.firstOrNull?.episodeNumber,
+                  currentEpisodeNumber:
+                      currentEpisodeNumber ??
+                      history.firstOrNull?.episodeNumber,
                   padding: EdgeInsets.only(
                     left: gutter - m.backArrowInset,
                     bottom: m.body * 2,
