@@ -17,6 +17,12 @@ class HorizontalSection<T> extends StatelessWidget {
   final Widget Function(BuildContext context, int index)? skeletonItemBuilder;
   final int skeletonCount;
 
+  /// Where the row's content starts, when the screen's text column does not
+  /// begin at the shell gutter. The detail screen indents its column past the
+  /// back arrow, and a row left on the gutter sat visibly to the left of the
+  /// title it belongs under.
+  final double? edgeInset;
+
   const HorizontalSection({
     super.key,
     required this.title,
@@ -28,6 +34,7 @@ class HorizontalSection<T> extends StatelessWidget {
     this.onMoreTap,
     this.skeletonItemBuilder,
     this.skeletonCount = 12,
+    this.edgeInset,
   });
 
   @override
@@ -36,7 +43,7 @@ class HorizontalSection<T> extends StatelessWidget {
     // so items scroll under the safe edge instead of having their focus ring
     // clipped at the first and last position.
     final m = ShonenXMetrics.of(context);
-    final edge = m.shellGutter(MediaQuery.sizeOf(context));
+    final edge = edgeInset ?? m.shellGutter(MediaQuery.sizeOf(context));
     // Cards carry a focus ring drawn as a Border, which occupies its width
     // even when transparent, so each one is already ringWidth wider on both
     // sides than the art inside it. Deduct that or the visible gap comes out
@@ -119,10 +126,19 @@ class HorizontalSection<T> extends StatelessWidget {
                     clipBehavior: Clip.none,
                     scrollDirection: Axis.horizontal,
                     padding: EdgeInsets.symmetric(horizontal: edge),
-                    // Directional traversal can only reach focus nodes that have
-                    // actually been built. Without a generous cache the row simply
-                    // dead-ends at the edge of the viewport.
-                    cacheExtent: 700,
+                    // Directional traversal can only reach focus nodes that
+                    // have actually been built, so the cache has to stay ahead
+                    // of the focus, not just ahead of the eye.
+                    //
+                    // 700 was tuned against poster rows of a dozen items. A
+                    // long row -- characters, now that every role is fetched
+                    // rather than the mains alone -- outruns it: the next node
+                    // does not exist yet, traversal falls back to the nearest
+                    // one that does, and focus appears to jump into the middle
+                    // of the row. Wide enough to always hold a screenful
+                    // either side of the viewport fixes that; it is still well
+                    // under the 1600 this started at.
+                    cacheExtent: 1200,
                     itemCount: items.length,
                     itemBuilder: (context, index) =>
                         itemBuilder(context, items[index]),

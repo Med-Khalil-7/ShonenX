@@ -260,7 +260,7 @@ class AnilistTrackerQueries {
           site
           icon
         }
-        characters(role: MAIN, sort: [ROLE, RELEVANCE]) {
+        characters(sort: [ROLE, RELEVANCE]) {
           edges {
             role
             node {

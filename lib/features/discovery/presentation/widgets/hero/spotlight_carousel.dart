@@ -178,10 +178,17 @@ class _SpotlightCarouselState extends ConsumerState<SpotlightCarousel> {
     // Leaving on the left edge is the shell's business, not ours.
     if (step < 0 && from == 0) return KeyEventResult.ignored;
 
-    final to = (from + step) % count;
-    if (to >= 0 && to < _thumbFocus.length) {
-      _thumbFocus[to].requestFocus();
+    // Stop at the ends; do not wrap.
+    //
+    // This was modulo, so holding right ran round the strip forever -- the
+    // slide, its backdrop and its poster changing on every key repeat, for as
+    // long as the button was held. A strip of ten titles is a list, not a
+    // carousel: the last one is the end of it.
+    final to = from + step;
+    if (to < 0 || to >= count || to >= _thumbFocus.length) {
+      return KeyEventResult.handled;
     }
+    _thumbFocus[to].requestFocus();
     return KeyEventResult.handled;
   }
 

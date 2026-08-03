@@ -13,18 +13,21 @@ class DetailMediaRow extends StatelessWidget {
   final String title;
   final List<UnifiedMedia> items;
   final String tagPrefix;
+  final double? edgeInset;
 
   const DetailMediaRow({
     super.key,
     required this.title,
     required this.items,
     required this.tagPrefix,
+    this.edgeInset,
   });
 
   @override
   Widget build(BuildContext context) {
     return HorizontalSection<UnifiedMedia>(
       title: title,
+      edgeInset: edgeInset,
       height: TvPosterCard.rowExtent(context),
       gap: ShonenXMetrics.of(context).rowGap,
       data: AsyncValue.data(items),
@@ -46,13 +49,15 @@ class DetailMediaRow extends StatelessWidget {
 /// Characters and their voice actors.
 class DetailCharacterRow extends StatelessWidget {
   final List<MediaCharacter> characters;
+  final double? edgeInset;
 
-  const DetailCharacterRow({super.key, required this.characters});
+  const DetailCharacterRow({super.key, required this.characters, this.edgeInset});
 
   @override
   Widget build(BuildContext context) {
     return HorizontalSection<MediaCharacter>(
       title: 'Characters',
+      edgeInset: edgeInset,
       // Portrait plus two text lines. The card lets the portrait absorb any
       // slack, so this only has to be roughly right -- see _CharacterCard.
       height: ShonenXMetrics.of(context).rowPoster * 1.25 +

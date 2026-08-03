@@ -285,7 +285,64 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       right: ShonenXMetrics.of(
                         context,
                       ).shellGutter(MediaQuery.sizeOf(context)),
-                      child: _HeaderActions(firstFocus: _headerFocus),
+                      // A group of its own: left and right belong to these
+                      // two buttons, and down leaves for the hero. Without it
+                      // the arrows wandered into whatever the page happened to
+                      // put nearby, and down skipped the hero for the first
+                      // row -- the header sits outside the row scopes, so the
+                      // vertical stepper reads it as "no row" and starts at
+                      // the top of the list.
+                      child: FocusTraversalGroup(
+                        child: Focus(
+                          canRequestFocus: false,
+                          skipTraversal: true,
+                          onKeyEvent: (node, event) {
+                            if (event is! KeyDownEvent &&
+                                event is! KeyRepeatEvent) {
+                              return KeyEventResult.ignored;
+                            }
+                            final key = event.logicalKey;
+
+                            if (key == LogicalKeyboardKey.arrowDown) {
+                              if (!_heroFocus.canRequestFocus) {
+                                return KeyEventResult.ignored;
+                              }
+                              _heroFocus.requestFocus();
+                              return KeyEventResult.handled;
+                            }
+
+                            // Left and right are answered here rather than
+                            // left to the traversal group. A group only
+                            // confines the search: when it finds no candidate
+                            // in the direction asked for, the framework hands
+                            // the press to the enclosing group, and right off
+                            // the last button dropped into the rows below.
+                            // Consuming it stops at the end of the pair.
+                            final forward = key == LogicalKeyboardKey.arrowRight;
+                            final back = key == LogicalKeyboardKey.arrowLeft;
+                            if (!forward && !back) {
+                              return KeyEventResult.ignored;
+                            }
+
+                            final buttons = node.traversalDescendants
+                                .where(
+                                  (n) => n.canRequestFocus && !n.skipTraversal,
+                                )
+                                .toList();
+                            final current = buttons.indexWhere(
+                              (n) => n.hasPrimaryFocus,
+                            );
+                            if (current == -1) return KeyEventResult.ignored;
+
+                            final next = current + (forward ? 1 : -1);
+                            if (next >= 0 && next < buttons.length) {
+                              buttons[next].requestFocus();
+                            }
+                            return KeyEventResult.handled;
+                          },
+                          child: _HeaderActions(firstFocus: _headerFocus),
+                        ),
+                      ),
                     ),
                   ],
                 ),
