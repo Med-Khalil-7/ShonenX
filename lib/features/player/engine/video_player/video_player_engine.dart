@@ -12,6 +12,17 @@ import 'package:shonenx/features/player/providers/video_engine_provider.dart';
 
 class VideoPlayerEngine implements VideoEngine {
   VideoPlayerController? _controller;
+
+  /// Published so the view rebuilds when the controller is *replaced*.
+  ///
+  /// The view used to detect that by watching the engine state's duration,
+  /// which works for a new episode and not at all for a new rendition of the
+  /// same one: switching quality or language keeps the duration identical, so
+  /// nothing rebuilt and the widget went on holding a controller that had just
+  /// been disposed. Black screen until some unrelated press repainted the
+  /// tree, which is exactly when it came back.
+  final ValueNotifier<VideoPlayerController?> _current =
+      ValueNotifier<VideoPlayerController?>(null);
   final Ref ref;
 
 
@@ -33,6 +44,7 @@ class VideoPlayerEngine implements VideoEngine {
 
 
     _controller?.removeListener(_listener);
+    _current.value = null;
     await _controller?.dispose();
 
     final headers = <String, String>{...?stream.headers};
@@ -45,6 +57,7 @@ class VideoPlayerEngine implements VideoEngine {
           : null,
     );
     _controller?.addListener(_listener);
+    _current.value = _controller;
 
     await _controller?.initialize();
 
@@ -82,30 +95,25 @@ class VideoPlayerEngine implements VideoEngine {
     return Consumer(
       builder: (context, ref, _) {
         final fit = ref.watch(videoEngineStateProvider.select((s) => s.fit));
-        // Rebuilds when the controller itself is swapped -- a new episode or a
-        // quality change replaces it, and the closure below captures the old
-        // one otherwise.
-        ref.watch(videoEngineStateProvider.select((s) => s.duration));
 
-        final controller = _controller;
-        if (controller == null) {
-          return const ColoredBox(color: Colors.black);
-        }
-
-        // Listening to the controller is what makes the first frame appear.
-        //
-        // This used to read `value.isInitialized` inside a Consumer that only
-        // watched `fit`, so nothing rebuilt it when initialisation finished:
-        // the black box stayed until something unrelated happened to repaint
-        // the tree -- a remote press, a panel closing. The video was playing
-        // the whole time, just never drawn.
-        return ValueListenableBuilder<VideoPlayerValue>(
-          valueListenable: controller,
-          builder: (context, value, _) {
-            if (!value.isInitialized) {
+        // Two listenables, and both are load-bearing: the outer one fires when
+        // the controller is swapped for a new rendition, the inner one when
+        // that controller finishes initialising and has a frame to draw.
+        return ValueListenableBuilder<VideoPlayerController?>(
+          valueListenable: _current,
+          builder: (context, controller, __) {
+            if (controller == null) {
               return const ColoredBox(color: Colors.black);
             }
-            return _videoBox(context, controller, value, fit);
+            return ValueListenableBuilder<VideoPlayerValue>(
+              valueListenable: controller,
+              builder: (context, value, ___) {
+                if (!value.isInitialized) {
+                  return const ColoredBox(color: Colors.black);
+                }
+                return _videoBox(context, controller, value, fit);
+              },
+            );
           },
         );
       },
@@ -208,6 +216,7 @@ class VideoPlayerEngine implements VideoEngine {
 
   @override
   Future<void> dispose() async {
+    _current.value = null;
     _controller?.removeListener(_listener);
     await _controller?.dispose();
     _controller = null;

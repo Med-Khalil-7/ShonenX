@@ -208,32 +208,6 @@ class PlayerSettingsScreen extends ConsumerWidget {
                 value: playerPrefs.autoNext,
                 onChanged: (val) => prefsNotifier.setAutoNext(val),
               ),
-              SettingsDropdownTile<int>(
-                icon: Icons.timer_outlined,
-                title: 'Next Episode Prompt Threshold',
-                value:
-                    [
-                      30,
-                      45,
-                      60,
-                      85,
-                      90,
-                      120,
-                    ].contains(playerPrefs.nextEpisodeThreshold)
-                    ? playerPrefs.nextEpisodeThreshold
-                    : 85,
-                items: [30, 45, 60, 85, 90, 120]
-                    .map(
-                      (s) => DropdownMenuItem(
-                        value: s,
-                        child: Text('${s}s before end'),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (val) {
-                  if (val != null) prefsNotifier.setNextEpisodeThreshold(val);
-                },
-              ),
               SettingsSwitchTile(
                 icon: Icons.fast_forward_rounded,
                 title: 'Show Quick Skip Button',

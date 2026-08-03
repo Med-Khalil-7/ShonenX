@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shonenx/core/theme/shonenx_tokens.dart';
+import 'package:shonenx/features/player/providers/player_controller.dart';
 import 'package:shonenx/features/player/providers/video_engine_provider.dart';
 
 /// Transient centre feedback: a red arc while buffering, and a dark disc with
@@ -27,9 +28,18 @@ class _PlayerCenterIndicatorState
 
   @override
   Widget build(BuildContext context) {
-    final isBuffering = ref.watch(
-      videoEngineStateProvider.select((s) => s.isBuffering),
+    // Resolving counts as buffering here.
+    //
+    // The engine reports buffering, but until the controller has picked a
+    // server and a stream there is no engine to report anything -- and the
+    // play buttons go straight to the player now rather than resolving first,
+    // so that stretch used to be a black screen with nothing on it.
+    final isResolving = ref.watch(
+      playerControllerProvider.select((s) => s.isLoading),
     );
+    final isBuffering =
+        isResolving ||
+        ref.watch(videoEngineStateProvider.select((s) => s.isBuffering));
     final isPlaying = ref.watch(
       videoEngineStateProvider.select((s) => s.isPlaying),
     );

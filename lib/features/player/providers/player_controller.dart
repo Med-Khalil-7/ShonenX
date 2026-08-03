@@ -17,6 +17,8 @@ import 'package:shonenx/features/player/domain/player_mode.dart';
 import 'package:shonenx/features/player/providers/aniskip_prefs_provider.dart';
 import 'package:shonenx/features/player/providers/aniskip_provider.dart';
 import 'package:shonenx/features/player/providers/player_prefs_provider.dart';
+import 'package:shonenx/features/player/providers/scrub_provider.dart';
+import 'package:shonenx/features/player/providers/source_playback_prefs_provider.dart';
 import 'package:shonenx/features/player/providers/subtitle_prefs_provider.dart';
 import 'package:shonenx/features/player/providers/video_engine_provider.dart';
 import 'package:shonenx/features/tracking/engine/sync_engine.dart';
@@ -105,12 +107,47 @@ class PlayerController extends Notifier<PlayerState> {
   AniSkipArgs? _autoSkipArgs;
   bool _autoNextTriggered = false;
 
+  /// Position at the previous tick, so a jump can be told from a tick.
+  Duration? _lastTickPosition;
+
+  /// Whether playback has been outside the end-of-episode window since the
+  /// last seek. Auto-next requires playing *into* the window, not landing in
+  /// it -- see [_maybeAutoNext].
+  bool _autoNextArmed = false;
+
+  /// How close to the end auto-next fires.
+  ///
+  /// Five seconds, fixed. The setting behind this used to be 85 by default,
+  /// which on a 24 minute episode cut away a minute and a half before the end
+  /// -- through the outro and the next-episode preview -- and made every seek
+  /// near the end feel like the player was fighting back. At five seconds it
+  /// only ever takes over once the episode has genuinely finished.
+  static const _autoNextWindowSeconds = 5;
+
   // Subscriptions
   ProviderSubscription<Duration>? _positionSubscription;
 
   // Smart Memory
   String? _preferredServerId;
   ServerType? _preferredServerType;
+  /// The viewer's choices for the source in hand, if they have made any.
+  ///
+  /// Per source, not app-wide: sources disagree on what they offer and on what
+  /// they call it, so a choice made against one is not a statement about the
+  /// others. The settings screen's defaults remain the fallback for a source
+  /// that has never been chosen for.
+  SourcePlaybackPrefs? get _sourcePrefs {
+    final id = _source?.sourceInfo.id;
+    if (id == null || id.isEmpty) return null;
+    return ref.read(sourcePlaybackPrefsProvider(id));
+  }
+
+  SourcePlaybackPrefsNotifier? get _sourcePrefsNotifier {
+    final id = _source?.sourceInfo.id;
+    if (id == null || id.isEmpty) return null;
+    return ref.read(sourcePlaybackPrefsProvider(id).notifier);
+  }
+
   String? _preferredQuality;
   String? _preferredSubtitleLang = 'eng';
   String? _preferredAudioLang;
@@ -218,9 +255,17 @@ class PlayerController extends Notifier<PlayerState> {
     _media = mode.media;
 
     try {
-      final listState = await ref.read(
-        episodesListProvider(MediaArgs.fromMedia(mode.media)).future,
-      );
+      // Bounded. Resolving is a search against the source and can be slow,
+      // but it must not be able to hang: with the resolve inside the player
+      // there is no screen behind it to go back to, just a spinner.
+      final listState = await ref
+          .read(episodesListProvider(MediaArgs.fromMedia(mode.media)).future)
+          .timeout(
+            const Duration(seconds: 45),
+            onTimeout: () => throw TimeoutException(
+              'the source took too long to answer',
+            ),
+          );
       final episodes = listState.episodes;
       if (episodes.isEmpty) {
         state = state.copyWith(
@@ -384,6 +429,8 @@ class PlayerController extends Notifier<PlayerState> {
   }) async {
     _alreadyAutoSkipped.clear();
     _autoNextTriggered = false;
+    _autoNextArmed = false;
+    _lastTickPosition = null;
     _cachedThumbnail = null;
     _lastThumbnailTime = null;
     _initialCaptureDone = false;
@@ -452,9 +499,21 @@ class PlayerController extends Notifier<PlayerState> {
     bool force = false,
   }) async {
     if (_source == null) return;
+
+    // Re-read the axes for *this* source before choosing anything. The fields
+    // still hold whatever the last source resolved to, so falling back to the
+    // global default rather than leaving them is what stops one extension's
+    // choice leaking into the next.
+    final globalPrefs = ref.read(playerPrefsProvider);
+    final chosen = _sourcePrefs;
+    _preferredQuality = chosen?.quality ?? globalPrefs.defaultQuality;
+    _preferredAudioLang = chosen?.audioLang ?? globalPrefs.defaultAudioLang;
+
     if (state.activeEpisode?.id != episode.id) {
       _alreadyAutoSkipped.clear();
     _autoNextTriggered = false;
+    _autoNextArmed = false;
+    _lastTickPosition = null;
     }
     state = state.copyWith(
       isLoading: true,
@@ -495,27 +554,49 @@ class PlayerController extends Notifier<PlayerState> {
       final streams = await _source!.getSources(episode.id, activeServer);
       if (streams.isEmpty) throw Exception('No streams available.');
 
-      // Video Stream (mirror) Selection
-      VideoStream activeStream = streams.first;
+      // Mirror selection, in order of how deliberate the choice was.
+      //
+      // Language first, because it is the only one of these the viewer picked
+      // by hand for this source. It used to run last, after the sub/dub
+      // filter -- and that filter reads `english` in a label as "this is a
+      // dub", so with the server type left at sub the English mirror was
+      // dropped from the pool before the language filter ever saw it. The
+      // saved choice was correct and unreachable: playback fell back to
+      // Japanese every time.
+      List<VideoStream> pool = streams;
 
-      List<VideoStream> preferredTypeStreams = streams;
+      final lang = _preferredAudioLang;
+      if (lang != null && lang.isNotEmpty && lang != 'Auto') {
+        final wanted = lang.toLowerCase();
+        final sameLanguage = [
+          for (final facet in StreamCatalog.from(pool).facets)
+            if (facet.language != null &&
+                (facet.language!.toLowerCase() == wanted ||
+                    facet.language!.toLowerCase().contains(wanted) ||
+                    wanted.contains(facet.language!.toLowerCase())))
+              facet.stream,
+        ];
+        if (sameLanguage.isNotEmpty) pool = sameLanguage;
+      }
+
+      // Then sub/dub, but only as far as it narrows without emptying: it is a
+      // guess read off the label, and it must not overrule the language above.
       if (_preferredServerType != null) {
         final isPrefDub = _preferredServerType == ServerType.dub;
-        final matchingStreams = streams.where((s) {
+        final byType = pool.where((s) {
           final sq = s.quality.toLowerCase();
           final isDub = sq.contains('dub') || sq.contains('english');
           return isPrefDub ? isDub : (!isDub);
         }).toList();
-
-        if (matchingStreams.isNotEmpty) {
-          preferredTypeStreams = matchingStreams;
-          activeStream = matchingStreams.first;
-        }
+        if (byType.isNotEmpty) pool = byType;
       }
 
+      VideoStream activeStream = pool.first;
+
+      // Finally resolution, within whatever the two above left.
       if (_preferredQuality != null && _preferredQuality != 'Auto') {
         final qualityMatch =
-            preferredTypeStreams.firstWhereOrNull(
+            pool.firstWhereOrNull(
               (s) => _matchesQuality(s.quality, _preferredQuality!),
             ) ??
             streams.firstWhereOrNull(
@@ -621,12 +702,26 @@ class PlayerController extends Notifier<PlayerState> {
     // was forgotten the moment the next episode loaded and the mirror was
     // chosen from defaults again. _preferredAudioLang is what _loadData filters
     // the mirror list by, so writing it here is what makes the choice stick.
-    final language = StreamCatalog.from(
-      state.streams,
-    ).facetFor(newStream)?.language;
+    final facet = StreamCatalog.from(state.streams).facetFor(newStream);
+
+    final language = facet?.language;
     if (language != null && language.isNotEmpty) {
       _preferredAudioLang = language;
-      ref.read(playerPrefsProvider.notifier).setDefaultAudioLang(language);
+      _sourcePrefsNotifier?.setAudioLang(language);
+    }
+
+    // And the resolution, because on these sources this *is* the quality
+    // picker too.
+    //
+    // One label carries both axes -- `Japanese - 1080p` -- so when the mirror
+    // list has heights in it the panel routes the quality menu through here
+    // rather than through changeQuality. This only ever wrote the language
+    // down, so choosing a resolution on those sources was never saved and the
+    // next episode came back at whatever the default said.
+    final height = facet?.height;
+    if (height != null) {
+      _preferredQuality = '${height}p';
+      _sourcePrefsNotifier?.setQuality('${height}p');
     }
 
     state = state.copyWith(
@@ -694,9 +789,7 @@ class PlayerController extends Notifier<PlayerState> {
     }
 
     _preferredQuality = newQuality.quality;
-    ref
-        .read(playerPrefsProvider.notifier)
-        .setDefaultQuality(newQuality.quality);
+    _sourcePrefsNotifier?.setQuality(newQuality.quality);
 
     final engine = ref.read(videoEngineProvider);
     final currentPos = engine.currentPosition;
@@ -742,18 +835,18 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   Future<void> changeAudioTrack(AudioTrack track) async {
+    // Same axis as the mirror picker, so it is remembered the same way: on
+    // the source, not as an app-wide default.
     if (track.language != null && track.language!.isNotEmpty) {
       _preferredAudioLang = track.language;
-      ref
-          .read(playerPrefsProvider.notifier)
-          .setDefaultAudioLang(track.language!);
     } else if (track.id != 'auto' && track.id != 'no') {
       _preferredAudioLang = track.label;
-      ref.read(playerPrefsProvider.notifier).setDefaultAudioLang(track.label);
     } else if (track.id == 'auto') {
       _preferredAudioLang = 'Auto';
-      ref.read(playerPrefsProvider.notifier).setDefaultAudioLang('Auto');
     }
+    final picked = _preferredAudioLang;
+    if (picked != null) _sourcePrefsNotifier?.setAudioLang(picked);
+
     await ref.read(videoEngineProvider).setAudioTrack(track);
   }
 
@@ -809,11 +902,53 @@ class PlayerController extends Notifier<PlayerState> {
     final playerPrefs = ref.read(playerPrefsProvider);
     if (!playerPrefs.autoNext || !hasNextEpisode) return;
 
+    // Never mid-switch or mid-scrub. Position and duration come from two
+    // different places, and during a load or a drag they do not describe the
+    // same moment.
+    if (state.isLoading || ref.read(isScrubbingProvider)) {
+      _lastTickPosition = position;
+      return;
+    }
+
     final duration = ref.read(videoEngineStateProvider).duration;
     if (duration.inSeconds <= 0) return;
 
     final remaining = duration.inSeconds - position.inSeconds;
-    if (remaining > 0 && remaining > playerPrefs.nextEpisodeThreshold) return;
+
+    // A large negative remaining is not "past the end", it is a stale position
+    // measured against a duration that has already moved on -- the old
+    // episode's clock against the new episode's length.
+    if (remaining < -5) return;
+
+    final previous = _lastTickPosition;
+    _lastTickPosition = position;
+
+    // Did the clock tick, or did somebody move it? A seek shows up here as a
+    // jump of more than a couple of seconds, forwards or backwards.
+    final delta = previous == null
+        ? null
+        : (position - previous).inSeconds;
+    final playedOn = delta != null && delta >= 0 && delta <= 3;
+
+    if (!playedOn) {
+      // Landed here rather than arrived. Scrubbing to the last minute and
+      // pressing OK used to roll straight into the next episode: the commit
+      // put the position inside the window and the very next tick took that
+      // as the episode ending. Someone who seeks into the credits is choosing
+      // to watch them.
+      _autoNextArmed = remaining > _autoNextWindowSeconds;
+      return;
+    }
+
+    // Outside the window: arm, so playing into it later counts.
+    if (remaining > _autoNextWindowSeconds) {
+      _autoNextArmed = true;
+      return;
+    }
+
+    // Inside the window. Advance if we played in from outside it -- or if the
+    // episode has genuinely run out, which is true however you got here.
+    if (!_autoNextArmed && remaining > 1) return;
 
     _autoNextTriggered = true;
     skipEpisode();
